@@ -35,4 +35,5 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.memdo.ios.widget
         PRODUCT_NAME: MemdoWidget
         SKIP_INSTALL: YES
-        INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: MemdoWidget/Info.plist
