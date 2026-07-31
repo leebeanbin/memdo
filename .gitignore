@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# Xcode user state and build products
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+*.xcconfig.local
+
+# Generated design exploration; approved previews live in design/previews.
+outputs/
+
