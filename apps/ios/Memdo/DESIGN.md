@@ -165,7 +165,7 @@ flowchart LR
 - 최소 탭 높이: `48pt`
 - 선택 상태: Accent 아이콘·라벨 + Accent Soft 배경
 - 비선택 상태: Secondary Ink
-- 표면: `ultraThinMaterial`, 흰색 외곽선, 약한 그림자
+- 표면: Cloud Milk 불투명 카드, 흰색 외곽선, 약한 그림자
 - 오늘 요약·새 일정처럼 별도 시트나 상세 문맥에서는 표시하지 않는다.
 
 ![확정 하단 내비게이션](../../../design/previews/01-floating-navigation.png)

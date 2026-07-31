@@ -22,17 +22,16 @@ struct TodayView: View {
                         }
                         briefing
                         summary
+                        HStack {
+                            Spacer()
+                            addButton
+                        }
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
                     .padding(.bottom, 96)
                 }
                 .scrollIndicators(.hidden)
-            }
-            .overlay(alignment: .bottomTrailing) {
-                addButton
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 12)
             }
             .sheet(item: $presentedSheet) { destination in
                 switch destination {
