@@ -58,6 +58,9 @@ struct AppShellView: View {
         .onOpenURL { url in
             switch url.host {
             case "calendar": selectedTab = .calendar
+            case "search": selectedTab = .search
+            case "assistant": selectedTab = .assistant
+            case "settings": selectedTab = .settings
             case "summary": showSummary = true
             default: selectedTab = .today
             }
@@ -113,6 +116,7 @@ struct CalendarView: View {
     private let days = Array(1...31)
     @State private var selectedDay = 31
     @State private var showAll = false
+    @State private var selectedAgenda = ""
 
     private let agenda = [
         ("10:00", "앱 기획 문서 다듬기", "내 일정"),
@@ -171,7 +175,10 @@ struct CalendarView: View {
             if selectedDay == 31 {
                 VStack(spacing: 0) {
                     ForEach(Array(agenda.prefix(showAll ? 7 : 3).enumerated()), id: \.offset) { index, item in
-                        AgendaRow(time: item.0, title: item.1, source: item.2)
+                        Button { selectedAgenda = "\(item.0) · \(item.1)\n\(item.2)" } label: {
+                            AgendaRow(time: item.0, title: item.1, source: item.2)
+                        }
+                        .buttonStyle(.plain)
                         if index < (showAll ? 6 : 2) {
                             Divider().padding(.leading, 72)
                         }
@@ -190,6 +197,14 @@ struct CalendarView: View {
                 ContentUnavailableView("등록된 일정이 없어요", systemImage: "calendar.badge.plus", description: Text("빈 시간을 눌러 나만의 일정을 추가해 보세요."))
             }
         }
+        .alert("일정 상세", isPresented: Binding(
+            get: { !selectedAgenda.isEmpty },
+            set: { if !$0 { selectedAgenda = "" } }
+        )) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text(selectedAgenda)
+        }
     }
 }
 
@@ -198,6 +213,7 @@ struct ScheduleSearchView: View {
     @State private var scope = "전체"
     @State private var selectedResult: SearchItem?
     @State private var showSummary = false
+    @State private var showVoiceHelp = false
 
     private let results = [
         SearchItem(date: "7월 31일 · 14:30", title: "디자인 시안 확인", note: "Google Calendar"),
@@ -217,7 +233,10 @@ struct ScheduleSearchView: View {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                 TextField("일정, 메모, 장소", text: $query)
-                Image(systemName: "mic")
+                Button { showVoiceHelp = true } label: {
+                    Image(systemName: "mic")
+                }
+                .accessibilityLabel("음성 검색")
             }
             .padding(.horizontal, 14)
             .frame(minHeight: 48)
@@ -272,6 +291,11 @@ struct ScheduleSearchView: View {
             Button("확인", role: .cancel) {}
         } message: {
             Text(filteredResults.isEmpty ? "요약할 일정이 없어요." : "관련 일정 \(filteredResults.count)개가 있어요. 가장 가까운 일정을 먼저 확인해 보세요.")
+        }
+        .alert("음성 검색", isPresented: $showVoiceHelp) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("마이크 권한을 허용하면 일정 제목과 메모를 음성으로 검색할 수 있어요.")
         }
     }
 }
@@ -429,33 +453,57 @@ struct DailySummaryView: View {
 struct SettingsView: View {
     @State private var dailySummary = true
     @State private var calendarSync = true
+    @State private var notifications = true
+    @State private var summaryTime = Calendar.current.date(from: DateComponents(hour: 21, minute: 30)) ?? .now
+    @State private var promptTime = Calendar.current.date(from: DateComponents(hour: 9)) ?? .now
+    @State private var newsTopics: Set<String> = ["AI", "생산성"]
+    @State private var showAIConsent = false
 
     var body: some View {
         MemdoPage(title: "설정", subtitle: "Memdo를 나에게 맞게 조정하세요", eyebrow: "나만의 Memdo", icon: "slider.horizontal.3") {
             SettingsGroup(title: "하루") {
                 Toggle("오늘 요약 받기", isOn: $dailySummary)
                 Divider()
-                LabeledContent("요약 시간", value: "21:30")
+                DatePicker("요약 시간", selection: $summaryTime, displayedComponents: .hourAndMinute)
+                    .disabled(!dailySummary)
                 Divider()
-                LabeledContent("계획이 없을 때", value: "아침 9시")
+                DatePicker("계획이 없을 때", selection: $promptTime, displayedComponents: .hourAndMinute)
             }
 
             SettingsGroup(title: "연결 및 권한") {
                 Toggle("Google Calendar", isOn: $calendarSync)
                 Divider()
-                LabeledContent("AI 데이터 접근", value: "일정 제목·시간")
+                Button { showAIConsent = true } label: {
+                    LabeledContent("AI 데이터 접근", value: "일정 제목·시간")
+                }
+                .buttonStyle(.plain)
                 Divider()
-                LabeledContent("알림", value: "허용됨")
+                Toggle("알림", isOn: $notifications)
             }
 
             SettingsGroup(title: "관심 뉴스") {
                 HStack {
-                    FilterPill(title: "AI", selected: true)
-                    FilterPill(title: "생산성", selected: true)
-                    FilterPill(title: "로컬", selected: false)
+                    ForEach(["AI", "생산성", "로컬"], id: \.self) { topic in
+                        Button {
+                            if newsTopics.contains(topic) {
+                                newsTopics.remove(topic)
+                            } else {
+                                newsTopics.insert(topic)
+                            }
+                        } label: {
+                            FilterPill(title: topic, selected: newsTopics.contains(topic))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
+        .alert("AI 데이터 접근", isPresented: $showAIConsent) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("AI는 일정 제목과 시간만 분석하며, 일정 변경은 항상 사용자의 확인 후 실행합니다.")
+        }
+        .sensoryFeedback(.selection, trigger: newsTopics)
     }
 }
 
