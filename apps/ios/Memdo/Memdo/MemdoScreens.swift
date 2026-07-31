@@ -33,19 +33,13 @@ struct AppShellView: View {
     @State private var showSummary = false
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            TodayView()
-                .tag(AppTab.today)
-            CalendarView()
-                .tag(AppTab.calendar)
-            ScheduleSearchView()
-                .tag(AppTab.search)
-            AssistantView()
-                .tag(AppTab.assistant)
-            SettingsView()
-                .tag(AppTab.settings)
+        ZStack {
+            tabScreen(.today) { TodayView() }
+            tabScreen(.calendar) { CalendarView() }
+            tabScreen(.search) { ScheduleSearchView() }
+            tabScreen(.assistant) { AssistantView() }
+            tabScreen(.settings) { SettingsView() }
         }
-        .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             FloatingTabBar(selection: $selectedTab)
                 .frame(maxWidth: 350)
@@ -68,6 +62,16 @@ struct AppShellView: View {
         .sheet(isPresented: $showSummary) {
             DailySummaryView()
         }
+    }
+
+    private func tabScreen<Content: View>(
+        _ tab: AppTab,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .opacity(selectedTab == tab ? 1 : 0)
+            .allowsHitTesting(selectedTab == tab)
+            .accessibilityHidden(selectedTab != tab)
     }
 }
 
@@ -103,7 +107,7 @@ struct FloatingTabBar: View {
         }
         .padding(6)
         .frame(height: 60)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
+        .background(MemdoTheme.surface.opacity(0.97), in: RoundedRectangle(cornerRadius: 25, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 25, style: .continuous)
                 .stroke(.white.opacity(0.9), lineWidth: 1)
@@ -539,7 +543,7 @@ private struct MemdoPage<Content: View>: View {
             content
         }
         .padding(20)
-        .padding(.bottom, 28)
+        .padding(.bottom, 100)
     }
 
     var body: some View {
