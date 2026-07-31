@@ -30,6 +30,7 @@ enum AppTab: String, CaseIterable {
 
 struct AppShellView: View {
     @State private var selectedTab = AppTab.today
+    @State private var showSummary = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -51,6 +52,17 @@ struct AppShellView: View {
                 .padding(.bottom, 6)
         }
         .tint(MemdoTheme.accent)
+        .sensoryFeedback(.selection, trigger: selectedTab)
+        .onOpenURL { url in
+            switch url.host {
+            case "calendar": selectedTab = .calendar
+            case "summary": showSummary = true
+            default: selectedTab = .today
+            }
+        }
+        .sheet(isPresented: $showSummary) {
+            DailySummaryView()
+        }
     }
 }
 
@@ -96,6 +108,18 @@ struct FloatingTabBar: View {
 
 struct CalendarView: View {
     private let days = Array(1...31)
+    @State private var selectedDay = 31
+    @State private var showAll = false
+
+    private let agenda = [
+        ("10:00", "앱 기획 문서 다듬기", "내 일정"),
+        ("14:30", "디자인 시안 확인", "Google"),
+        ("19:00", "30분 산책", "내 일정"),
+        ("20:00", "영어 단어 복습", "내 일정"),
+        ("20:30", "주간 메모 정리", "Google"),
+        ("21:00", "친구에게 연락", "내 일정"),
+        ("21:30", "오늘 요약", "내 일정")
+    ]
 
     var body: some View {
         MemdoPage(title: "캘린더", subtitle: "2026년 7월", eyebrow: "나의 시간", icon: "calendar") {
@@ -104,7 +128,10 @@ struct CalendarView: View {
                     Text("7월")
                         .font(.title3.bold())
                     Spacer()
-                    Button("오늘") {}
+                    Button("오늘") {
+                        selectedDay = 31
+                        showAll = false
+                    }
                         .buttonStyle(.bordered)
                 }
 
@@ -113,16 +140,22 @@ struct CalendarView: View {
                         Text($0).font(.caption.bold()).foregroundStyle(MemdoTheme.secondaryInk)
                     }
                     ForEach(days, id: \.self) { day in
-                        Text("\(day)")
-                            .font(.subheadline.weight(day == 31 ? .bold : .regular))
-                            .foregroundStyle(day == 31 ? .white : MemdoTheme.ink)
-                            .frame(maxWidth: .infinity, minHeight: 36)
-                            .background(day == 31 ? MemdoTheme.accent : .clear, in: Circle())
-                            .overlay(alignment: .bottom) {
-                                if [3, 8, 15, 23].contains(day) {
-                                    Circle().fill(MemdoTheme.accent).frame(width: 3, height: 3)
+                        Button {
+                            selectedDay = day
+                            showAll = false
+                        } label: {
+                            Text("\(day)")
+                                .font(.subheadline.weight(day == selectedDay ? .bold : .regular))
+                                .foregroundStyle(day == selectedDay ? .white : MemdoTheme.ink)
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                                .background(day == selectedDay ? MemdoTheme.accent : .clear, in: Circle())
+                                .overlay(alignment: .bottom) {
+                                    if [3, 8, 15, 23].contains(day) {
+                                        Circle().fill(MemdoTheme.accent).frame(width: 3, height: 3)
+                                    }
                                 }
-                            }
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -131,28 +164,50 @@ struct CalendarView: View {
             .frame(maxWidth: .infinity)
             .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
-            SectionTitle(title: "7월 31일", trailing: "7개")
-            VStack(spacing: 0) {
-                AgendaRow(time: "10:00", title: "앱 기획 문서 다듬기", source: "내 일정")
-                Divider().padding(.leading, 72)
-                AgendaRow(time: "14:30", title: "디자인 시안 확인", source: "Google")
-                Divider().padding(.leading, 72)
-                AgendaRow(time: "19:00", title: "30분 산책", source: "내 일정")
-            }
-            .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            SectionTitle(title: "7월 \(selectedDay)일", trailing: selectedDay == 31 ? "7개" : "0개")
+            if selectedDay == 31 {
+                VStack(spacing: 0) {
+                    ForEach(Array(agenda.prefix(showAll ? 7 : 3).enumerated()), id: \.offset) { index, item in
+                        AgendaRow(time: item.0, title: item.1, source: item.2)
+                        if index < (showAll ? 6 : 2) {
+                            Divider().padding(.leading, 72)
+                        }
+                    }
+                }
+                .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
-            Button {
-            } label: {
-                Label("4개 일정 더 보기", systemImage: "ellipsis.circle")
-                    .frame(maxWidth: .infinity, minHeight: 46)
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { showAll.toggle() }
+                } label: {
+                    Label(showAll ? "일정 접기" : "4개 일정 더 보기", systemImage: showAll ? "chevron.up.circle" : "ellipsis.circle")
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                }
+                .buttonStyle(.bordered)
+            } else {
+                ContentUnavailableView("등록된 일정이 없어요", systemImage: "calendar.badge.plus", description: Text("빈 시간을 눌러 나만의 일정을 추가해 보세요."))
             }
-            .buttonStyle(.bordered)
         }
     }
 }
 
 struct ScheduleSearchView: View {
     @State private var query = "디자인"
+    @State private var scope = "전체"
+    @State private var selectedResult: SearchItem?
+    @State private var showSummary = false
+
+    private let results = [
+        SearchItem(date: "7월 31일 · 14:30", title: "디자인 시안 확인", note: "Google Calendar"),
+        SearchItem(date: "7월 24일 · 11:00", title: "위젯 디자인 리뷰", note: "완료됨 · 내 일정"),
+        SearchItem(date: "7월 18일 · 16:00", title: "디자인 시스템 정리", note: "내 일정")
+    ]
+
+    private var filteredResults: [SearchItem] {
+        results.filter {
+            (query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)) &&
+            (scope == "전체" || (scope == "Google" ? $0.note.contains("Google") : $0.note.contains("내 일정")))
+        }
+    }
 
     var body: some View {
         MemdoPage(title: "검색", subtitle: "내 기억 속 일정을 찾아보세요", eyebrow: "기억 탐색", icon: "magnifyingglass") {
@@ -167,51 +222,93 @@ struct ScheduleSearchView: View {
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(MemdoTheme.outline))
 
             HStack(spacing: 8) {
-                FilterPill(title: "전체", selected: true)
-                FilterPill(title: "내 일정", selected: false)
-                FilterPill(title: "Google", selected: false)
+                ForEach(["전체", "내 일정", "Google"], id: \.self) { item in
+                    Button { scope = item } label: {
+                        FilterPill(title: item, selected: scope == item)
+                    }
+                    .buttonStyle(.plain)
+                }
                 Spacer()
             }
 
-            SectionTitle(title: "검색 결과", trailing: "3개")
-            VStack(spacing: 0) {
-                SearchResult(date: "7월 31일 · 14:30", title: "디자인 시안 확인", note: "Google Calendar")
-                Divider().padding(.leading, 58)
-                SearchResult(date: "7월 24일 · 11:00", title: "위젯 디자인 리뷰", note: "완료됨")
-                Divider().padding(.leading, 58)
-                SearchResult(date: "7월 18일 · 16:00", title: "디자인 시스템 정리", note: "내 일정")
+            SectionTitle(title: "검색 결과", trailing: "\(filteredResults.count)개")
+            if filteredResults.isEmpty {
+                ContentUnavailableView.search(text: query)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(filteredResults) { item in
+                        Button { selectedResult = item } label: {
+                            SearchResult(date: item.date, title: item.title, note: item.note)
+                        }
+                        .buttonStyle(.plain)
+                        if item.id != filteredResults.last?.id {
+                            Divider().padding(.leading, 58)
+                        }
+                    }
+                }
+                .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             }
-            .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
             Button {
+                showSummary = true
             } label: {
                 Label("AI에게 이 일정들 요약 요청", systemImage: "sparkles")
                     .frame(maxWidth: .infinity, minHeight: 50)
             }
             .buttonStyle(.borderedProminent)
         }
+        .sheet(item: $selectedResult) { item in
+            NavigationStack {
+                SearchResult(date: item.date, title: item.title, note: item.note)
+                    .navigationTitle("일정 상세")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+            .presentationDetents([.medium])
+        }
+        .alert("AI 요약", isPresented: $showSummary) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text(filteredResults.isEmpty ? "요약할 일정이 없어요." : "관련 일정 \(filteredResults.count)개가 있어요. 가장 가까운 일정을 먼저 확인해 보세요.")
+        }
     }
 }
 
 struct AssistantView: View {
+    @State private var composer = ""
+    @State private var messages: [(String, Bool)] = [
+        ("매주 화요일 오후에 운동 일정을 만들어줘.", true),
+        ("오후 7시부터 1시간으로 제안할게요. 8월부터 매주 반복할까요?", false)
+    ]
+    @State private var title = "운동"
+    @State private var time = "매주 화요일 19:00"
+    @State private var editingProposal = false
+    @State private var added = false
+
     var body: some View {
         MemdoPage(title: "AI 도우미", subtitle: "확인 전에는 일정을 변경하지 않아요", eyebrow: "조용한 도우미", icon: "sparkles") {
-            ChatBubble(text: "매주 화요일 오후에 운동 일정을 만들어줘.", isUser: true)
-            ChatBubble(text: "오후 7시부터 1시간으로 제안할게요. 8월부터 매주 반복할까요?", isUser: false)
+            ForEach(messages.indices, id: \.self) { index in
+                ChatBubble(text: messages[index].0, isUser: messages[index].1)
+            }
 
             VStack(alignment: .leading, spacing: 16) {
                 Label("반복 일정 제안", systemImage: "calendar.badge.plus")
                     .font(.headline)
-                LabeledContent("제목", value: "운동")
-                LabeledContent("시간", value: "매주 화요일 19:00")
+                if editingProposal {
+                    TextField("제목", text: $title).textFieldStyle(.roundedBorder)
+                    TextField("시간", text: $time).textFieldStyle(.roundedBorder)
+                } else {
+                    LabeledContent("제목", value: title)
+                    LabeledContent("시간", value: time)
+                }
                 LabeledContent("알림", value: "30분 전")
                 Divider()
                 HStack {
-                    Button("수정") {}
+                    Button(editingProposal ? "수정 완료" : "수정") { editingProposal.toggle() }
                         .buttonStyle(.bordered)
                     Spacer()
-                    Button("일정에 추가") {}
+                    Button(added ? "추가됨" : "일정에 추가") { added = true }
                         .buttonStyle(.borderedProminent)
+                        .disabled(added)
                 }
             }
             .padding(18)
@@ -225,22 +322,36 @@ struct AssistantView: View {
             )
 
             HStack(spacing: 10) {
-                TextField("무엇을 도와드릴까요?", text: .constant(""))
-                Button {} label: {
+                TextField("무엇을 도와드릴까요?", text: $composer)
+                    .onSubmit(sendMessage)
+                Button(action: sendMessage) {
                     Image(systemName: "arrow.up")
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(composer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .accessibilityLabel("보내기")
             }
             .padding(8)
             .background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(MemdoTheme.outline))
         }
+        .sensoryFeedback(.success, trigger: added)
+    }
+
+    private func sendMessage() {
+        let text = composer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        messages.append((text, true))
+        messages.append(("좋아요. 변경 전 확인할 수 있도록 일정 제안으로 준비했어요.", false))
+        composer = ""
     }
 }
 
 struct DailySummaryView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var reviews = ["디자인 시안 확인", "30분 산책"]
+
     var body: some View {
         MemdoPage(title: "오늘 요약", subtitle: "7월 31일 금요일 · 21:30", eyebrow: "하루 마무리", icon: "moon.stars") {
             HStack(spacing: 18) {
@@ -275,13 +386,24 @@ struct DailySummaryView: View {
                 in: RoundedRectangle(cornerRadius: 24, style: .continuous)
             )
 
-            SectionTitle(title: "결정이 필요한 일정", trailing: "2개")
-            VStack(spacing: 0) {
-                ReviewRow(title: "디자인 시안 확인", time: "14:30")
-                Divider().padding(.leading, 16)
-                ReviewRow(title: "30분 산책", time: "19:00")
+            SectionTitle(title: "결정이 필요한 일정", trailing: "\(reviews.count)개")
+            if reviews.isEmpty {
+                ContentUnavailableView("정리가 끝났어요", systemImage: "checkmark.circle.fill")
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(reviews, id: \.self) { title in
+                        ReviewRow(
+                            title: title,
+                            time: title == "디자인 시안 확인" ? "14:30" : "19:00",
+                            resolve: { reviews.removeAll { $0 == title } }
+                        )
+                        if title != reviews.last {
+                            Divider().padding(.leading, 16)
+                        }
+                    }
+                }
+                .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             }
-            .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
             VStack(alignment: .leading, spacing: 10) {
                 Label("AI가 본 오늘", systemImage: "sparkles")
@@ -294,7 +416,7 @@ struct DailySummaryView: View {
             .padding(16)
             .background(MemdoTheme.accentSoft, in: RoundedRectangle(cornerRadius: 24))
 
-            Button("정리 완료") {}
+            Button("정리 완료") { dismiss() }
                 .buttonStyle(.borderedProminent)
                 .frame(maxWidth: .infinity)
         }
@@ -469,6 +591,13 @@ private struct SearchResult: View {
     }
 }
 
+private struct SearchItem: Identifiable {
+    let id = UUID()
+    let date: String
+    let title: String
+    let note: String
+}
+
 private struct ChatBubble: View {
     let text: String
     let isUser: Bool
@@ -490,6 +619,7 @@ private struct ChatBubble: View {
 private struct ReviewRow: View {
     let title: String
     let time: String
+    let resolve: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -502,10 +632,10 @@ private struct ReviewRow: View {
                 Spacer()
             }
             HStack {
-                Button("완료") {}
-                Button("내일로") {}
+                Button("완료", action: resolve)
+                Button("내일로", action: resolve)
                 Spacer()
-                Button(role: .destructive) {} label: {
+                Button(role: .destructive, action: resolve) {
                     Image(systemName: "trash")
                 }
                 .accessibilityLabel("일정 삭제")

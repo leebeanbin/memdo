@@ -20,6 +20,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memdo.ios
         PRODUCT_NAME: Memdo
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Memdo/Info.plist
     dependencies:
       - target: MemdoWidget
         embed: true
