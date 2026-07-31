@@ -116,21 +116,65 @@ struct FloatingTabBar: View {
     }
 }
 
+struct ScheduleDetail: Identifiable, Equatable {
+    let id: UUID
+    var day: Int
+    var time: String
+    var title: String
+    var source: String
+    var isDone: Bool
+    var location: String
+    var memo: String
+    var reminder: String
+    var repeatRule: String
+
+    init(
+        id: UUID = UUID(),
+        day: Int,
+        time: String,
+        title: String,
+        source: String = "내 일정",
+        isDone: Bool = false,
+        location: String = "장소 없음",
+        memo: String = "메모 없음",
+        reminder: String = "30분 전",
+        repeatRule: String = "반복 안 함"
+    ) {
+        self.id = id
+        self.day = day
+        self.time = time
+        self.title = title
+        self.source = source
+        self.isDone = isDone
+        self.location = location
+        self.memo = memo
+        self.reminder = reminder
+        self.repeatRule = repeatRule
+    }
+}
+
 struct CalendarView: View {
     private let days = Array(1...31)
     @State private var selectedDay = 31
     @State private var showAll = false
-    @State private var selectedAgenda = ""
-
-    private let agenda = [
-        ("10:00", "앱 기획 문서 다듬기", "내 일정"),
-        ("14:30", "디자인 시안 확인", "Google"),
-        ("19:00", "30분 산책", "내 일정"),
-        ("20:00", "영어 단어 복습", "내 일정"),
-        ("20:30", "주간 메모 정리", "Google"),
-        ("21:00", "친구에게 연락", "내 일정"),
-        ("21:30", "오늘 요약", "내 일정")
+    @State private var presentedDay: SelectedCalendarDay?
+    @State private var selectedSchedule: ScheduleDetail?
+    @State private var agenda = [
+        ScheduleDetail(day: 31, time: "10:00", title: "앱 기획 문서 다듬기", memo: "기능 우선순위와 화면 흐름 정리"),
+        ScheduleDetail(day: 31, time: "14:30", title: "디자인 시안 확인", source: "Google Calendar", location: "온라인 미팅"),
+        ScheduleDetail(day: 31, time: "19:00", title: "30분 산책", location: "한강 공원"),
+        ScheduleDetail(day: 31, time: "20:00", title: "영어 단어 복습"),
+        ScheduleDetail(day: 31, time: "20:30", title: "주간 메모 정리", source: "Google Calendar"),
+        ScheduleDetail(day: 31, time: "21:00", title: "친구에게 연락"),
+        ScheduleDetail(day: 31, time: "21:30", title: "오늘 요약"),
+        ScheduleDetail(day: 24, time: "11:00", title: "위젯 디자인 리뷰", isDone: true, memo: "잠금화면 위젯 정보 밀도 확인"),
+        ScheduleDetail(day: 18, time: "16:00", title: "디자인 시스템 정리", isDone: true),
+        ScheduleDetail(day: 8, time: "19:30", title: "저녁 산책", isDone: true, location: "동네 공원")
     ]
+
+    private var selectedAgenda: [ScheduleDetail] {
+        agenda.filter { $0.day == selectedDay }
+    }
 
     var body: some View {
         MemdoPage(title: "캘린더", subtitle: "2026년 7월", eyebrow: "나의 시간", icon: "calendar") {
@@ -142,6 +186,7 @@ struct CalendarView: View {
                     Button("오늘") {
                         selectedDay = 31
                         showAll = false
+                        presentedDay = .init(day: 31)
                     }
                         .buttonStyle(.bordered)
                 }
@@ -154,6 +199,7 @@ struct CalendarView: View {
                         Button {
                             selectedDay = day
                             showAll = false
+                            presentedDay = .init(day: day)
                         } label: {
                             Text("\(day)")
                                 .font(.subheadline.weight(day == selectedDay ? .bold : .regular))
@@ -161,7 +207,7 @@ struct CalendarView: View {
                                 .frame(maxWidth: .infinity, minHeight: 36)
                                 .background(day == selectedDay ? MemdoTheme.accent : .clear, in: Circle())
                                 .overlay(alignment: .bottom) {
-                                    if [3, 8, 15, 23].contains(day) {
+                                    if agenda.contains(where: { $0.day == day }) {
                                         Circle().fill(MemdoTheme.accent).frame(width: 3, height: 3)
                                     }
                                 }
@@ -175,39 +221,43 @@ struct CalendarView: View {
             .frame(maxWidth: .infinity)
             .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
-            SectionTitle(title: "7월 \(selectedDay)일", trailing: selectedDay == 31 ? "7개" : "0개")
-            if selectedDay == 31 {
+            SectionTitle(title: "7월 \(selectedDay)일", trailing: "\(selectedAgenda.count)개")
+            if !selectedAgenda.isEmpty {
                 VStack(spacing: 0) {
-                    ForEach(Array(agenda.prefix(showAll ? 7 : 3).enumerated()), id: \.offset) { index, item in
-                        Button { selectedAgenda = "\(item.0) · \(item.1)\n\(item.2)" } label: {
-                            AgendaRow(time: item.0, title: item.1, source: item.2)
+                    ForEach(Array(selectedAgenda.prefix(showAll ? selectedAgenda.count : 3).enumerated()), id: \.element.id) { index, item in
+                        Button { selectedSchedule = item } label: {
+                            AgendaRow(time: item.time, title: item.title, source: item.isDone ? "완료 · \(item.source)" : item.source)
                         }
                         .buttonStyle(.plain)
-                        if index < (showAll ? 6 : 2) {
+                        if index < min(showAll ? selectedAgenda.count : 3, selectedAgenda.count) - 1 {
                             Divider().padding(.leading, 72)
                         }
                     }
                 }
                 .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
-                Button {
-                    withAnimation(.easeOut(duration: 0.2)) { showAll.toggle() }
-                } label: {
-                    Label(showAll ? "일정 접기" : "4개 일정 더 보기", systemImage: showAll ? "chevron.up.circle" : "ellipsis.circle")
-                        .frame(maxWidth: .infinity, minHeight: 46)
+                if selectedAgenda.count > 3 {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { showAll.toggle() }
+                    } label: {
+                        Label(showAll ? "일정 접기" : "\(selectedAgenda.count - 3)개 일정 더 보기", systemImage: showAll ? "chevron.up.circle" : "ellipsis.circle")
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
             } else {
                 ContentUnavailableView("등록된 일정이 없어요", systemImage: "calendar.badge.plus", description: Text("빈 시간을 눌러 나만의 일정을 추가해 보세요."))
             }
         }
-        .alert("일정 상세", isPresented: Binding(
-            get: { !selectedAgenda.isEmpty },
-            set: { if !$0 { selectedAgenda = "" } }
-        )) {
-            Button("확인", role: .cancel) {}
-        } message: {
-            Text(selectedAgenda)
+        .sheet(item: $presentedDay) { selection in
+            DayAgendaSheet(day: selection.day, schedules: $agenda)
+        }
+        .sheet(item: $selectedSchedule) { schedule in
+            ScheduleDetailSheet(schedule: schedule) { isDone in
+                if let index = agenda.firstIndex(where: { $0.id == schedule.id }) {
+                    agenda[index].isDone = isDone
+                }
+            }
         }
     }
 }
@@ -215,20 +265,24 @@ struct CalendarView: View {
 struct ScheduleSearchView: View {
     @State private var query = "디자인"
     @State private var scope = "전체"
-    @State private var selectedResult: SearchItem?
+    @State private var status = "전체 상태"
+    @State private var period = "전체 기간"
+    @State private var presentedSearchSheet: SearchSheet?
     @State private var showSummary = false
     @State private var showVoiceHelp = false
 
     private let results = [
-        SearchItem(date: "7월 31일 · 14:30", title: "디자인 시안 확인", note: "Google Calendar"),
-        SearchItem(date: "7월 24일 · 11:00", title: "위젯 디자인 리뷰", note: "완료됨 · 내 일정"),
-        SearchItem(date: "7월 18일 · 16:00", title: "디자인 시스템 정리", note: "내 일정")
+        SearchItem(detail: .init(day: 31, time: "14:30", title: "디자인 시안 확인", source: "Google Calendar", location: "온라인 미팅")),
+        SearchItem(detail: .init(day: 24, time: "11:00", title: "위젯 디자인 리뷰", isDone: true, memo: "잠금화면 위젯 정보 밀도 확인")),
+        SearchItem(detail: .init(day: 18, time: "16:00", title: "디자인 시스템 정리", isDone: true))
     ]
 
     private var filteredResults: [SearchItem] {
         results.filter {
             (query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)) &&
-            (scope == "전체" || (scope == "Google" ? $0.note.contains("Google") : $0.note.contains("내 일정")))
+            (scope == "전체" || (scope == "Google" ? $0.detail.source.contains("Google") : $0.detail.source == "내 일정")) &&
+            (status == "전체 상태" || (status == "완료" ? $0.detail.isDone : !$0.detail.isDone)) &&
+            (period == "전체 기간" || (period == "이번 주" ? $0.detail.day >= 27 : $0.detail.day >= 18))
         }
     }
 
@@ -255,6 +309,20 @@ struct ScheduleSearchView: View {
                     .buttonStyle(.plain)
                 }
                 Spacer()
+                Button {
+                    presentedSearchSheet = .filters
+                } label: {
+                    Label("필터", systemImage: "line.3.horizontal.decrease.circle")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+            }
+
+            if status != "전체 상태" || period != "전체 기간" {
+                Text([status, period].filter { $0 != "전체 상태" && $0 != "전체 기간" }.joined(separator: " · "))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(MemdoTheme.accent)
             }
 
             SectionTitle(title: "검색 결과", trailing: "\(filteredResults.count)개")
@@ -263,7 +331,7 @@ struct ScheduleSearchView: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(filteredResults) { item in
-                        Button { selectedResult = item } label: {
+                        Button { presentedSearchSheet = .detail(item) } label: {
                             SearchResult(date: item.date, title: item.title, note: item.note)
                         }
                         .buttonStyle(.plain)
@@ -283,13 +351,13 @@ struct ScheduleSearchView: View {
             }
             .buttonStyle(.borderedProminent)
         }
-        .sheet(item: $selectedResult) { item in
-            NavigationStack {
-                SearchResult(date: item.date, title: item.title, note: item.note)
-                    .navigationTitle("일정 상세")
-                    .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $presentedSearchSheet) { sheet in
+            switch sheet {
+            case .detail(let item):
+                ScheduleDetailSheet(schedule: item.detail)
+            case .filters:
+                SearchFilterSheet(status: $status, period: $period)
             }
-            .presentationDetents([.medium])
         }
         .alert("AI 요약", isPresented: $showSummary) {
             Button("확인", role: .cancel) {}
@@ -585,17 +653,17 @@ private struct AgendaRow: View {
                 .font(.caption.monospacedDigit().weight(.semibold))
                 .foregroundStyle(MemdoTheme.secondaryInk)
                 .frame(width: 46, alignment: .leading)
-            Image(systemName: source == "Google" ? "calendar" : "person.fill")
+            Image(systemName: source.contains("Google") ? "calendar" : "person.fill")
                 .font(.caption.weight(.bold))
-                .foregroundStyle(source == "Google" ? MemdoTheme.google : MemdoTheme.mine)
+                .foregroundStyle(source.contains("Google") ? MemdoTheme.google : MemdoTheme.mine)
                 .frame(width: 34, height: 34)
                 .background(
-                    source == "Google" ? MemdoTheme.googleSoft : MemdoTheme.mineSoft,
+                    source.contains("Google") ? MemdoTheme.googleSoft : MemdoTheme.mineSoft,
                     in: RoundedRectangle(cornerRadius: 10)
                 )
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.body.bold())
-                Label(source, systemImage: source == "Google" ? "calendar" : "person.fill")
+                Label(source, systemImage: source.contains("Google") ? "calendar" : "person.fill")
                     .font(.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
@@ -646,11 +714,247 @@ private struct SearchResult: View {
     }
 }
 
+private struct SelectedCalendarDay: Identifiable {
+    let day: Int
+    var id: Int { day }
+}
+
+private struct DayAgendaSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let day: Int
+    @Binding var schedules: [ScheduleDetail]
+    @State private var selectedSchedule: ScheduleDetail?
+    @State private var showAddTask = false
+
+    private var daySchedules: [ScheduleDetail] {
+        schedules.filter { $0.day == day }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 18) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(day == 31 ? "오늘" : day < 31 ? "지난 일정" : "예정")
+                        .font(.caption.bold())
+                        .foregroundStyle(MemdoTheme.accent)
+                    Text("7월 \(day)일")
+                        .font(.title2.bold())
+                    Text(daySchedules.isEmpty ? "아직 등록된 일정이 없어요." : "\(daySchedules.count)개의 일정을 확인해 보세요.")
+                        .font(.subheadline)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if daySchedules.isEmpty {
+                    ContentUnavailableView(
+                        "비어 있는 하루예요",
+                        systemImage: "calendar.badge.plus",
+                        description: Text("편한 시간에 첫 일정을 추가해 보세요.")
+                    )
+                    .frame(maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(daySchedules) { schedule in
+                                Button { selectedSchedule = schedule } label: {
+                                    AgendaRow(
+                                        time: schedule.time,
+                                        title: schedule.title,
+                                        source: schedule.isDone ? "완료 · \(schedule.source)" : schedule.source
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                if schedule.id != daySchedules.last?.id {
+                                    Divider().padding(.leading, 72)
+                                }
+                            }
+                        }
+                        .background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    }
+                }
+
+                Button {
+                    showAddTask = true
+                } label: {
+                    Label("7월 \(day)일에 새 일정", systemImage: "plus")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(20)
+            .background(MemdoPageBackground())
+            .navigationTitle("하루 일정")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("닫기") { dismiss() }
+                }
+            }
+        }
+        .sheet(item: $selectedSchedule) { schedule in
+            ScheduleDetailSheet(schedule: schedule) { isDone in
+                if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
+                    schedules[index].isDone = isDone
+                }
+            }
+        }
+        .sheet(isPresented: $showAddTask) {
+            AddTaskSheet { title, time in
+                schedules.append(.init(day: day, time: time, title: title))
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+}
+
+struct ScheduleDetailSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var schedule: ScheduleDetail
+    let onDoneChange: ((Bool) -> Void)?
+
+    init(schedule: ScheduleDetail, onDoneChange: ((Bool) -> Void)? = nil) {
+        _schedule = State(initialValue: schedule)
+        self.onDoneChange = onDoneChange
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    HStack(alignment: .top, spacing: 14) {
+                        Image(systemName: schedule.source.contains("Google") ? "calendar" : "person.fill")
+                            .font(.headline)
+                            .foregroundStyle(schedule.source.contains("Google") ? MemdoTheme.google : MemdoTheme.mine)
+                            .frame(width: 44, height: 44)
+                            .background(
+                                schedule.source.contains("Google") ? MemdoTheme.googleSoft : MemdoTheme.mineSoft,
+                                in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            )
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(schedule.source)
+                                .font(.caption.bold())
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                            Text(schedule.title)
+                                .font(.title2.bold())
+                                .foregroundStyle(MemdoTheme.ink)
+                            Text("7월 \(schedule.day)일 · \(schedule.time)")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(MemdoTheme.accent)
+                        }
+                    }
+
+                    VStack(spacing: 0) {
+                        DetailLine(icon: "mappin.and.ellipse", title: "장소", value: schedule.location)
+                        Divider().padding(.leading, 50)
+                        DetailLine(icon: "bell", title: "알림", value: schedule.reminder)
+                        Divider().padding(.leading, 50)
+                        DetailLine(icon: "repeat", title: "반복", value: schedule.repeatRule)
+                        Divider().padding(.leading, 50)
+                        DetailLine(icon: "note.text", title: "메모", value: schedule.memo)
+                    }
+                    .background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                    if let onDoneChange {
+                        Button {
+                            schedule.isDone.toggle()
+                            onDoneChange(schedule.isDone)
+                        } label: {
+                            Label(schedule.isDone ? "완료 취소" : "완료로 표시", systemImage: schedule.isDone ? "arrow.uturn.backward.circle" : "checkmark.circle.fill")
+                                .frame(maxWidth: .infinity, minHeight: 50)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding(20)
+            }
+            .background(MemdoPageBackground())
+            .navigationTitle("일정 상세")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("닫기") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+}
+
+private struct DetailLine: View {
+    let icon: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(MemdoTheme.accent)
+                .frame(width: 30)
+            Text(title)
+                .foregroundStyle(MemdoTheme.secondaryInk)
+            Spacer()
+            Text(value)
+                .multilineTextAlignment(.trailing)
+                .foregroundStyle(MemdoTheme.ink)
+        }
+        .font(.subheadline)
+        .padding(16)
+    }
+}
+
 private struct SearchItem: Identifiable {
     let id = UUID()
-    let date: String
-    let title: String
-    let note: String
+    let detail: ScheduleDetail
+    var date: String { "7월 \(detail.day)일 · \(detail.time)" }
+    var title: String { detail.title }
+    var note: String { "\(detail.isDone ? "완료됨 · " : "")\(detail.source)" }
+}
+
+private enum SearchSheet: Identifiable {
+    case detail(SearchItem)
+    case filters
+
+    var id: String {
+        switch self {
+        case .detail(let item): "detail-\(item.id)"
+        case .filters: "filters"
+        }
+    }
+}
+
+private struct SearchFilterSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var status: String
+    @Binding var period: String
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Picker("상태", selection: $status) {
+                    ForEach(["전체 상태", "예정", "완료"], id: \.self) { Text($0) }
+                }
+                Picker("기간", selection: $period) {
+                    ForEach(["전체 기간", "최근 2주", "이번 주"], id: \.self) { Text($0) }
+                }
+                Button("필터 초기화") {
+                    status = "전체 상태"
+                    period = "전체 기간"
+                }
+            }
+            .navigationTitle("상세 필터")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("적용") { dismiss() }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
 }
 
 private struct ChatBubble: View {

@@ -41,6 +41,12 @@ struct TodayView: View {
                     }
                 case .dailySummary:
                     DailySummaryView()
+                case .detail(let schedule):
+                    ScheduleDetailSheet(schedule: schedule) { isDone in
+                        if let index = tasks.firstIndex(where: { $0.id == schedule.id }) {
+                            tasks[index].isDone = isDone
+                        }
+                    }
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -177,7 +183,9 @@ struct TodayView: View {
 
             VStack(spacing: 0) {
                 ForEach($tasks) { $task in
-                    TimelineTaskRow(task: $task)
+                    TimelineTaskRow(task: $task) {
+                        presentedSheet = .detail(task.detail)
+                    }
                     if task.id != tasks.last?.id {
                         Divider().padding(.leading, 76)
                     }
@@ -291,6 +299,7 @@ struct TodayView: View {
 
 private struct TimelineTaskRow: View {
     @Binding var task: DayTask
+    let onOpen: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -334,6 +343,9 @@ private struct TimelineTaskRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onOpen)
+        .accessibilityAction(named: "상세 보기", onOpen)
     }
 }
 
@@ -381,7 +393,7 @@ private struct BriefingRow: View {
     }
 }
 
-private struct AddTaskSheet: View {
+struct AddTaskSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
     @State private var time = Date()
@@ -416,10 +428,18 @@ private struct AddTaskSheet: View {
     }
 }
 
-private enum SheetDestination: String, Identifiable {
+private enum SheetDestination: Identifiable {
     case addTask
     case dailySummary
-    var id: String { rawValue }
+    case detail(ScheduleDetail)
+
+    var id: String {
+        switch self {
+        case .addTask: "addTask"
+        case .dailySummary: "dailySummary"
+        case .detail(let schedule): "detail-\(schedule.id)"
+        }
+    }
 }
 
 private struct DayTask: Identifiable {
@@ -435,6 +455,19 @@ private struct DayTask: Identifiable {
     var time: String
     var source: Source
     var isDone = false
+
+    var detail: ScheduleDetail {
+        .init(
+            id: id,
+            day: 31,
+            time: time,
+            title: title,
+            source: source.label,
+            isDone: isDone,
+            location: title.contains("산책") ? "한강 공원" : "장소 없음",
+            memo: source == .google ? "Google Calendar에서 가져온 일정" : "직접 만든 일정"
+        )
+    }
 
     static let samples = [
         DayTask(title: "앱 기획 문서 다듬기", time: "10:00", source: .mine),
