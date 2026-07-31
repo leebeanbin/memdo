@@ -109,7 +109,7 @@ struct TodayView: View {
                     VStack(spacing: 4) {
                         Text(day)
                             .font(.caption2.weight(.semibold))
-                        Text(date > 31 ? "\(date - 31)" : "\(date)")
+                        Text(displayDate(date))
                             .font(.subheadline.weight(.semibold))
                     }
                     .foregroundStyle(date == selectedDate ? Color.white : MemdoTheme.secondaryInk)
@@ -117,7 +117,7 @@ struct TodayView: View {
                     .background(date == selectedDate ? MemdoTheme.accent : Color.clear)
                     .clipShape(Capsule())
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(day)요일 \(date > 31 ? date - 31 : date)일")
+                    .accessibilityLabel("\(day)요일 \(displayDate(date))일")
                 }
                 .buttonStyle(.plain)
             }
@@ -128,6 +128,10 @@ struct TodayView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(.white.opacity(0.9), lineWidth: 1)
         }
+    }
+
+    private func displayDate(_ date: Int) -> String {
+        String(date > 31 ? date - 31 : date)
     }
 
     private var intention: some View {
