@@ -1,0 +1,1852 @@
+openapi: 3.1.0
+info:
+  title: Memdo API
+  version: 0.1.0
+  description: MVP API contract for personal daily planning, reviews, reminders, and optional AI.
+x-documentation:
+  brainMap: ./00-product-brain-map.md
+  requirements: ./01-product-requirements.md
+  userExperience: ./02-ux-and-screens.md
+  dataModel: ./04-data-model.md
+  privacyPolicy: ./06-privacy-consent-ai-policy.md
+  traceability: ./12-requirements-traceability.md
+  integrationHub: ./21-integration-hub-google-calendar-mcp.md
+x-api-conventions:
+  requestIdHeader: X-Request-ID
+  idempotencyRetentionHours: 24
+  pagination: opaque-keyset-cursor
+  defaultPageSize: 20
+  maximumPageSize: 50
+  maximumSyncPageSize: 200
+  maximumJsonBodyBytes: 262144
+  standardErrorResponses: [400, 401, 403, 404, 409, 422, 429, 500, 503]
+  rateLimits:
+    generalPerUserPerMinute: 120
+    searchPerUserPerMinute: 30
+    aiPerUserPerHour: 10
+    mcpPerClientUserPerMinute: 60
+servers:
+  - url: https://api.myday.example/v1
+security:
+  - bearerAuth: []
+paths:
+  /days/{date}:
+    get:
+      summary: Get a complete day view
+      parameters:
+        - $ref: '#/components/parameters/Date'
+      responses:
+        '200':
+          description: Day view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DayView'
+  /daily-plans/{date}:
+    get:
+      summary: Get the user's plan container for a local date
+      parameters:
+        - $ref: '#/components/parameters/Date'
+      responses:
+        '200':
+          description: Daily plan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DailyPlan' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      summary: Create or replace intention, mood, and reflection for a date
+      parameters:
+        - $ref: '#/components/parameters/Date'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DailyPlanInput' }
+      responses:
+        '200':
+          description: Saved daily plan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DailyPlan' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /todos:
+    get:
+      summary: List todos
+      parameters:
+        - name: q
+          in: query
+          description: Optional title or note search text
+          schema: { type: string, maxLength: 100 }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: status
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [planned, in_progress, partial, completed, skipped, rescheduled, cancelled]
+        - name: cursor
+          in: query
+          schema: { type: [string, 'null'] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: Todo list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TodoPage' }
+    post:
+      summary: Create a todo
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TodoInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Todo'
+  /todos/{todoId}:
+    get:
+      summary: Get one todo
+      parameters:
+        - $ref: '#/components/parameters/TodoId'
+      responses:
+        '200':
+          description: Todo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Todo' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      summary: Update a todo
+      parameters:
+        - $ref: '#/components/parameters/TodoId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TodoPatch'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Todo' }
+    delete:
+      summary: Soft-delete a todo
+      parameters:
+        - $ref: '#/components/parameters/TodoId'
+        - $ref: '#/components/parameters/BaseVersion'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Deleted }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /todos/{todoId}/status:
+    post:
+      summary: Apply an explicit user status
+      parameters:
+        - $ref: '#/components/parameters/TodoId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, baseVersion]
+              properties:
+                baseVersion: { type: integer, minimum: 1 }
+                status:
+                  type: string
+                  enum: [planned, in_progress, partial, completed, skipped, cancelled]
+                progress:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+      responses:
+        '200':
+          description: Status applied
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Todo' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /todos/{todoId}/reschedule:
+    post:
+      summary: Atomically mark the original todo rescheduled and create its replacement
+      parameters:
+        - $ref: '#/components/parameters/TodoId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RescheduleTodoInput' }
+      responses:
+        '201':
+          description: Original and replacement todos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [original, replacement]
+                properties:
+                  original: { $ref: '#/components/schemas/Todo' }
+                  replacement: { $ref: '#/components/schemas/Todo' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /sync:
+    get:
+      summary: Pull changes with a stable keyset cursor
+      parameters:
+        - name: cursor
+          in: query
+          description: Opaque encoding of updatedAt and id
+          schema: { type: [string, 'null'] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 200 }
+      responses:
+        '200':
+          description: Changed records, including tombstones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPage'
+    post:
+      summary: Push a batch of local mutations
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mutations]
+              properties:
+                mutations:
+                  type: array
+                  maxItems: 100
+                  items:
+                    $ref: '#/components/schemas/SyncMutation'
+      responses:
+        '200':
+          description: Per-mutation results and current server versions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncPushResult' }
+  /schedule-rules:
+    get:
+      summary: List recurrence rules
+      responses:
+        '200':
+          description: Rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ScheduleRule' }
+    post:
+      summary: Create a recurrence rule
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleRuleInput'
+      responses:
+        '201':
+          description: Rule created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduleRule' }
+  /schedule-rules/{ruleId}:
+    patch:
+      summary: Update future occurrences
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleRulePatch' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduleRule' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      summary: Disable a recurrence rule
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/BaseVersion'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Disabled }
+  /daily-review/settings:
+    get:
+      summary: Get daily review settings
+      responses:
+        '200':
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyReviewSettings'
+    put:
+      summary: Replace daily review settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DailyReviewSettings'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DailyReviewSettings' }
+  /daily-reviews/{date}:
+    get:
+      summary: Get review and unanswered todos
+      parameters:
+        - $ref: '#/components/parameters/Date'
+      responses:
+        '200':
+          description: Review
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DailyReview' }
+  /daily-reviews/{date}/responses:
+    post:
+      summary: Record one explicit review response
+      parameters:
+        - $ref: '#/components/parameters/Date'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewResponseInput'
+      responses:
+        '200':
+          description: Response applied
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DailyReview' }
+  /ai/plan-drafts:
+    post:
+      summary: Generate a non-persistent plan draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date, message]
+              properties:
+                date: { type: string, format: date }
+                message: { type: string, maxLength: 2000 }
+                mood: { type: string }
+      responses:
+        '201':
+          description: Draft generated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanDraft' }
+        '403': { description: AI consent required }
+  /ai/plan-drafts/{draftId}/commit:
+    post:
+      summary: Commit an approved plan draft
+      parameters:
+        - name: draftId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Todos created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [dailyPlanId, todos]
+                properties:
+                  dailyPlanId: { type: string, format: uuid }
+                  todos:
+                    type: array
+                    items: { $ref: '#/components/schemas/Todo' }
+  /privacy/consents:
+    get:
+      summary: List current consent grants
+      responses:
+        '200':
+          description: Consents
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ConsentRecord' }
+  /privacy/consents/{consentType}:
+    put:
+      summary: Grant or update a consent
+      parameters:
+        - name: consentType
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/ConsentType' }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConsentGrantInput' }
+      responses:
+        '200':
+          description: Granted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsentRecord' }
+    delete:
+      summary: Revoke a consent
+      parameters:
+        - name: consentType
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/ConsentType' }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Revoked }
+  /connections/google-calendar/authorize:
+    post:
+      summary: Start Google Calendar OAuth with incremental scopes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accessLevel, returnUrl]
+              properties:
+                accessLevel:
+                  type: string
+                  enum: [free_busy, events_read, events_write]
+                returnUrl: { type: string, format: uri }
+      responses:
+        '200':
+          description: Authorization URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authorizationUrl]
+                properties:
+                  authorizationUrl: { type: string, format: uri }
+  /calendar-sources:
+    get:
+      summary: List connected calendar sources
+      responses:
+        '200':
+          description: Calendar sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CalendarSource'
+  /calendar-sources/{sourceId}:
+    patch:
+      summary: Update source visibility, name, or sync settings
+      parameters:
+        - $ref: '#/components/parameters/SourceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                displayName: { type: string, minLength: 1, maxLength: 100 }
+                color: { type: [string, 'null'] }
+                visible: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalendarSource' }
+    delete:
+      summary: Disconnect and revoke a calendar source
+      parameters:
+        - $ref: '#/components/parameters/SourceId'
+      responses:
+        '204': { description: Disconnection started }
+  /calendar-entries:
+    get:
+      summary: List unified Memdo and external calendar entries
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: sourceProvider
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [myday, google_calendar, apple_eventkit]
+        - name: entryKind
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [todo, external_event, proposal]
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: cursor
+          in: query
+          schema: { type: [string, 'null'] }
+      responses:
+        '200':
+          description: Unified calendar page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hasMore]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CalendarEntry'
+                  nextCursor: { type: [string, 'null'] }
+                  hasMore: { type: boolean }
+  /change-proposals:
+    get:
+      summary: List change proposals
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [pending_approval, executing, applied, rejected, expired, failed, conflict]
+        - name: cursor
+          in: query
+          schema: { type: [string, 'null'] }
+      responses:
+        '200':
+          description: Proposal page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hasMore]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChangeProposal' }
+                  nextCursor: { type: [string, 'null'] }
+                  hasMore: { type: boolean }
+    post:
+      summary: Create an app-originated proposal for later approval
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [summary, operations]
+              properties:
+                summary: { type: string, minLength: 1, maxLength: 500 }
+                operations:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items:
+                    type: object
+                    required: [operationType, targetType, proposedChanges]
+                    properties:
+                      operationType:
+                        type: string
+                        enum: [create, update, reschedule, complete, skip]
+                      targetType:
+                        type: string
+                        enum: [todo, google_calendar_event]
+                      targetId: { type: [string, 'null'], format: uuid }
+                      proposedChanges: { type: object }
+      responses:
+        '201':
+          description: Proposal
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeProposal' }
+  /change-proposals/{proposalId}:
+    get:
+      summary: Get a proposal diff for review
+      parameters:
+        - $ref: '#/components/parameters/ProposalId'
+      responses:
+        '200':
+          description: Proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeProposal'
+  /change-proposals/{proposalId}/approve:
+    post:
+      summary: Approve and execute a proposal after version revalidation
+      parameters:
+        - $ref: '#/components/parameters/ProposalId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Applied or executing externally
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeProposal' }
+        '409': { description: Target changed; refreshed approval required }
+  /change-proposals/{proposalId}/reject:
+    post:
+      summary: Reject a pending proposal
+      parameters:
+        - $ref: '#/components/parameters/ProposalId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Rejected
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeProposal' }
+  /preferences:
+    get:
+      summary: Get the authenticated user's product preferences
+      responses:
+        '200':
+          description: Preferences
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserPreferences' }
+    put:
+      summary: Replace product preferences
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserPreferences' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserPreferences' }
+  /interests:
+    get:
+      summary: List news interests
+      responses:
+        '200':
+          description: Interests
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Interest' }
+    post:
+      summary: Create an interest
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, query]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 50 }
+                query: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Interest' }
+  /interests/{interestId}:
+    patch:
+      summary: Update an interest
+      parameters:
+        - $ref: '#/components/parameters/InterestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name: { type: string, minLength: 1, maxLength: 50 }
+                query: { type: string, minLength: 1, maxLength: 100 }
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Interest' }
+    delete:
+      summary: Delete an interest
+      parameters:
+        - $ref: '#/components/parameters/InterestId'
+      responses:
+        '204': { description: Deleted }
+  /briefings:
+    get:
+      summary: List daily briefings using cursor pagination
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: [string, 'null'] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: Briefing page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hasMore]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/DailyBriefing' }
+                  nextCursor: { type: [string, 'null'] }
+                  hasMore: { type: boolean }
+  /briefings/today:
+    get:
+      summary: Get today's briefing
+      responses:
+        '200':
+          description: Today's briefing
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DailyBriefing' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /insights/weekly:
+    get:
+      summary: Get a factual, non-scoring seven-day activity summary
+      parameters:
+        - name: weekStart
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Weekly summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WeeklyInsight' }
+  /briefings/generate:
+    post:
+      summary: Request today's briefing generation
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Generation accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsyncOperation' }
+        '403': { $ref: '#/components/responses/ConsentRequired' }
+  /briefings/{briefingId}/view:
+    post:
+      summary: Mark a briefing as viewed
+      parameters:
+        - $ref: '#/components/parameters/BriefingId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Recorded }
+  /devices:
+    get:
+      summary: List the user's registered devices
+      responses:
+        '200':
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Device' }
+    post:
+      summary: Register or refresh an APNs device token
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [installationId, platform, pushToken, environment]
+              properties:
+                installationId: { type: string, format: uuid }
+                platform: { type: string, enum: [ios] }
+                pushToken: { type: string, minLength: 32, maxLength: 256 }
+                environment: { type: string, enum: [sandbox, production] }
+                appVersion: { type: string }
+      responses:
+        '200':
+          description: Registered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Device' }
+  /devices/{deviceId}:
+    delete:
+      summary: Unregister a device
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '204': { description: Unregistered }
+  /notifications/test:
+    post:
+      summary: Send a user-requested test notification
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Delivery queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsyncOperation' }
+  /ai/plan-drafts/{draftId}:
+    get:
+      summary: Get an unexpired plan draft
+      parameters:
+        - $ref: '#/components/parameters/DraftId'
+      responses:
+        '200':
+          description: Draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanDraft' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      summary: Revise a plan draft with a user instruction
+      parameters:
+        - $ref: '#/components/parameters/DraftId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string, minLength: 1, maxLength: 2000 }
+      responses:
+        '200':
+          description: Revised draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanDraft' }
+    delete:
+      summary: Discard a plan draft
+      parameters:
+        - $ref: '#/components/parameters/DraftId'
+      responses:
+        '204': { description: Discarded }
+  /agent-runs:
+    get:
+      summary: List privacy-safe agent execution metadata
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: [string, 'null'] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: Agent run page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, hasMore]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AgentRun' }
+                  nextCursor: { type: [string, 'null'] }
+                  hasMore: { type: boolean }
+  /agent-runs/{agentRunId}:
+    get:
+      summary: Get one privacy-safe agent run
+      parameters:
+        - $ref: '#/components/parameters/AgentRunId'
+      responses:
+        '200':
+          description: Agent run metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRun' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-history:
+    delete:
+      summary: Delete deletable agent execution history
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Deletion accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsyncOperation' }
+  /automations:
+    get:
+      summary: List approved automations
+      responses:
+        '200':
+          description: Automations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Automation' }
+    post:
+      summary: Create an approved automation from a proposal
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [proposalId]
+              properties:
+                proposalId: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Automation' }
+  /automations/{automationId}:
+    patch:
+      summary: Enable, disable, or update an automation
+      parameters:
+        - $ref: '#/components/parameters/AutomationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [baseVersion]
+              minProperties: 2
+              properties:
+                baseVersion: { type: integer, minimum: 1 }
+                enabled: { type: boolean }
+                schedule:
+                  oneOf:
+                    - $ref: '#/components/schemas/LocalWeeklySchedule'
+                    - type: 'null'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Automation' }
+    delete:
+      summary: Delete an automation
+      parameters:
+        - $ref: '#/components/parameters/AutomationId'
+        - $ref: '#/components/parameters/BaseVersion'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204': { description: Deleted }
+  /daily-reviews/{date}/complete:
+    post:
+      summary: Complete a daily review and optionally save reflection
+      parameters:
+        - $ref: '#/components/parameters/Date'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reflection: { type: [string, 'null'], maxLength: 500 }
+      responses:
+        '200':
+          description: Review completed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DailyReview' }
+  /connections:
+    get:
+      summary: List external data connections
+      responses:
+        '200':
+          description: Connections
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DataConnection' }
+  /connections/google-calendar/callback:
+    get:
+      summary: Complete Google OAuth authorization code exchange
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema: { type: string }
+        - name: state
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '302': { description: Redirect to the app or approval web }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /connections/{connectionId}/sync:
+    post:
+      summary: Request a manual incremental sync
+      parameters:
+        - $ref: '#/components/parameters/ConnectionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Sync queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsyncOperation' }
+  /webhooks/google-calendar:
+    post:
+      summary: Receive and verify Google Calendar change signals
+      security: []
+      responses:
+        '204': { description: Signal accepted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /operations/{operationId}:
+    get:
+      summary: Get an asynchronous operation status
+      parameters:
+        - $ref: '#/components/parameters/OperationId'
+      responses:
+        '200':
+          description: Operation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsyncOperation' }
+  /privacy/export:
+    post:
+      summary: Request a portable data export
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Export queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsyncOperation' }
+  /account:
+    delete:
+      summary: Request account and user-data deletion
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmation]
+              properties:
+                confirmation: { type: string, const: DELETE }
+      responses:
+        '202':
+          description: Deletion queued and sessions revoked
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsyncOperation' }
+  /health/live:
+    get:
+      summary: Process liveness
+      security: []
+      responses:
+        '200':
+          description: Live
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthStatus' }
+  /health/ready:
+    get:
+      summary: Required configuration and database readiness
+      security: []
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthStatus' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Date:
+      name: date
+      in: path
+      required: true
+      schema: { type: string, format: date }
+    TodoId:
+      name: todoId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    BaseVersion:
+      name: baseVersion
+      in: query
+      required: true
+      description: Last server version observed by the client
+      schema: { type: integer, minimum: 1 }
+    SourceId:
+      name: sourceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ProposalId:
+      name: proposalId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    InterestId:
+      name: interestId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    BriefingId:
+      name: briefingId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DraftId:
+      name: draftId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AgentRunId:
+      name: agentRunId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AutomationId:
+      name: automationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ConnectionId:
+      name: connectionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    OperationId:
+      name: operationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Authentication required or signature invalid
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: Authenticated but not permitted
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ConsentRequired:
+      description: Required optional consent is absent
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: Version, state, or idempotency conflict
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds before retry
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unavailable:
+      description: Required dependency unavailable
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, retryable, requestId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            retryable: { type: boolean }
+            requestId: { type: string, format: uuid }
+            details: { type: object, additionalProperties: true }
+    AsyncOperation:
+      type: object
+      required: [id, type, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        type:
+          type: string
+          enum: [briefing_generation, calendar_sync, notification_test, data_export, account_deletion, agent_history_deletion]
+        status:
+          type: string
+          enum: [pending, processing, succeeded, failed, cancelled]
+        resultUrl: { type: [string, 'null'], format: uri }
+        error:
+          oneOf:
+            - $ref: '#/components/schemas/ErrorResponse'
+            - type: 'null'
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+    HealthStatus:
+      type: object
+      required: [status, checkedAt]
+      properties:
+        status: { type: string, enum: [ok] }
+        checkedAt: { type: string, format: date-time }
+    UserPreferences:
+      type: object
+      required: [timezone, theme, accentColor, widgetStyle, hideWidgetContent, dailyReview, newsBriefing]
+      properties:
+        timezone: { type: string, examples: [Asia/Seoul] }
+        theme: { type: string, enum: [warmPaper, quietBlue, softSage, sunset, midnight] }
+        accentColor: { type: string, enum: [coral, amber, sage, sky, indigo, violet] }
+        widgetStyle: { type: string, enum: [nextTodo, dailyIntention] }
+        defaultMood: { type: [string, 'null'], enum: [focus, relaxed, active, recovery, excited, null] }
+        hideWidgetContent: { type: boolean }
+        quietHoursStart: { type: [string, 'null'], format: time }
+        quietHoursEnd: { type: [string, 'null'], format: time }
+        calendarFilter:
+          type: array
+          items: { type: string }
+        dailyReview: { $ref: '#/components/schemas/DailyReviewSettings' }
+        newsBriefing: { $ref: '#/components/schemas/NewsBriefingSettings' }
+    Interest:
+      type: object
+      required: [id, name, query, enabled, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        query: { type: string }
+        enabled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    DailyBriefing:
+      type: object
+      required: [id, date, generatedAt, items]
+      properties:
+        id: { type: string, format: uuid }
+        date: { type: string, format: date }
+        intro: { type: [string, 'null'] }
+        generatedAt: { type: string, format: date-time }
+        viewedAt: { type: [string, 'null'], format: date-time }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: object
+            required: [id, title, sourceName, url, publishedAt, summary]
+            properties:
+              id: { type: string, format: uuid }
+              title: { type: string }
+              sourceName: { type: string }
+              url: { type: string, format: uri }
+              publishedAt: { type: string, format: date-time }
+              summary: { type: string }
+              relevanceReason: { type: [string, 'null'] }
+    WeeklyInsight:
+      type: object
+      required: [weekStart, weekEnd, completedCount, partialCount, rescheduledCount, skippedCount, daily]
+      properties:
+        weekStart: { type: string, format: date }
+        weekEnd: { type: string, format: date }
+        completedCount: { type: integer, minimum: 0 }
+        partialCount: { type: integer, minimum: 0 }
+        rescheduledCount: { type: integer, minimum: 0 }
+        skippedCount: { type: integer, minimum: 0 }
+        daily:
+          type: array
+          minItems: 7
+          maxItems: 7
+          items:
+            type: object
+            required: [date, completed, partial, rescheduled, skipped]
+            properties:
+              date: { type: string, format: date }
+              completed: { type: integer, minimum: 0 }
+              partial: { type: integer, minimum: 0 }
+              rescheduled: { type: integer, minimum: 0 }
+              skipped: { type: integer, minimum: 0 }
+    Device:
+      type: object
+      required: [id, installationId, platform, environment, enabled, lastSeenAt]
+      properties:
+        id: { type: string, format: uuid }
+        installationId: { type: string, format: uuid }
+        platform: { type: string, enum: [ios] }
+        environment: { type: string, enum: [sandbox, production] }
+        appVersion: { type: [string, 'null'] }
+        enabled: { type: boolean }
+        lastSeenAt: { type: string, format: date-time }
+    Automation:
+      type: object
+      required: [id, type, enabled, requiresConfirmation, version, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [schedule_rule, daily_briefing] }
+        instruction: { type: [string, 'null'] }
+        schedule:
+          oneOf:
+            - $ref: '#/components/schemas/LocalWeeklySchedule'
+            - type: 'null'
+        enabled: { type: boolean }
+        requiresConfirmation: { type: boolean }
+        nextRunAt: { type: [string, 'null'], format: date-time }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+    LocalWeeklySchedule:
+      type: object
+      required: [localTime, days, timezone]
+      properties:
+        localTime: { type: string, format: time }
+        days:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, enum: [MO, TU, WE, TH, FR, SA, SU] }
+        timezone: { type: string, examples: [Asia/Seoul] }
+    AgentRun:
+      type: object
+      required: [id, workflowName, model, status, toolNames, toolCallCount, latencyMs, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        workflowName: { type: string }
+        model: { type: string }
+        status: { type: string, enum: [running, succeeded, failed, cancelled] }
+        resultKind:
+          type: [string, 'null']
+          enum: [answer, todo_search_results, plan_draft, todo_change_proposal, schedule_rule_proposal, clarification, refusal, null]
+        toolNames:
+          type: array
+          items: { type: string }
+        toolCallCount: { type: integer, minimum: 0 }
+        latencyMs: { type: integer, minimum: 0 }
+        approvalStatus:
+          type: [string, 'null']
+          enum: [not_required, pending, approved, rejected, null]
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+    Todo:
+      allOf:
+        - $ref: '#/components/schemas/TodoInput'
+        - type: object
+          required: [id, status, source, isRecurrenceException, version, createdAt, updatedAt]
+          properties:
+            id: { type: string, format: uuid }
+            dailyPlanId: { type: [string, 'null'], format: uuid }
+            scheduleRuleId: { type: [string, 'null'], format: uuid }
+            rescheduledFromId: { type: [string, 'null'], format: uuid }
+            status:
+              type: string
+              enum: [planned, in_progress, partial, completed, skipped, rescheduled, cancelled]
+            progress: { type: integer, minimum: 0, maximum: 100 }
+            source: { type: string, enum: [manual, ai, recurring, imported] }
+            isRecurrenceException: { type: boolean }
+            completedAt: { type: [string, 'null'], format: date-time }
+            deletedAt: { type: [string, 'null'], format: date-time }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+            version: { type: integer, minimum: 1 }
+    TodoPage:
+      type: object
+      required: [items, hasMore, appliedFilters]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Todo' }
+        nextCursor: { type: [string, 'null'] }
+        hasMore: { type: boolean }
+        appliedFilters: { type: object, additionalProperties: true }
+    TodoInput:
+      type: object
+      required: [scheduledDate, title, timeBucket]
+      properties:
+        scheduledDate: { type: string, format: date }
+        title: { type: string, minLength: 1, maxLength: 120 }
+        note: { type: [string, 'null'], maxLength: 2000 }
+        emoji: { type: [string, 'null'] }
+        color:
+          type: [string, 'null']
+          enum: [coral, amber, sage, sky, indigo, violet, null]
+        startAt: { type: [string, 'null'], format: date-time }
+        endAt: { type: [string, 'null'], format: date-time }
+        timeBucket:
+          type: string
+          enum: [morning, afternoon, evening, anytime]
+        estimatedMinutes:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 1440
+        sortOrder: { type: integer, default: 0 }
+        reminderOffsetMinutes: { type: [integer, 'null'], minimum: 0, maximum: 10080 }
+    TodoPatch:
+      type: object
+      required: [baseVersion]
+      minProperties: 2
+      properties:
+        baseVersion: { type: integer, minimum: 1 }
+        scheduledDate: { type: string, format: date }
+        title: { type: string, minLength: 1, maxLength: 120 }
+        note: { type: [string, 'null'], maxLength: 2000 }
+        emoji: { type: [string, 'null'] }
+        color:
+          type: [string, 'null']
+          enum: [coral, amber, sage, sky, indigo, violet, null]
+        startAt: { type: [string, 'null'], format: date-time }
+        endAt: { type: [string, 'null'], format: date-time }
+        timeBucket:
+          type: string
+          enum: [morning, afternoon, evening, anytime]
+        estimatedMinutes: { type: [integer, 'null'], minimum: 1, maximum: 1440 }
+        sortOrder: { type: integer }
+        reminderOffsetMinutes: { type: [integer, 'null'], minimum: 0, maximum: 10080 }
+    RescheduleTodoInput:
+      type: object
+      required: [baseVersion, targetDate, timeBucket]
+      properties:
+        baseVersion: { type: integer, minimum: 1 }
+        targetDate: { type: string, format: date }
+        startAt: { type: [string, 'null'], format: date-time }
+        endAt: { type: [string, 'null'], format: date-time }
+        timeBucket: { type: string, enum: [morning, afternoon, evening, anytime] }
+    ScheduleRuleInput:
+      type: object
+      required: [title, rrule, timezone, startsOn]
+      properties:
+        title: { type: string, maxLength: 120 }
+        rrule:
+          type: string
+          pattern: '^FREQ=(DAILY|WEEKLY)(;INTERVAL=[1-9][0-9]?)?(;BYDAY=(MO|TU|WE|TH|FR|SA|SU)(,(MO|TU|WE|TH|FR|SA|SU))*)?$'
+        localStartTime: { type: [string, 'null'], format: time }
+        durationMinutes: { type: [integer, 'null'], minimum: 1 }
+        timezone: { type: string }
+        startsOn: { type: string, format: date }
+        endsOn: { type: [string, 'null'], format: date }
+        reminderOffsetMinutes: { type: [integer, 'null'], minimum: 0, maximum: 10080 }
+    ScheduleRulePatch:
+      type: object
+      required: [baseVersion]
+      minProperties: 2
+      properties:
+        baseVersion: { type: integer, minimum: 1 }
+        title: { type: string, maxLength: 120 }
+        rrule:
+          type: string
+          pattern: '^FREQ=(DAILY|WEEKLY)(;INTERVAL=[1-9][0-9]?)?(;BYDAY=(MO|TU|WE|TH|FR|SA|SU)(,(MO|TU|WE|TH|FR|SA|SU))*)?$'
+        localStartTime: { type: [string, 'null'], format: time }
+        durationMinutes: { type: [integer, 'null'], minimum: 1, maximum: 1440 }
+        timezone: { type: string }
+        startsOn: { type: string, format: date }
+        endsOn: { type: [string, 'null'], format: date }
+        reminderOffsetMinutes: { type: [integer, 'null'], minimum: 0, maximum: 10080 }
+    ScheduleRule:
+      allOf:
+        - $ref: '#/components/schemas/ScheduleRuleInput'
+        - type: object
+          required: [id, isActive, version, createdAt, updatedAt]
+          properties:
+            id: { type: string, format: uuid }
+            isActive: { type: boolean }
+            generatedThrough: { type: [string, 'null'], format: date }
+            version: { type: integer, minimum: 1 }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    DailyReviewSettings:
+      type: object
+      required: [enabled, days]
+      properties:
+        enabled: { type: boolean }
+        time: { type: [string, 'null'], format: time }
+        days:
+          type: array
+          items:
+            type: string
+            enum: [MO, TU, WE, TH, FR, SA, SU]
+        includeReflection: { type: boolean, default: true }
+    NewsBriefingSettings:
+      type: object
+      required: [enabled, days]
+      properties:
+        enabled: { type: boolean }
+        localTime: { type: [string, 'null'], format: time }
+        days:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [MO, TU, WE, TH, FR, SA, SU]
+        lastGeneratedLocalDate: { type: [string, 'null'], format: date, readOnly: true }
+    DailyPlanInput:
+      type: object
+      required: [baseVersion]
+      properties:
+        baseVersion:
+          type: integer
+          minimum: 0
+          description: Use 0 when creating the date for the first time
+        intention: { type: [string, 'null'], maxLength: 280 }
+        mood: { type: [string, 'null'], enum: [focus, relaxed, active, recovery, excited, null] }
+        reflection: { type: [string, 'null'], maxLength: 1000 }
+    DailyPlan:
+      type: object
+      required: [id, date, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        date: { type: string, format: date }
+        intention: { type: [string, 'null'], maxLength: 280 }
+        mood: { type: [string, 'null'], enum: [focus, relaxed, active, recovery, excited, null] }
+        reflection: { type: [string, 'null'], maxLength: 1000 }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DayView:
+      type: object
+      required: [date, todos, emptyState]
+      properties:
+        date: { type: string, format: date }
+        emptyState:
+          type: string
+          enum: [needs_planning, planned, completed]
+        todos:
+          type: array
+          items: { $ref: '#/components/schemas/Todo' }
+        needsReviewCount: { type: integer }
+    DailyReview:
+      type: object
+      required: [date, pendingTodos]
+      properties:
+        date: { type: string, format: date }
+        pendingTodos:
+          type: array
+          items: { $ref: '#/components/schemas/Todo' }
+        status:
+          type: string
+          enum: [not_started, in_progress, completed]
+        responses:
+          type: array
+          items:
+            type: object
+            required: [todoId, response, respondedAt]
+            properties:
+              todoId: { type: string, format: uuid }
+              response:
+                type: string
+                enum: [completed, partial, skipped, reschedule_tomorrow, reschedule_custom, leave_planned]
+              progress: { type: [integer, 'null'], minimum: 1, maximum: 99 }
+              respondedAt: { type: string, format: date-time }
+    ReviewResponseInput:
+      type: object
+      required: [todoId, baseVersion, response]
+      properties:
+        todoId: { type: string, format: uuid }
+        baseVersion: { type: integer, minimum: 1 }
+        response:
+          type: string
+          enum: [completed, partial, skipped, reschedule_tomorrow, reschedule_custom, leave_planned]
+        progress:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 99
+          description: Required only when response is partial
+        targetDate: { type: [string, 'null'], format: date }
+      allOf:
+        - if:
+            properties: { response: { const: partial } }
+          then:
+            required: [progress]
+        - if:
+            properties: { response: { const: reschedule_custom } }
+          then:
+            required: [targetDate]
+    PlanDraft:
+      type: object
+      required: [id, date, status, intention, todos, expiresAt, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        date: { type: string, format: date }
+        status: { type: string, enum: [draft, committed, discarded, expired] }
+        intention: { type: string }
+        message: { type: string }
+        todos:
+          type: array
+          maxItems: 5
+          items: { $ref: '#/components/schemas/TodoInput' }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    ConsentRecord:
+      type: object
+      required: [type, status, scope, policyVersion, updatedAt]
+      properties:
+        type: { $ref: '#/components/schemas/ConsentType' }
+        status: { type: string, enum: [granted, revoked] }
+        scope: { type: object, additionalProperties: true }
+        policyVersion: { type: string }
+        grantedAt: { type: [string, 'null'], format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ConsentType:
+      type: string
+      enum:
+        - notifications.schedule
+        - notifications.review
+        - ai.plan.basic
+        - ai.calendar.time
+        - ai.calendar.title
+        - ai.calendar.note
+        - ai.history
+        - news.personalization
+        - calendar.read
+        - calendar.write
+    ConsentGrantInput:
+      type: object
+      required: [scope, policyVersion]
+      properties:
+        scope:
+          type: object
+          additionalProperties: true
+          description: User-selected fields within the consent type's allowed scope
+        policyVersion: { type: string, minLength: 1, maxLength: 40 }
+    DataConnection:
+      type: object
+      required: [id, provider, accessLevel, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [google_calendar] }
+        accessLevel: { type: string, enum: [free_busy, events_read, events_write] }
+        status:
+          type: string
+          enum: [pending, active, reauthorization_required, revoking, revoked, error]
+        grantedScopes:
+          type: array
+          items: { type: string }
+        lastSyncedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    SyncPage:
+      type: object
+      required: [items, nextCursor, hasMore]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [entityType, operation, id, version, updatedAt]
+            properties:
+              entityType:
+                type: string
+                enum: [todo, dailyPlan, preference, scheduleRule]
+              operation:
+                type: string
+                enum: [upsert, delete]
+              id: { type: string, format: uuid }
+              version: { type: integer, minimum: 1 }
+              updatedAt: { type: string, format: date-time }
+              data: { type: [object, 'null'] }
+        nextCursor: { type: [string, 'null'] }
+        hasMore: { type: boolean }
+    SyncMutation:
+      type: object
+      required: [mutationId, entityType, operation, entityId, baseVersion]
+      properties:
+        mutationId: { type: string, format: uuid }
+        entityType:
+          type: string
+          enum: [todo, dailyPlan, preference, scheduleRule]
+        operation:
+          type: string
+          enum: [upsert, delete]
+        entityId: { type: string, format: uuid }
+        baseVersion: { type: integer, minimum: 0 }
+        data: { type: [object, 'null'] }
+    SyncMutationResult:
+      type: object
+      required: [mutationId, entityId, status]
+      properties:
+        mutationId: { type: string, format: uuid }
+        entityId: { type: string, format: uuid }
+        status: { type: string, enum: [applied, conflict, rejected] }
+        serverVersion: { type: [integer, 'null'], minimum: 1 }
+        serverData: { type: [object, 'null'] }
+        error:
+          oneOf:
+            - $ref: '#/components/schemas/ErrorResponse'
+            - type: 'null'
+    SyncPushResult:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/SyncMutationResult' }
+    CalendarSource:
+      type: object
+      required: [id, provider, displayName, accessLevel, syncStatus]
+      properties:
+        id: { type: string, format: uuid }
+        provider:
+          type: string
+          enum: [google_calendar, apple_eventkit]
+        displayName: { type: string }
+        color: { type: [string, 'null'] }
+        visible: { type: boolean, default: true }
+        accessLevel:
+          type: string
+          enum: [free_busy, events_read, events_write]
+        syncStatus:
+          type: string
+          enum: [pending, active, reauthorization_required, revoking, revoked, error]
+        lastSyncedAt: { type: [string, 'null'], format: date-time }
+    CalendarEntry:
+      type: object
+      required: [id, entryKind, sourceProvider, sourceLabel, ownership, title, startAt, endAt, resourceUrl]
+      properties:
+        id: { type: string, format: uuid }
+        entryKind:
+          type: string
+          enum: [todo, external_event, proposal]
+        sourceProvider:
+          type: string
+          enum: [myday, google_calendar, apple_eventkit]
+        sourceLabel: { type: string }
+        ownership:
+          type: string
+          enum: [owned, mirrored, proposed]
+        title: { type: string }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        resourceUrl: { type: string, format: uri }
+    ChangeProposal:
+      type: object
+      required: [id, origin, status, summary, approvalUrl, expiresAt, operations]
+      properties:
+        id: { type: string, format: uuid }
+        origin:
+          type: string
+          enum: [ios, myday_agent, mcp]
+        status:
+          type: string
+          enum: [pending_approval, executing, applied, rejected, expired, failed, conflict]
+        summary: { type: string }
+        approvalUrl: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
+        operations:
+          type: array
+          items:
+            type: object
+            required: [operationType, targetType, proposedChanges]
+            properties:
+              operationType:
+                type: string
+                enum: [create, update, reschedule, complete, skip]
+              targetType:
+                type: string
+                enum: [todo, google_calendar_event]
+              targetId: { type: [string, 'null'], format: uuid }
+              proposedChanges: { type: object }
