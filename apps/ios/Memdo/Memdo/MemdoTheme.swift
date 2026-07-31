@@ -17,6 +17,13 @@ enum MemdoTheme {
     static let peachSoft = Color(red: 1.0, green: 0.886, blue: 0.824)
 }
 
+enum MemdoMetrics {
+    static let pagePadding: CGFloat = 20
+    static let cardRadius: CGFloat = 24
+    static let fieldRadius: CGFloat = 14
+    static let touchTarget: CGFloat = 44
+}
+
 struct MemdoPageBackground: View {
     var body: some View {
         LinearGradient(
@@ -30,5 +37,28 @@ struct MemdoPageBackground: View {
         )
         .ignoresSafeArea()
         .accessibilityHidden(true)
+    }
+}
+
+struct MemdoSectionHeader: View {
+    let title: String
+    let trailing: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.title3.bold())
+                .foregroundStyle(MemdoTheme.ink)
+            Spacer()
+            Text(trailing)
+                .font(.caption.bold())
+                .foregroundStyle(MemdoTheme.secondaryInk)
+        }
+    }
+}
+
+extension View {
+    func memdoCard(radius: CGFloat = MemdoMetrics.cardRadius) -> some View {
+        background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
 }
