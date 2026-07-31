@@ -3,6 +3,8 @@ import SwiftUI
 struct TodayView: View {
     @State private var tasks = DayTask.samples
     @State private var presentedSheet: SheetDestination?
+    @State private var selectedDate = 31
+    @State private var briefingMessage = ""
 
     var body: some View {
         NavigationStack {
@@ -27,8 +29,10 @@ struct TodayView: View {
                 }
                 .scrollIndicators(.hidden)
             }
-            .safeAreaInset(edge: .bottom) {
+            .overlay(alignment: .bottomTrailing) {
                 addButton
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
             }
             .sheet(item: $presentedSheet) { destination in
                 switch destination {
@@ -41,8 +45,17 @@ struct TodayView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .alert("3분 브리핑", isPresented: Binding(
+                get: { !briefingMessage.isEmpty },
+                set: { if !$0 { briefingMessage = "" } }
+            )) {
+                Button("확인", role: .cancel) {}
+            } message: {
+                Text(briefingMessage)
+            }
         }
         .tint(MemdoTheme.accent)
+        .sensoryFeedback(.selection, trigger: selectedDate)
     }
 
     private var header: some View {
@@ -90,18 +103,23 @@ struct TodayView: View {
     private var weekIndex: some View {
         HStack(spacing: 4) {
             ForEach(Array(zip(["월", "화", "수", "목", "금", "토", "일"], 27...33)), id: \.0) { day, date in
-                let isToday = day == "금"
-                VStack(spacing: 4) {
-                    Text(day)
-                        .font(.caption2.weight(.semibold))
-                    Text(date > 31 ? "\(date - 31)" : "\(date)")
-                        .font(.subheadline.weight(.semibold))
+                Button {
+                    selectedDate = date
+                } label: {
+                    VStack(spacing: 4) {
+                        Text(day)
+                            .font(.caption2.weight(.semibold))
+                        Text(date > 31 ? "\(date - 31)" : "\(date)")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(date == selectedDate ? Color.white : MemdoTheme.secondaryInk)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(date == selectedDate ? MemdoTheme.accent : Color.clear)
+                    .clipShape(Capsule())
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(day)요일 \(date > 31 ? date - 31 : date)일")
                 }
-                .foregroundStyle(isToday ? Color.white : MemdoTheme.secondaryInk)
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .background(isToday ? MemdoTheme.accent : Color.clear)
-                .clipShape(Capsule())
-                .accessibilityElement(children: .combine)
+                .buttonStyle(.plain)
             }
         }
         .padding(6)
@@ -172,19 +190,19 @@ struct TodayView: View {
             sectionHeader("3분 브리핑", trailing: "AI 요약")
 
             VStack(spacing: 0) {
-                BriefingRow(
+                briefingButton(
                     icon: "cpu",
                     title: "온디바이스 AI 도구 확대",
                     summary: "개인정보를 기기 안에서 처리하는 흐름이 커지고 있어요."
                 )
                 Divider().padding(.leading, 60)
-                BriefingRow(
+                briefingButton(
                     icon: "checklist",
                     title: "생산성 앱은 회고 중심으로",
                     summary: "완벽한 계획보다 미완료 일정을 정리하는 경험에 집중해요."
                 )
                 Divider().padding(.leading, 60)
-                BriefingRow(
+                briefingButton(
                     icon: "cloud.rain",
                     title: "퇴근 무렵 짧은 소나기",
                     summary: "19시 산책은 30분 정도 늦추는 편이 좋아요."
@@ -233,23 +251,26 @@ struct TodayView: View {
     }
 
     private var addButton: some View {
-        HStack {
-            Spacer()
-            Button {
-                presentedSheet = .addTask
-            } label: {
-                Label("새 일정", systemImage: "plus")
-                    .font(.headline)
-                    .padding(.horizontal, 22)
-                    .frame(minHeight: 50)
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .shadow(color: MemdoTheme.ink.opacity(0.12), radius: 12, y: 5)
+        Button {
+            presentedSheet = .addTask
+        } label: {
+            Label("새 일정", systemImage: "plus")
+                .font(.headline)
+                .padding(.horizontal, 22)
+                .frame(minHeight: 50)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
+        .buttonStyle(.borderedProminent)
+        .buttonBorderShape(.capsule)
+        .shadow(color: MemdoTheme.ink.opacity(0.12), radius: 12, y: 5)
+    }
+
+    private func briefingButton(icon: String, title: String, summary: String) -> some View {
+        Button {
+            briefingMessage = "\(title)\n\n\(summary)"
+        } label: {
+            BriefingRow(icon: icon, title: title, summary: summary)
+        }
+        .buttonStyle(.plain)
     }
 
     private func sectionHeader(_ title: String, trailing: String) -> some View {
