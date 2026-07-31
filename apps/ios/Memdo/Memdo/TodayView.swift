@@ -1,10 +1,22 @@
 import SwiftUI
 
 struct TodayView: View {
-    @State private var tasks = DayTask.samples
+    @Environment(ScheduleStore.self) private var scheduleStore
     @State private var presentedSheet: SheetDestination?
     @State private var selectedDate = 31
     @State private var briefingMessage = ""
+
+    private var schedules: [ScheduleDetail] {
+        scheduleStore.items(for: selectedDate)
+    }
+
+    private var completedCount: Int {
+        schedules.filter(\.isDone).count
+    }
+
+    private var remainingCount: Int {
+        schedules.count - completedCount
+    }
 
     var body: some View {
         NavigationStack {
@@ -15,7 +27,7 @@ struct TodayView: View {
                     VStack(alignment: .leading, spacing: 26) {
                         header
                         weekIndex
-                        if tasks.isEmpty {
+                        if schedules.isEmpty {
                             intention
                         } else {
                             schedule
@@ -29,24 +41,18 @@ struct TodayView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
-                    .padding(.bottom, 96)
+                    .padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
             }
             .sheet(item: $presentedSheet) { destination in
                 switch destination {
-                case .addTask:
-                    AddTaskSheet { title, time in
-                        tasks.append(.init(title: title, time: time, source: .mine))
-                    }
+                case .addTask(let day):
+                    AddScheduleSheet(day: day, onSave: scheduleStore.save)
                 case .dailySummary:
                     DailySummaryView()
                 case .detail(let schedule):
-                    ScheduleDetailSheet(schedule: schedule) { isDone in
-                        if let index = tasks.firstIndex(where: { $0.id == schedule.id }) {
-                            tasks[index].isDone = isDone
-                        }
-                    }
+                    ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -66,13 +72,13 @@ struct TodayView: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("좋은 오후예요")
+                Text(selectedDate == 31 ? "좋은 오후예요" : selectedDate < 31 ? "지난 하루" : "다가오는 하루")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(MemdoTheme.accent)
-                Text("오늘")
+                Text(selectedDate == 31 ? "오늘" : selectedDate > 31 ? "8월 \(displayDate(selectedDate))일" : "7월 \(selectedDate)일")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(MemdoTheme.ink)
-                Text("7월 31일 금요일")
+                Text(dateSubtitle)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
@@ -86,11 +92,11 @@ struct TodayView: View {
                     Circle()
                         .stroke(MemdoTheme.accent.opacity(0.16), lineWidth: 5)
                     Circle()
-                        .trim(from: 0, to: tasks.isEmpty ? 0 : CGFloat(tasks.filter(\.isDone).count) / CGFloat(tasks.count))
+                        .trim(from: 0, to: schedules.isEmpty ? 0 : CGFloat(completedCount) / CGFloat(schedules.count))
                         .stroke(MemdoTheme.accent, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                     VStack(spacing: 0) {
-                        Text("\(tasks.filter(\.isDone).count)/\(tasks.count)")
+                        Text("\(completedCount)/\(schedules.count)")
                             .font(.caption.weight(.bold))
                         Text("완료")
                             .font(.system(size: 9, weight: .semibold))
@@ -128,7 +134,7 @@ struct TodayView: View {
             }
         }
         .padding(6)
-        .background(.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .memdoCard(radius: 22)
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(.white.opacity(0.9), lineWidth: 1)
@@ -139,16 +145,22 @@ struct TodayView: View {
         String(date > 31 ? date - 31 : date)
     }
 
+    private var dateSubtitle: String {
+        let weekday = ["27": "월요일", "28": "화요일", "29": "수요일", "30": "목요일", "31": "금요일", "32": "토요일", "33": "일요일"]["\(selectedDate)"] ?? ""
+        let month = selectedDate > 31 ? 8 : 7
+        return "\(month)월 \(displayDate(selectedDate))일 \(weekday)"
+    }
+
     private var intention: some View {
         Button {
-            presentedSheet = .addTask
+            presentedSheet = .addTask(selectedDate)
         } label: {
             HStack(alignment: .top, spacing: 14) {
                 VStack(alignment: .leading, spacing: 5) {
                     Label("오늘의 방향", systemImage: "sparkle")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(MemdoTheme.peach)
-                    Text("오늘은 어떤 하루를 보내고 싶나요?")
+                    Text(selectedDate == 31 ? "오늘은 어떤 하루를 보내고 싶나요?" : "이날에는 어떤 시간을 보내고 싶나요?")
                         .font(.headline)
                         .foregroundStyle(MemdoTheme.ink)
                     Text("계획이 비어 있을 때 가볍게 시작해보세요")
@@ -179,26 +191,29 @@ struct TodayView: View {
 
     private var schedule: some View {
         VStack(alignment: .leading, spacing: 14) {
-            sectionHeader("일정", trailing: "\(tasks.filter { !$0.isDone }.count)개 남음")
+            MemdoSectionHeader(title: "일정", trailing: "\(remainingCount)개 남음")
 
             VStack(spacing: 0) {
-                ForEach($tasks) { $task in
-                    TimelineTaskRow(task: $task) {
-                        presentedSheet = .detail(task.detail)
-                    }
-                    if task.id != tasks.last?.id {
+                ForEach(schedules) { schedule in
+                    ScheduleRow(
+                        schedule: schedule,
+                        context: .timeline,
+                        onOpen: { presentedSheet = .detail(schedule) },
+                        onToggleDone: { scheduleStore.toggleDone(id: schedule.id) }
+                    )
+                    if schedule.id != schedules.last?.id {
                         Divider().padding(.leading, 76)
                     }
                 }
             }
             .padding(.vertical, 4)
-            .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .memdoCard()
         }
     }
 
     private var briefing: some View {
         VStack(alignment: .leading, spacing: 14) {
-            sectionHeader("3분 브리핑", trailing: "AI 요약")
+            MemdoSectionHeader(title: "3분 브리핑", trailing: "AI 요약")
 
             VStack(spacing: 0) {
                 briefingButton(
@@ -235,9 +250,9 @@ struct TodayView: View {
                     .background(MemdoTheme.accentSoft, in: Circle())
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("오늘 1/3 완료")
+                    Text("\(selectedDate == 31 ? "오늘" : "선택한 날") \(completedCount)/\(schedules.count) 완료")
                         .font(.subheadline.weight(.semibold))
-                    Text("남은 2개를 정리하면 하루가 끝나요")
+                    Text(schedules.isEmpty ? "등록된 일정이 없어요" : remainingCount == 0 ? "모든 일정을 정리했어요" : "남은 \(remainingCount)개를 확인해 보세요")
                         .font(.caption)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                 }
@@ -263,7 +278,7 @@ struct TodayView: View {
 
     private var addButton: some View {
         Button {
-            presentedSheet = .addTask
+            presentedSheet = .addTask(selectedDate)
         } label: {
             Label("새 일정", systemImage: "plus")
                 .font(.headline)
@@ -272,7 +287,6 @@ struct TodayView: View {
         }
         .buttonStyle(.borderedProminent)
         .buttonBorderShape(.capsule)
-        .shadow(color: MemdoTheme.ink.opacity(0.12), radius: 12, y: 5)
     }
 
     private func briefingButton(icon: String, title: String, summary: String) -> some View {
@@ -284,69 +298,6 @@ struct TodayView: View {
         .buttonStyle(.plain)
     }
 
-    private func sectionHeader(_ title: String, trailing: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(MemdoTheme.ink)
-            Spacer()
-            Text(trailing)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(MemdoTheme.secondaryInk)
-        }
-    }
-}
-
-private struct TimelineTaskRow: View {
-    @Binding var task: DayTask
-    let onOpen: () -> Void
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text(task.time)
-                .font(.caption.monospacedDigit().weight(.semibold))
-                .foregroundStyle(MemdoTheme.secondaryInk)
-                .frame(width: 48, alignment: .leading)
-
-            Image(systemName: task.source == .mine ? "person.fill" : "calendar")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(task.source == .mine ? MemdoTheme.mine : MemdoTheme.google)
-                .frame(width: 34, height: 34)
-                .background(
-                    task.source == .mine ? MemdoTheme.mineSoft : MemdoTheme.googleSoft,
-                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                )
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(task.title)
-                    .font(.body.weight(.semibold))
-                    .lineLimit(2)
-                    .strikethrough(task.isDone)
-                    .foregroundStyle(task.isDone ? MemdoTheme.secondaryInk : MemdoTheme.ink)
-
-                Text(task.source.label)
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(MemdoTheme.secondaryInk)
-            }
-
-            Spacer(minLength: 0)
-
-            Button {
-                task.isDone.toggle()
-            } label: {
-                Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(task.isDone ? "완료 취소" : "완료로 표시")
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onOpen)
-        .accessibilityAction(named: "상세 보기", onOpen)
-    }
 }
 
 private struct BriefingRow: View {
@@ -393,91 +344,23 @@ private struct BriefingRow: View {
     }
 }
 
-struct AddTaskSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var title = ""
-    @State private var time = Date()
-
-    let onSave: (String, String) -> Void
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("무엇을 할까요?") {
-                    TextField("예: 산책하며 생각 정리하기", text: $title)
-                    DatePicker("시간", selection: $time, displayedComponents: .hourAndMinute)
-                }
-            }
-            .navigationTitle("새 일정")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("취소") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("추가") {
-                        onSave(title, time.formatted(date: .omitted, time: .shortened))
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
-}
-
 private enum SheetDestination: Identifiable {
-    case addTask
+    case addTask(Int)
     case dailySummary
     case detail(ScheduleDetail)
 
     var id: String {
         switch self {
-        case .addTask: "addTask"
+        case .addTask(let day): "addTask-\(day)"
         case .dailySummary: "dailySummary"
         case .detail(let schedule): "detail-\(schedule.id)"
         }
     }
 }
 
-private struct DayTask: Identifiable {
-    enum Source {
-        case mine
-        case google
-
-        var label: String { self == .mine ? "내 일정" : "Google Calendar" }
-    }
-
-    let id = UUID()
-    var title: String
-    var time: String
-    var source: Source
-    var isDone = false
-
-    var detail: ScheduleDetail {
-        .init(
-            id: id,
-            day: 31,
-            time: time,
-            title: title,
-            source: source.label,
-            isDone: isDone,
-            location: title.contains("산책") ? "한강 공원" : "장소 없음",
-            memo: source == .google ? "Google Calendar에서 가져온 일정" : "직접 만든 일정"
-        )
-    }
-
-    static let samples = [
-        DayTask(title: "앱 기획 문서 다듬기", time: "10:00", source: .mine),
-        DayTask(title: "디자인 시안 확인", time: "14:30", source: .google),
-        DayTask(title: "30분 산책", time: "19:00", source: .mine)
-    ]
-}
-
 struct TodayView_Previews: PreviewProvider {
     static var previews: some View {
         TodayView()
+            .environment(ScheduleStore())
     }
 }

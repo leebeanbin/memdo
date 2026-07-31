@@ -155,17 +155,17 @@ flowchart LR
 
 ### 5.6 하단 내비게이션
 
-모든 최상위 탭은 하나의 `FloatingTabBar`를 공유한다.
+모든 최상위 탭은 하나의 `BottomTabDock`을 공유한다.
 
 - 탭: 오늘, 캘린더, 검색, AI, 설정
 - 좌우 여백: `14pt`
-- 최대 너비: `350pt`, 화면 중앙 정렬
-- 컨테이너 반경: `25pt`
-- 선택 배경 반경: `17pt`
-- 최소 탭 높이: `48pt`
+- 도크는 화면 전체 너비와 하단 안전 영역을 불투명 Surface로 채운다.
+- 선택 배경 반경: `16pt`
+- 최소 탭 높이: `50pt`
 - 선택 상태: Accent 아이콘·라벨 + Accent Soft 배경
 - 비선택 상태: Secondary Ink
-- 표면: Cloud Milk 불투명 카드, 흰색 외곽선, 약한 그림자
+- 상단 경계는 한 줄 구분선으로만 표시하고 그림자와 유리 효과를 사용하지 않는다.
+- 도크 뒤로 스크롤 콘텐츠가 비치거나 겹쳐 보이면 안 된다.
 - 오늘 요약·새 일정처럼 별도 시트나 상세 문맥에서는 표시하지 않는다.
 
 ![확정 하단 내비게이션](../../../design/previews/01-floating-navigation.png)
@@ -236,6 +236,7 @@ Apple SF Symbols를 기본 아이콘 세트로 사용한다. 한 화면에서 �
 | 일부 완료 | 완료 아이콘, 취소선, 남은 개수 갱신 |
 | 일정 과다 | 화면은 스크롤하고 위젯에서는 일부와 `+N개 더` 표시 |
 | 외부 일정 | 출처 아이콘과 출처명 표시 |
+| 날짜 변경 | 선택 날짜의 일정·완료 수·빈 상태·추가 대상 날짜를 함께 갱신 |
 
 ### 7.4 하단 버튼
 
@@ -245,6 +246,8 @@ Apple SF Symbols를 기본 아이콘 세트로 사용한다. 한 화면에서 �
 - 지난 날짜는 완료된 기록을 포함해 당시 일정을 보여주고, 기록이 없으면 빈 상태를 보여준다.
 - 날짜 시트 하단에는 `7월 N일에 새 일정` 주요 버튼을 크게 고정한다.
 - 일정 행을 누르면 출처·시간·장소·알림·반복·메모·완료 상태를 보여주는 상세 시트가 열린다.
+- 상세 시트의 완료 처리는 보조 크기 버튼으로 표현하고, 수정 모드는 날짜·시간·장소·알림·반복·메모를 편집한다.
+- 수정 결과는 공통 `ScheduleStore`에 저장되어 오늘·캘린더·검색에 동일하게 반영된다.
 - 오늘 화면의 일정 행과 검색 결과도 동일한 상세 시트를 재사용한다.
 - 검색 상세 필터는 출처, 완료 상태, 기간을 조합하며 활성 필터를 결과 위에 텍스트로 표시한다.
 
@@ -520,10 +523,11 @@ AI가 제안한 일정도 사용자가 승인한 뒤에는 일반 일정과 동�
 | Page Header | 화면 목적과 날짜·설명 |
 | Date Rail | 인접 날짜 이동 |
 | Intention Prompt | 계획이 없을 때 첫 행동 |
-| Timeline Row | 시간, 제목, 출처, 완료 |
+| Schedule Row | 오늘·캘린더·검색에서 시간, 제목, 출처, 완료를 문맥별 표시 |
 | Briefing Row | 분야 아이콘, 제목, AI 요약 |
-| Agenda Row | 선택 날짜의 일정 |
-| Source Badge | 아이콘과 출처명 |
+| Schedule Source Icon | 직접 일정과 외부 일정의 아이콘·색상 |
+| Schedule Editor Fields | 추가·수정에서 날짜, 시간, 장소, 알림, 반복, 메모 |
+| Schedule Detail Sheet | 조회, 소형 완료 액션, 수정·저장 |
 | Proposal Card | AI 일정 제안과 승인 |
 | Decision Row | 완료·이동·삭제 |
 | Summary Insight | AI 근거와 다음 행동 |
@@ -537,8 +541,9 @@ AI가 제안한 일정도 사용자가 승인한 뒤에는 일반 일정과 동�
 |---|---|
 | `Memdo/MemdoApp.swift` | 앱 진입점 |
 | `Memdo/MemdoScreens.swift` | 탭, 캘린더, 검색, AI, 요약, 설정 |
-| `Memdo/TodayView.swift` | 오늘 화면과 새 일정 시트 |
-| `Memdo/MemdoTheme.swift` | Cloud Milk 색상 토큰 |
+| `Memdo/TodayView.swift` | 선택 날짜 기반 오늘 화면 |
+| `Memdo/ScheduleKit.swift` | 공통 일정 모델·저장소·행·추가·상세·편집 컴포넌트 |
+| `Memdo/MemdoTheme.swift` | Cloud Milk 색상·간격·반경·터치 토큰 |
 | `MemdoWidget/MemdoWidget.swift` | 잠금화면 및 홈 화면 위젯 |
 | `project.yml` | XcodeGen 프로젝트 설정 |
 
