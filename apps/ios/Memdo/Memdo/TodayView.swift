@@ -5,6 +5,7 @@ struct TodayView: View {
     @State private var presentedSheet: SheetDestination?
     @State private var selectedDate = 31
     @State private var briefingMessage = ""
+    @State private var showAllSchedules = false
 
     private var schedules: [ScheduleDetail] {
         scheduleStore.items(for: selectedDate)
@@ -16,6 +17,10 @@ struct TodayView: View {
 
     private var remainingCount: Int {
         schedules.count - completedCount
+    }
+
+    private var displayedSchedules: [ScheduleDetail] {
+        showAllSchedules ? schedules : Array(schedules.prefix(3))
     }
 
     var body: some View {
@@ -116,6 +121,7 @@ struct TodayView: View {
             ForEach(Array(zip(["월", "화", "수", "목", "금", "토", "일"], 27...33)), id: \.0) { day, date in
                 Button {
                     selectedDate = date
+                    showAllSchedules = false
                 } label: {
                     VStack(spacing: 4) {
                         Text(day)
@@ -194,16 +200,42 @@ struct TodayView: View {
             MemdoSectionHeader(title: "일정", trailing: "\(remainingCount)개 남음")
 
             VStack(spacing: 0) {
-                ForEach(schedules) { schedule in
+                ForEach(displayedSchedules) { schedule in
                     ScheduleRow(
                         schedule: schedule,
                         context: .timeline,
                         onOpen: { presentedSheet = .detail(schedule) },
                         onToggleDone: { scheduleStore.toggleDone(id: schedule.id) }
                     )
-                    if schedule.id != schedules.last?.id {
+                    if schedule.id != displayedSchedules.last?.id {
                         Divider().padding(.leading, 76)
                     }
+                }
+
+                if schedules.count > 3 {
+                    Divider().padding(.leading, 76)
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showAllSchedules.toggle()
+                        }
+                    } label: {
+                        HStack {
+                            Label(
+                                showAllSchedules ? "일정 접기" : "나머지 \(schedules.count - 3)개 보기",
+                                systemImage: showAllSchedules ? "chevron.up" : "ellipsis"
+                            )
+                            Spacer()
+                            Text("총 \(schedules.count)개")
+                                .font(.caption)
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.accent)
+                        .frame(minHeight: 44)
+                        .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(showAllSchedules ? "일정 목록을 세 개로 줄입니다" : "나머지 일정을 이어서 보여줍니다")
                 }
             }
             .padding(.vertical, 4)
@@ -215,27 +247,34 @@ struct TodayView: View {
         VStack(alignment: .leading, spacing: 14) {
             MemdoSectionHeader(title: "3분 브리핑", trailing: "AI 요약")
 
-            VStack(spacing: 0) {
-                briefingButton(
-                    icon: "cpu",
-                    title: "온디바이스 AI 도구 확대",
-                    summary: "개인정보를 기기 안에서 처리하는 흐름이 커지고 있어요."
-                )
-                Divider().padding(.leading, 60)
-                briefingButton(
-                    icon: "checklist",
-                    title: "생산성 앱은 회고 중심으로",
-                    summary: "완벽한 계획보다 미완료 일정을 정리하는 경험에 집중해요."
-                )
-                Divider().padding(.leading, 60)
-                briefingButton(
-                    icon: "cloud.rain",
-                    title: "퇴근 무렵 짧은 소나기",
-                    summary: "19시 산책은 30분 정도 늦추는 편이 좋아요."
-                )
+            VStack(spacing: 12) {
+                Button {
+                    briefingMessage = "온디바이스 AI가 일상 도구로\n\n개인정보를 기기 안에서 처리하는 흐름이 커지고 있어요."
+                } label: {
+                    BriefingLeadCard(
+                        icon: "cpu",
+                        eyebrow: "TECH · 2분",
+                        title: "온디바이스 AI가\n일상 도구로",
+                        summary: "개인정보를 기기 안에서 처리하는 흐름이 커지고 있어요."
+                    )
+                }
+                .buttonStyle(.plain)
+
+                HStack(alignment: .top, spacing: 12) {
+                    briefingCompactButton(
+                        icon: "checklist",
+                        eyebrow: "FOCUS · 1분",
+                        title: "계획보다 회고가 오래 남아요",
+                        summary: "미완료 일정 정리가 핵심"
+                    )
+                    briefingCompactButton(
+                        icon: "cloud.rain",
+                        eyebrow: "WEATHER · 지금",
+                        title: "19시 산책은 30분 뒤로",
+                        summary: "퇴근 무렵 짧은 소나기"
+                    )
+                }
             }
-            .background(MemdoTheme.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
     }
 
@@ -289,58 +328,106 @@ struct TodayView: View {
         .buttonBorderShape(.capsule)
     }
 
-    private func briefingButton(icon: String, title: String, summary: String) -> some View {
+    private func briefingCompactButton(
+        icon: String,
+        eyebrow: String,
+        title: String,
+        summary: String
+    ) -> some View {
         Button {
             briefingMessage = "\(title)\n\n\(summary)"
         } label: {
-            BriefingRow(icon: icon, title: title, summary: summary)
+            BriefingCompactCard(
+                icon: icon,
+                eyebrow: eyebrow,
+                title: title,
+                summary: summary
+            )
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
     }
 
 }
 
-private struct BriefingRow: View {
+private struct BriefingLeadCard: View {
     let icon: String
+    let eyebrow: String
     let title: String
     let summary: String
 
-    private var iconColor: Color {
-        switch icon {
-        case "cpu": MemdoTheme.accent
-        case "checklist": MemdoTheme.mine
-        default: MemdoTheme.google
-        }
-    }
-
-    private var iconBackground: Color {
-        switch icon {
-        case "cpu": MemdoTheme.accentSoft
-        case "checklist": MemdoTheme.mineSoft
-        default: MemdoTheme.googleSoft
-        }
-    }
-
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(iconColor)
-                .frame(width: 32, height: 32)
-                .background(iconBackground, in: RoundedRectangle(cornerRadius: 9))
-
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label(eyebrow, systemImage: icon)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(MemdoTheme.accent)
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.title3.weight(.bold))
                     .foregroundStyle(MemdoTheme.ink)
                 Text(summary)
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(MemdoTheme.secondaryInk)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 0)
+            Text("AI가 고른 오늘의 핵심")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(MemdoTheme.secondaryInk)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .background(
+            LinearGradient(
+                colors: [MemdoTheme.accentSoft, MemdoTheme.surface],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.white.opacity(0.9), lineWidth: 1)
+        }
+    }
+}
+
+private struct BriefingCompactCard: View {
+    let icon: String
+    let eyebrow: String
+    let title: String
+    let summary: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(icon == "checklist" ? MemdoTheme.mine : MemdoTheme.google)
+                .frame(width: 32, height: 32)
+                .background(
+                    icon == "checklist" ? MemdoTheme.mineSoft : MemdoTheme.googleSoft,
+                    in: RoundedRectangle(cornerRadius: 9)
+                )
+            Text(eyebrow)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(MemdoTheme.secondaryInk)
+            Text(title)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(MemdoTheme.ink)
+                .lineLimit(2)
+            Text(summary)
+                .font(.caption)
+                .foregroundStyle(MemdoTheme.secondaryInk)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, minHeight: 164, alignment: .topLeading)
         .padding(16)
+        .background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }
 

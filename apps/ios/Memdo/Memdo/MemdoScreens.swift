@@ -34,17 +34,25 @@ struct AppShellView: View {
     @State private var showSummary = false
 
     var body: some View {
-        ZStack {
-            tabScreen(.today) { TodayView() }
-            tabScreen(.calendar) { CalendarView() }
-            tabScreen(.search) { ScheduleSearchView() }
-            tabScreen(.assistant) { AssistantView() }
-            tabScreen(.settings) { SettingsView() }
+        TabView(selection: $selectedTab) {
+            TodayView()
+                .tabItem { Label(AppTab.today.title, systemImage: AppTab.today.icon) }
+                .tag(AppTab.today)
+            CalendarView()
+                .tabItem { Label(AppTab.calendar.title, systemImage: AppTab.calendar.icon) }
+                .tag(AppTab.calendar)
+            ScheduleSearchView()
+                .tabItem { Label(AppTab.search.title, systemImage: AppTab.search.icon) }
+                .tag(AppTab.search)
+            AssistantView()
+                .tabItem { Label(AppTab.assistant.title, systemImage: AppTab.assistant.icon) }
+                .tag(AppTab.assistant)
+            SettingsView()
+                .tabItem { Label(AppTab.settings.title, systemImage: AppTab.settings.icon) }
+                .tag(AppTab.settings)
         }
+        .modifier(NativeTabBarBehavior())
         .environment(scheduleStore)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            BottomTabDock(selection: $selectedTab)
-        }
         .tint(MemdoTheme.accent)
         .sensoryFeedback(.selection, trigger: selectedTab)
         .onOpenURL { url in
@@ -61,55 +69,16 @@ struct AppShellView: View {
             DailySummaryView()
         }
     }
-
-    private func tabScreen<Content: View>(
-        _ tab: AppTab,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        content()
-            .opacity(selectedTab == tab ? 1 : 0)
-            .allowsHitTesting(selectedTab == tab)
-            .accessibilityHidden(selectedTab != tab)
-    }
 }
 
-struct BottomTabDock: View {
-    @Binding var selection: AppTab
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Divider()
-            HStack(spacing: 4) {
-                ForEach(AppTab.allCases, id: \.self) { tab in
-                    Button {
-                        withAnimation(.easeOut(duration: 0.18)) {
-                            selection = tab
-                        }
-                    } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: tab.icon)
-                                .font(.system(size: 16, weight: .semibold))
-                            Text(tab.title)
-                                .font(.system(size: 10, weight: .semibold))
-                                .lineLimit(1)
-                        }
-                        .foregroundStyle(selection == tab ? MemdoTheme.accent : MemdoTheme.secondaryInk)
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                        .background(
-                            selection == tab ? MemdoTheme.accentSoft : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(tab.title)
-                    .accessibilityAddTraits(selection == tab ? .isSelected : [])
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 7)
-            .padding(.bottom, 6)
+private struct NativeTabBarBehavior: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            content
         }
-        .background(MemdoTheme.surface.ignoresSafeArea())
     }
 }
 
