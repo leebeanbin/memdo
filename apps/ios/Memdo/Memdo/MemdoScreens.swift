@@ -96,7 +96,7 @@ struct CalendarView: View {
 
     var body: some View {
         MemdoPage(title: "캘린더", subtitle: "2026년 7월", eyebrow: "나의 시간", icon: "calendar") {
-            VStack(spacing: 18) {
+            VStack(spacing: 16) {
                 HStack {
                     Text("7월")
                         .font(.title3.bold())
@@ -118,11 +118,13 @@ struct CalendarView: View {
                             Text("\(day)")
                                 .font(.subheadline.weight(day == selectedDay ? .bold : .regular))
                                 .foregroundStyle(day == selectedDay ? .white : MemdoTheme.ink)
-                                .frame(maxWidth: .infinity, minHeight: 36)
+                                .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
                                 .background(day == selectedDay ? MemdoTheme.accent : .clear, in: Circle())
                                 .overlay(alignment: .bottom) {
                                     if !scheduleStore.items(for: day).isEmpty {
-                                        Circle().fill(MemdoTheme.accent).frame(width: 3, height: 3)
+                                        Circle()
+                                            .fill(day == selectedDay ? Color.white : MemdoTheme.accent)
+                                            .frame(width: 4, height: 4)
                                     }
                                 }
                         }
@@ -151,33 +153,41 @@ struct CalendarView: View {
             .frame(maxWidth: .infinity)
             .memdoCard()
 
-            MemdoSectionHeader(title: "7월 \(selectedDay)일", trailing: "\(selectedAgenda.count)개")
-            if !selectedAgenda.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(Array(selectedAgenda.prefix(showAll ? selectedAgenda.count : 3).enumerated()), id: \.element.id) { index, item in
-                        ScheduleRow(
-                            schedule: item,
-                            context: .timeline,
-                            onOpen: { selectedSchedule = item }
-                        )
-                        if index < min(showAll ? selectedAgenda.count : 3, selectedAgenda.count) - 1 {
+            MemdoSection(title: "7월 \(selectedDay)일", trailing: "\(selectedAgenda.count)개") {
+                if !selectedAgenda.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(Array(selectedAgenda.prefix(showAll ? selectedAgenda.count : 3).enumerated()), id: \.element.id) { index, item in
+                            ScheduleRow(
+                                schedule: item,
+                                context: .timeline,
+                                onOpen: { selectedSchedule = item }
+                            )
+                            if index < min(showAll ? selectedAgenda.count : 3, selectedAgenda.count) - 1 {
+                                Divider().padding(.leading, 72)
+                            }
+                        }
+
+                        if selectedAgenda.count > 3 {
                             Divider().padding(.leading, 72)
+                            MemdoDisclosureRow(
+                                isExpanded: showAll,
+                                hiddenCount: selectedAgenda.count - 3,
+                                totalCount: selectedAgenda.count
+                            ) {
+                                withAnimation(.easeOut(duration: 0.2)) { showAll.toggle() }
+                            }
                         }
                     }
+                    .memdoCard()
+                } else {
+                    ContentUnavailableView(
+                        "등록된 일정이 없어요",
+                        systemImage: "calendar.badge.plus",
+                        description: Text("빈 시간을 길게 눌러 첫 일정을 추가해 보세요.")
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 180)
+                    .memdoCard()
                 }
-                .memdoCard()
-
-                if selectedAgenda.count > 3 {
-                    Button {
-                        withAnimation(.easeOut(duration: 0.2)) { showAll.toggle() }
-                    } label: {
-                        Label(showAll ? "일정 접기" : "\(selectedAgenda.count - 3)개 일정 더 보기", systemImage: showAll ? "chevron.up.circle" : "ellipsis.circle")
-                            .frame(maxWidth: .infinity, minHeight: 46)
-                    }
-                    .buttonStyle(.bordered)
-                }
-            } else {
-                ContentUnavailableView("등록된 일정이 없어요", systemImage: "calendar.badge.plus", description: Text("빈 시간을 눌러 나만의 일정을 추가해 보세요."))
             }
         }
         .sheet(item: $presentedDay) { selection in
@@ -204,6 +214,11 @@ struct ScheduleSearchView: View {
     @State private var showSummary = false
     @State private var showVoiceHelp = false
 
+    private var activeFilterDescription: String? {
+        let filters = [status, period].filter { $0 != "전체 상태" && $0 != "전체 기간" }
+        return filters.isEmpty ? nil : filters.joined(separator: " · ")
+    }
+
     private var filteredResults: [ScheduleDetail] {
         scheduleStore.schedules.filter {
             (query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)) &&
@@ -218,67 +233,71 @@ struct ScheduleSearchView: View {
         MemdoPage(title: "검색", subtitle: "내 기억 속 일정을 찾아보세요", eyebrow: "기억 탐색", icon: "magnifyingglass") {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
+                    .foregroundStyle(MemdoTheme.secondaryInk)
                 TextField("일정, 메모, 장소", text: $query)
                 Button { showVoiceHelp = true } label: {
                     Image(systemName: "mic")
+                        .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
                 }
                 .accessibilityLabel("음성 검색")
             }
-            .padding(.horizontal, 14)
+            .padding(.leading, 16)
+            .padding(.trailing, 4)
             .frame(minHeight: 48)
             .background(MemdoTheme.surface)
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(MemdoTheme.outline))
 
-            HStack(spacing: 8) {
-                ForEach(["전체", "내 일정", "Google"], id: \.self) { item in
-                    Button { scope = item } label: {
-                        FilterPill(title: item, selected: scope == item)
+            MemdoSection(title: "검색 범위", trailing: activeFilterDescription) {
+                HStack(spacing: 8) {
+                    ForEach(["전체", "내 일정", "Google"], id: \.self) { item in
+                        Button { scope = item } label: {
+                            FilterPill(title: item, selected: scope == item)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                    Spacer()
+                    Button {
+                        presentedSearchSheet = .filters
+                    } label: {
+                        Label("필터", systemImage: "line.3.horizontal.decrease")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(minHeight: MemdoMetrics.touchTarget)
+                    }
+                    .buttonStyle(.bordered)
                 }
-                Spacer()
-                Button {
-                    presentedSearchSheet = .filters
-                } label: {
-                    Label("필터", systemImage: "line.3.horizontal.decrease.circle")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(minHeight: 44)
-                }
-                .buttonStyle(.bordered)
             }
 
-            if status != "전체 상태" || period != "전체 기간" {
-                Text([status, period].filter { $0 != "전체 상태" && $0 != "전체 기간" }.joined(separator: " · "))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(MemdoTheme.accent)
-            }
-
-            MemdoSectionHeader(title: "검색 결과", trailing: "\(filteredResults.count)개")
-            if filteredResults.isEmpty {
-                ContentUnavailableView.search(text: query)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(filteredResults) { item in
-                        ScheduleRow(
-                            schedule: item,
-                            context: .dated,
-                            onOpen: { presentedSearchSheet = .detail(item) }
-                        )
-                        if item.id != filteredResults.last?.id {
-                            Divider().padding(.leading, 58)
+            MemdoSection(title: "검색 결과", trailing: "\(filteredResults.count)개") {
+                if filteredResults.isEmpty {
+                    ContentUnavailableView.search(text: query)
+                        .frame(maxWidth: .infinity, minHeight: 180)
+                        .memdoCard()
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(filteredResults) { item in
+                            ScheduleRow(
+                                schedule: item,
+                                context: .dated,
+                                onOpen: { presentedSearchSheet = .detail(item) }
+                            )
+                            if item.id != filteredResults.last?.id {
+                                Divider().padding(.leading, 58)
+                            }
                         }
                     }
+                    .memdoCard()
                 }
-                .memdoCard()
             }
 
-            Button {
+            MemdoActionCard(
+                icon: "sparkles",
+                title: "AI로 검색 결과 요약",
+                subtitle: filteredResults.isEmpty ? "요약할 일정이 없어요" : "관련 일정 \(filteredResults.count)개의 흐름을 짧게 정리해요",
+                tint: MemdoTheme.accent,
+                tintBackground: MemdoTheme.accentSoft
+            ) {
                 showSummary = true
-            } label: {
-                Label("AI에게 이 일정들 요약 요청", systemImage: "sparkles")
-                    .frame(maxWidth: .infinity, minHeight: 50)
             }
-            .buttonStyle(.borderedProminent)
         }
         .sheet(item: $presentedSearchSheet) { sheet in
             switch sheet {
@@ -303,9 +322,9 @@ struct ScheduleSearchView: View {
 
 struct AssistantView: View {
     @State private var composer = ""
-    @State private var messages: [(String, Bool)] = [
-        ("매주 화요일 오후에 운동 일정을 만들어줘.", true),
-        ("오후 7시부터 1시간으로 제안할게요. 8월부터 매주 반복할까요?", false)
+    @State private var messages: [ChatMessage] = [
+        .init(text: "매주 화요일 오후에 운동 일정을 만들어줘.", isUser: true),
+        .init(text: "오후 7시부터 1시간으로 제안할게요. 8월부터 매주 반복할까요?", isUser: false)
     ]
     @State private var title = "운동"
     @State private var time = "매주 화요일 19:00"
@@ -313,31 +332,80 @@ struct AssistantView: View {
     @State private var added = false
 
     var body: some View {
-        MemdoPage(title: "AI 도우미", subtitle: "확인 전에는 일정을 변경하지 않아요", eyebrow: "조용한 도우미", icon: "sparkles") {
-            ForEach(messages.indices, id: \.self) { index in
-                ChatBubble(text: messages[index].0, isUser: messages[index].1)
-            }
+        NavigationStack {
+            ZStack {
+                MemdoPageBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
+                        MemdoPageHeader(
+                            title: "AI 도우미",
+                            subtitle: "확인 전에는 일정을 변경하지 않아요",
+                            eyebrow: "조용한 도우미",
+                            icon: "sparkles"
+                        )
 
+                        VStack(spacing: 12) {
+                            ForEach(messages) { message in
+                                ChatBubble(text: message.text, isUser: message.isUser)
+                            }
+                        }
+
+                        proposalCard
+                    }
+                    .padding(.horizontal, MemdoMetrics.pagePadding)
+                    .padding(.top, 12)
+                    .padding(.bottom, 16)
+                }
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                composerBar
+                    .padding(.horizontal, MemdoMetrics.pagePadding)
+                    .padding(.vertical, 10)
+                    .background(MemdoTheme.background.opacity(0.96))
+            }
+            .toolbar(.hidden, for: .navigationBar)
+        }
+        .tint(MemdoTheme.accent)
+        .sensoryFeedback(.success, trigger: added)
+    }
+
+    private var proposalCard: some View {
+        MemdoSection(title: "일정 제안", trailing: added ? "추가됨" : "확인 필요") {
             VStack(alignment: .leading, spacing: 16) {
-                Label("반복 일정 제안", systemImage: "calendar.badge.plus")
-                    .font(.headline)
+                Label("매주 반복", systemImage: "calendar.badge.plus")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MemdoTheme.accent)
+
                 if editingProposal {
-                    TextField("제목", text: $title).textFieldStyle(.roundedBorder)
-                    TextField("시간", text: $time).textFieldStyle(.roundedBorder)
+                    TextField("제목", text: $title)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("시간", text: $time)
+                        .textFieldStyle(.roundedBorder)
                 } else {
                     LabeledContent("제목", value: title)
                     LabeledContent("시간", value: time)
                 }
                 LabeledContent("알림", value: "30분 전")
+
                 Divider()
-                HStack {
-                    Button(editingProposal ? "수정 완료" : "수정") { editingProposal.toggle() }
-                        .buttonStyle(.bordered)
+
+                HStack(spacing: 12) {
+                    Button(editingProposal ? "수정 완료" : "수정") {
+                        editingProposal.toggle()
+                    }
+                    .buttonStyle(.bordered)
+
                     Spacer()
-                    Button(added ? "추가됨" : "일정에 추가") { added = true }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(added)
+
+                    Button(added ? "추가됨" : "일정에 추가") {
+                        added = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(added)
                 }
+                .controlSize(.large)
             }
             .padding(18)
             .background(
@@ -346,32 +414,37 @@ struct AssistantView: View {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ),
-                in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+                in: RoundedRectangle(cornerRadius: MemdoMetrics.cardRadius, style: .continuous)
             )
-
-            HStack(spacing: 10) {
-                TextField("무엇을 도와드릴까요?", text: $composer)
-                    .onSubmit(sendMessage)
-                Button(action: sendMessage) {
-                    Image(systemName: "arrow.up")
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(composer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .accessibilityLabel("보내기")
-            }
-            .padding(8)
-            .background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(MemdoTheme.outline))
         }
-        .sensoryFeedback(.success, trigger: added)
+    }
+
+    private var composerBar: some View {
+        HStack(spacing: 8) {
+            TextField("무엇을 도와드릴까요?", text: $composer)
+                .onSubmit(sendMessage)
+                .padding(.leading, 12)
+                .frame(minHeight: MemdoMetrics.touchTarget)
+
+            Button(action: sendMessage) {
+                Image(systemName: "arrow.up")
+                    .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.circle)
+            .disabled(composer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityLabel("메시지 보내기")
+        }
+        .padding(6)
+        .background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(MemdoTheme.outline))
     }
 
     private func sendMessage() {
         let text = composer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        messages.append((text, true))
-        messages.append(("좋아요. 변경 전 확인할 수 있도록 일정 제안으로 준비했어요.", false))
+        messages.append(.init(text: text, isUser: true))
+        messages.append(.init(text: "좋아요. 변경 전 확인할 수 있도록 일정 제안으로 준비했어요.", isUser: false))
         composer = ""
     }
 }
@@ -414,39 +487,48 @@ struct DailySummaryView: View {
                 in: RoundedRectangle(cornerRadius: 24, style: .continuous)
             )
 
-            MemdoSectionHeader(title: "결정이 필요한 일정", trailing: "\(reviews.count)개")
-            if reviews.isEmpty {
-                ContentUnavailableView("정리가 끝났어요", systemImage: "checkmark.circle.fill")
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(reviews, id: \.self) { title in
-                        ReviewRow(
-                            title: title,
-                            time: title == "디자인 시안 확인" ? "14:30" : "19:00",
-                            resolve: { reviews.removeAll { $0 == title } }
-                        )
-                        if title != reviews.last {
-                            Divider().padding(.leading, 16)
+            MemdoSection(title: "결정이 필요한 일정", trailing: "\(reviews.count)개") {
+                if reviews.isEmpty {
+                    ContentUnavailableView("정리가 끝났어요", systemImage: "checkmark.circle.fill")
+                        .frame(maxWidth: .infinity, minHeight: 160)
+                        .memdoCard()
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(reviews, id: \.self) { title in
+                            ReviewRow(
+                                title: title,
+                                time: title == "디자인 시안 확인" ? "14:30" : "19:00",
+                                resolve: { reviews.removeAll { $0 == title } }
+                            )
+                            if title != reviews.last {
+                                Divider().padding(.leading, 16)
+                            }
                         }
                     }
+                    .memdoCard()
                 }
-                .memdoCard()
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                Label("AI가 본 오늘", systemImage: "sparkles")
+            MemdoSection(title: "AI가 본 오늘", trailing: "제안") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("오전에는 계획한 일에 집중했지만 오후 일정이 밀렸어요. 내일은 중요한 확인 업무를 오전으로 옮겨보세요.")
+                        .font(.subheadline)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                    Label("내일 10:00으로 이동 추천", systemImage: "arrow.forward.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.accent)
+                }
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(MemdoTheme.accentSoft, in: RoundedRectangle(cornerRadius: MemdoMetrics.cardRadius))
+            }
+
+            Button { dismiss() } label: {
+                Text("정리 완료")
                     .font(.headline)
-                Text("오전에는 계획한 일에 집중했지만 오후 일정이 밀렸어요. 내일은 중요한 확인 업무를 오전으로 옮겨보세요.")
-                    .foregroundStyle(MemdoTheme.secondaryInk)
-                Label("내일 10:00으로 이동 추천", systemImage: "arrow.forward.circle.fill")
-                    .font(.caption.bold())
+                    .frame(maxWidth: .infinity, minHeight: 50)
             }
-            .padding(16)
-            .background(MemdoTheme.accentSoft, in: RoundedRectangle(cornerRadius: 24))
-
-            Button("정리 완료") { dismiss() }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
+            .buttonStyle(.borderedProminent)
         }
     }
 }
@@ -464,26 +546,40 @@ struct SettingsView: View {
         MemdoPage(title: "설정", subtitle: "Memdo를 나에게 맞게 조정하세요", eyebrow: "나만의 Memdo", icon: "slider.horizontal.3") {
             SettingsGroup(title: "하루") {
                 Toggle("오늘 요약 받기", isOn: $dailySummary)
+                    .memdoSettingsRow()
                 Divider()
                 DatePicker("요약 시간", selection: $summaryTime, displayedComponents: .hourAndMinute)
                     .disabled(!dailySummary)
+                    .memdoSettingsRow()
                 Divider()
                 DatePicker("계획이 없을 때", selection: $promptTime, displayedComponents: .hourAndMinute)
+                    .memdoSettingsRow()
             }
 
             SettingsGroup(title: "연결 및 권한") {
                 Toggle("Google Calendar", isOn: $calendarSync)
+                    .memdoSettingsRow()
                 Divider()
                 Button { showAIConsent = true } label: {
-                    LabeledContent("AI 데이터 접근", value: "일정 제목·시간")
+                    HStack {
+                        Text("AI 데이터 접근")
+                        Spacer()
+                        Text("일정 제목·시간")
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.bold())
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                    }
+                    .memdoSettingsRow()
                 }
                 .buttonStyle(.plain)
                 Divider()
                 Toggle("알림", isOn: $notifications)
+                    .memdoSettingsRow()
             }
 
             SettingsGroup(title: "관심 뉴스") {
-                HStack {
+                HStack(spacing: 8) {
                     ForEach(["AI", "생산성", "로컬"], id: \.self) { topic in
                         Button {
                             if newsTopics.contains(topic) {
@@ -497,6 +593,7 @@ struct SettingsView: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .frame(minHeight: 52, alignment: .leading)
             }
         }
         .alert("AI 데이터 접근", isPresented: $showAIConsent) {
@@ -516,27 +613,8 @@ private struct MemdoPage<Content: View>: View {
     @ViewBuilder let content: Content
 
     private var pageContent: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(eyebrow)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(MemdoTheme.accent)
-                    Text(title)
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
-                }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: icon)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(MemdoTheme.accent)
-                    .frame(width: 52, height: 52)
-                    .background(MemdoTheme.accentSoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
+        VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
+            MemdoPageHeader(title: title, subtitle: subtitle, eyebrow: eyebrow, icon: icon)
             content
         }
         .padding(20)
@@ -567,7 +645,7 @@ private struct FilterPill: View {
             .font(.caption.bold())
             .foregroundStyle(selected ? .white : MemdoTheme.ink)
             .padding(.horizontal, 12)
-            .frame(minHeight: 36)
+            .frame(minHeight: MemdoMetrics.touchTarget)
             .background(selected ? MemdoTheme.accent : MemdoTheme.surface, in: Capsule())
             .overlay(Capsule().stroke(MemdoTheme.outline))
     }
@@ -688,6 +766,12 @@ private struct SearchFilterSheet: View {
     }
 }
 
+private struct ChatMessage: Identifiable {
+    let id = UUID()
+    let text: String
+    let isUser: Bool
+}
+
 private struct ChatBubble: View {
     let text: String
     let isUser: Bool
@@ -703,6 +787,7 @@ private struct ChatBubble: View {
             )
             .frame(maxWidth: 310, alignment: isUser ? .trailing : .leading)
             .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
+            .accessibilityLabel("\(isUser ? "나" : "AI"): \(text)")
     }
 }
 
@@ -728,9 +813,11 @@ private struct ReviewRow: View {
                 Button(role: .destructive, action: resolve) {
                     Image(systemName: "trash")
                 }
+                .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
                 .accessibilityLabel("일정 삭제")
             }
             .buttonStyle(.bordered)
+            .controlSize(.large)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
@@ -742,10 +829,9 @@ private struct SettingsGroup<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.headline)
-            VStack(spacing: 14) { content }
-                .padding(16)
+        MemdoSection(title: title) {
+            VStack(spacing: 0) { content }
+                .padding(.horizontal, 16)
                 .memdoCard()
         }
     }

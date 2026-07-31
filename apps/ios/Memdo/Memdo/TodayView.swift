@@ -29,7 +29,7 @@ struct TodayView: View {
                 MemdoPageBackground()
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 26) {
+                    VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
                         header
                         weekIndex
                         if schedules.isEmpty {
@@ -113,6 +113,7 @@ struct TodayView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("오늘 완료 현황")
+            .accessibilityValue("\(schedules.count)개 중 \(completedCount)개 완료")
         }
     }
 
@@ -196,9 +197,7 @@ struct TodayView: View {
     }
 
     private var schedule: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            MemdoSectionHeader(title: "일정", trailing: "\(remainingCount)개 남음")
-
+        MemdoSection(title: "일정", trailing: "\(remainingCount)개 남음") {
             VStack(spacing: 0) {
                 ForEach(displayedSchedules) { schedule in
                     ScheduleRow(
@@ -214,28 +213,15 @@ struct TodayView: View {
 
                 if schedules.count > 3 {
                     Divider().padding(.leading, 76)
-                    Button {
+                    MemdoDisclosureRow(
+                        isExpanded: showAllSchedules,
+                        hiddenCount: schedules.count - 3,
+                        totalCount: schedules.count
+                    ) {
                         withAnimation(.easeOut(duration: 0.2)) {
                             showAllSchedules.toggle()
                         }
-                    } label: {
-                        HStack {
-                            Label(
-                                showAllSchedules ? "일정 접기" : "나머지 \(schedules.count - 3)개 보기",
-                                systemImage: showAllSchedules ? "chevron.up" : "ellipsis"
-                            )
-                            Spacer()
-                            Text("총 \(schedules.count)개")
-                                .font(.caption)
-                                .foregroundStyle(MemdoTheme.secondaryInk)
-                        }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(MemdoTheme.accent)
-                        .frame(minHeight: 44)
-                        .padding(.horizontal, 16)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityHint(showAllSchedules ? "일정 목록을 세 개로 줄입니다" : "나머지 일정을 이어서 보여줍니다")
                 }
             }
             .padding(.vertical, 4)
@@ -244,9 +230,7 @@ struct TodayView: View {
     }
 
     private var briefing: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            MemdoSectionHeader(title: "3분 브리핑", trailing: "AI 요약")
-
+        MemdoSection(title: "3분 브리핑", trailing: "AI 요약") {
             VStack(spacing: 12) {
                 Button {
                     briefingMessage = "온디바이스 AI가 일상 도구로\n\n개인정보를 기기 안에서 처리하는 흐름이 커지고 있어요."
@@ -279,40 +263,19 @@ struct TodayView: View {
     }
 
     private var summary: some View {
-        Button {
+        MemdoActionCard(
+            icon: "chart.bar.fill",
+            title: "\(selectedDate == 31 ? "오늘" : "선택한 날") \(completedCount)/\(schedules.count) 완료",
+            subtitle: schedules.isEmpty
+                ? "등록된 일정이 없어요"
+                : remainingCount == 0
+                    ? "모든 일정을 정리했어요"
+                    : "남은 \(remainingCount)개를 확인해 보세요",
+            tint: MemdoTheme.accent,
+            tintBackground: MemdoTheme.accentSoft
+        ) {
             presentedSheet = .dailySummary
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "chart.bar.fill")
-                    .foregroundStyle(MemdoTheme.accent)
-                    .frame(width: 32, height: 32)
-                    .background(MemdoTheme.accentSoft, in: Circle())
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(selectedDate == 31 ? "오늘" : "선택한 날") \(completedCount)/\(schedules.count) 완료")
-                        .font(.subheadline.weight(.semibold))
-                    Text(schedules.isEmpty ? "등록된 일정이 없어요" : remainingCount == 0 ? "모든 일정을 정리했어요" : "남은 \(remainingCount)개를 확인해 보세요")
-                        .font(.caption)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
-                }
-
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.bold())
-                    .foregroundStyle(MemdoTheme.secondaryInk)
-            }
-            .foregroundStyle(MemdoTheme.ink)
-            .padding(18)
-            .background(
-                LinearGradient(
-                    colors: [MemdoTheme.accentSoft, MemdoTheme.surface],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ),
-                in: RoundedRectangle(cornerRadius: 24, style: .continuous)
-            )
         }
-        .buttonStyle(.plain)
     }
 
     private var addButton: some View {

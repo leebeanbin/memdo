@@ -258,6 +258,30 @@ GET /health/ready
 
 telemetry는 제품 데이터의 백업이 아니다.
 
+## 13. iOS Simulator 개발 로그 판별
+
+다음 로그는 Memdo가 WebKit을 중복 링크한 오류가 아니라 iOS 26.5 Simulator 런타임의 접근성 번들 충돌로 분류한다.
+
+```text
+Class UIAccessibilityLoaderWebShared is implemented in both
+WebKit.axbundle/WebKit and WebCore.axbundle/WebCore
+```
+
+판별 기준:
+
+- 충돌 경로가 모두 `iOS 26.5.simruntime/.../System/Library/AccessibilityBundles` 아래다.
+- Memdo 타깃에 `WebKit`, `WKWebView`, `UIWebView` 참조가 없다.
+- 빌드·설치·실행이 성공하고 해당 한 줄 외 앱 크래시 또는 오류가 없다.
+
+대응:
+
+1. Apple 서명 런타임 안의 `WebKit.axbundle` 또는 `WebCore.axbundle`을 삭제·이름 변경하지 않는다.
+2. `OS_ACTIVITY_MODE`로 전체 로그를 숨기지 않는다.
+3. 앱 크래시가 없다면 개발 환경 경고로 격리하고, 새 Xcode 또는 iOS Simulator 런타임이 배포되면 재검증한다.
+4. 실제 크래시가 동반되면 동일 재현 프로젝트와 진단 파일을 Feedback Assistant에 첨부한다.
+
+근거: 동일 경고의 [Apple Developer Forums 사례](https://developer.apple.com/forums/thread/799951), [Xcode 26.6 Release Notes](https://developer.apple.com/documentation/xcode-release-notes/xcode-26_6-release-notes?language=objc).
+
 ## 13. 장애 대응
 
 ```text
@@ -276,4 +300,3 @@ degrade 예:
 - Google 장애: 마지막 sync 데이터와 stale 표시
 - Grafana 장애: 제품 기능 유지
 - Cloudflare 승인 웹 장애: 앱 내 승인 유지
-

@@ -22,6 +22,7 @@ enum MemdoMetrics {
     static let cardRadius: CGFloat = 24
     static let fieldRadius: CGFloat = 14
     static let touchTarget: CGFloat = 44
+    static let sectionSpacing: CGFloat = 28
 }
 
 struct MemdoPageBackground: View {
@@ -42,7 +43,12 @@ struct MemdoPageBackground: View {
 
 struct MemdoSectionHeader: View {
     let title: String
-    let trailing: String
+    let trailing: String?
+
+    init(title: String, trailing: String? = nil) {
+        self.title = title
+        self.trailing = trailing
+    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
@@ -50,15 +56,147 @@ struct MemdoSectionHeader: View {
                 .font(.title3.bold())
                 .foregroundStyle(MemdoTheme.ink)
             Spacer()
-            Text(trailing)
-                .font(.caption.bold())
-                .foregroundStyle(MemdoTheme.secondaryInk)
+            if let trailing {
+                Text(trailing)
+                    .font(.caption.bold())
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
         }
+    }
+}
+
+struct MemdoPageHeader: View {
+    let title: String
+    let subtitle: String
+    let eyebrow: String
+    let icon: String
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(eyebrow)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(MemdoTheme.accent)
+                Text(title)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(MemdoTheme.ink)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+
+            Spacer(minLength: 8)
+
+            Image(systemName: icon)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(MemdoTheme.accent)
+                .frame(width: 52, height: 52)
+                .background(MemdoTheme.accentSoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+struct MemdoSection<Content: View>: View {
+    let title: String
+    let trailing: String?
+    @ViewBuilder let content: Content
+
+    init(
+        title: String,
+        trailing: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.trailing = trailing
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            MemdoSectionHeader(title: title, trailing: trailing)
+            content
+        }
+    }
+}
+
+struct MemdoActionCard: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let tint: Color
+    let tintBackground: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 36, height: 36)
+                    .background(tintBackground, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.ink)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+            .multilineTextAlignment(.leading)
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: 68)
+            .memdoCard()
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct MemdoDisclosureRow: View {
+    let isExpanded: Bool
+    let hiddenCount: Int
+    let totalCount: Int
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Label(
+                    isExpanded ? "일정 접기" : "나머지 \(hiddenCount)개 보기",
+                    systemImage: isExpanded ? "chevron.up" : "ellipsis"
+                )
+                Spacer()
+                Text("총 \(totalCount)개")
+                    .font(.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(MemdoTheme.accent)
+            .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
+            .padding(.horizontal, 16)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(isExpanded ? "일정 목록을 세 개로 줄입니다" : "나머지 일정을 이어서 보여줍니다")
     }
 }
 
 extension View {
     func memdoCard(radius: CGFloat = MemdoMetrics.cardRadius) -> some View {
         background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+    }
+
+    func memdoSettingsRow() -> some View {
+        frame(minHeight: 52)
+            .contentShape(Rectangle())
     }
 }
