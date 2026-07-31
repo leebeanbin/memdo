@@ -94,50 +94,31 @@ enum ScheduleRowContext {
 struct ScheduleRow: View {
     let schedule: ScheduleDetail
     let context: ScheduleRowContext
-    let onOpen: () -> Void
+    let onOpen: (() -> Void)?
     var onToggleDone: (() -> Void)?
+
+    init(
+        schedule: ScheduleDetail,
+        context: ScheduleRowContext,
+        onOpen: (() -> Void)? = nil,
+        onToggleDone: (() -> Void)? = nil
+    ) {
+        self.schedule = schedule
+        self.context = context
+        self.onOpen = onOpen
+        self.onToggleDone = onToggleDone
+    }
 
     var body: some View {
         HStack(spacing: 0) {
-            Button(action: onOpen) {
-                HStack(alignment: .center, spacing: 12) {
-                    if context == .timeline {
-                        Text(schedule.time)
-                            .font(.caption.monospacedDigit().weight(.semibold))
-                            .foregroundStyle(MemdoTheme.secondaryInk)
-                            .frame(width: 48, alignment: .leading)
-                    }
-
-                    ScheduleSourceIcon(source: schedule.source)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        if context == .dated {
-                            Text("7월 \(schedule.day)일 · \(schedule.time)")
-                                .font(.caption)
-                                .foregroundStyle(MemdoTheme.secondaryInk)
-                        }
-                        Text(schedule.title)
-                            .font(.body.weight(.semibold))
-                            .lineLimit(2)
-                            .strikethrough(schedule.isDone)
-                            .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : MemdoTheme.ink)
-                        Text("\(schedule.isDone ? "완료 · " : "")\(schedule.source)")
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(MemdoTheme.secondaryInk)
-                    }
-
-                    Spacer(minLength: 0)
-
-                    if onToggleDone == nil {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.bold())
-                            .foregroundStyle(MemdoTheme.secondaryInk)
-                            .accessibilityHidden(true)
-                    }
+            if let onOpen {
+                Button(action: onOpen) {
+                    rowContent
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+            } else {
+                rowContent
             }
-            .buttonStyle(.plain)
 
             if let onToggleDone {
                 Button(action: onToggleDone) {
@@ -151,6 +132,45 @@ struct ScheduleRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
+    }
+
+    private var rowContent: some View {
+        HStack(alignment: .center, spacing: 12) {
+            if context == .timeline {
+                Text(schedule.time)
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+                    .frame(width: 48, alignment: .leading)
+            }
+
+            ScheduleSourceIcon(source: schedule.source)
+
+            VStack(alignment: .leading, spacing: 4) {
+                if context == .dated {
+                    Text("7월 \(schedule.day)일 · \(schedule.time)")
+                        .font(.caption)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                }
+                Text(schedule.title)
+                    .font(.body.weight(.semibold))
+                    .lineLimit(2)
+                    .strikethrough(schedule.isDone)
+                    .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : MemdoTheme.ink)
+                Text("\(schedule.isDone ? "완료 · " : "")\(schedule.source)")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+
+            Spacer(minLength: 0)
+
+            if onOpen != nil && onToggleDone == nil {
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+                    .accessibilityHidden(true)
+            }
+        }
+        .contentShape(Rectangle())
     }
 }
 
@@ -186,51 +206,57 @@ struct ScheduleDetailSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    ScheduleDetailHeader(schedule: draft)
-
-                    HStack(spacing: 10) {
-                        ScheduleStatusButton(isDone: $draft.isDone) {
-                            saved = draft
-                            onSave(draft)
-                        }
-                        .disabled(isEditing)
-                        Button {
-                            if isEditing {
-                                draft = saved
-                            }
-                            isEditing.toggle()
-                        } label: {
-                            Label(isEditing ? "편집 취소" : "수정", systemImage: isEditing ? "xmark" : "pencil")
-                                .frame(minHeight: MemdoMetrics.touchTarget)
-                        }
-                        .buttonStyle(.bordered)
+            Form {
+                if isEditing {
+                    ScheduleEditorFields(schedule: $draft)
+                } else {
+                    Section {
+                        ScheduleDetailHeader(schedule: draft)
                     }
 
-                    if isEditing {
-                        ScheduleEditorFields(schedule: $draft)
-                    } else {
-                        ScheduleMetadataCard(schedule: draft)
+                    Section("상태") {
+                        Toggle("완료", isOn: Binding(
+                            get: { draft.isDone },
+                            set: { isDone in
+                                draft.isDone = isDone
+                                saved = draft
+                                onSave(draft)
+                            }
+                        ))
+                    }
+
+                    Section("일정 정보") {
+                        LabeledContent("장소", value: draft.location.nilFallback)
+                        LabeledContent("알림", value: draft.reminder)
+                        LabeledContent("반복", value: draft.repeatRule)
+                        LabeledContent("메모", value: draft.memo.nilFallback)
                     }
                 }
-                .padding(20)
             }
-            .background(MemdoPageBackground())
+            .scrollContentBackground(.hidden)
+            .background(MemdoTheme.background)
             .navigationTitle("일정 상세")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("닫기") { dismiss() }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(isEditing ? "취소" : "닫기") {
+                        if isEditing {
+                            draft = saved
+                            isEditing = false
+                        } else {
+                            dismiss()
+                        }
+                    }
+                    .foregroundStyle(MemdoTheme.accent)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isEditing ? "저장" : "완료") {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(isEditing ? "저장" : "수정") {
                         if isEditing {
                             saved = draft
                             onSave(draft)
                             isEditing = false
                         } else {
-                            dismiss()
+                            isEditing = true
                         }
                     }
                     .fontWeight(.semibold)
@@ -238,8 +264,9 @@ struct ScheduleDetailSheet: View {
                 }
             }
         }
-        .presentationDetents([.large])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .presentationBackground(MemdoTheme.background)
     }
 }
 
@@ -249,13 +276,12 @@ private struct ScheduleDetailHeader: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             ScheduleSourceIcon(source: schedule.source)
-                .scaleEffect(1.15)
             VStack(alignment: .leading, spacing: 5) {
                 Text(schedule.source)
                     .font(.caption.bold())
                     .foregroundStyle(MemdoTheme.secondaryInk)
                 Text(schedule.title)
-                    .font(.title2.bold())
+                    .font(.headline)
                     .foregroundStyle(MemdoTheme.ink)
                 Text("7월 \(schedule.day)일 · \(schedule.time)")
                     .font(.subheadline.weight(.semibold))
@@ -265,116 +291,30 @@ private struct ScheduleDetailHeader: View {
     }
 }
 
-private struct ScheduleStatusButton: View {
-    @Binding var isDone: Bool
-    let onChange: () -> Void
-
-    var body: some View {
-        Button {
-            isDone.toggle()
-            onChange()
-        } label: {
-            Label(isDone ? "완료됨" : "완료로 표시", systemImage: isDone ? "checkmark.circle.fill" : "circle")
-                .frame(minHeight: MemdoMetrics.touchTarget)
-        }
-        .buttonStyle(.bordered)
-        .tint(isDone ? MemdoTheme.mine : MemdoTheme.accent)
-    }
-}
-
-private struct ScheduleMetadataCard: View {
-    let schedule: ScheduleDetail
-
-    var body: some View {
-        VStack(spacing: 0) {
-            MetadataLine(icon: "mappin.and.ellipse", title: "장소", value: schedule.location.nilFallback)
-            Divider().padding(.leading, 50)
-            MetadataLine(icon: "bell", title: "알림", value: schedule.reminder)
-            Divider().padding(.leading, 50)
-            MetadataLine(icon: "repeat", title: "반복", value: schedule.repeatRule)
-            Divider().padding(.leading, 50)
-            MetadataLine(icon: "note.text", title: "메모", value: schedule.memo.nilFallback)
-        }
-        .memdoCard()
-    }
-}
-
-private struct MetadataLine: View {
-    let icon: String
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(MemdoTheme.accent)
-                .frame(width: 30)
-            Text(title)
-                .foregroundStyle(MemdoTheme.secondaryInk)
-            Spacer()
-            Text(value)
-                .multilineTextAlignment(.trailing)
-                .foregroundStyle(MemdoTheme.ink)
-        }
-        .font(.subheadline)
-        .padding(16)
-    }
-}
-
 struct ScheduleEditorFields: View {
     @Binding var schedule: ScheduleDetail
 
     var body: some View {
-        VStack(spacing: 14) {
+        Section("기본 정보") {
             TextField("일정 제목", text: $schedule.title)
-                .font(.headline)
-                .memdoField()
-
-            HStack {
-                Label("날짜", systemImage: "calendar")
-                    .foregroundStyle(MemdoTheme.secondaryInk)
-                Spacer()
-                Picker("날짜", selection: $schedule.day) {
-                    ForEach(1...31, id: \.self) { day in
-                        Text("7월 \(day)일").tag(day)
-                    }
+            Picker("날짜", selection: $schedule.day) {
+                ForEach(1...31, id: \.self) { day in
+                    Text("7월 \(day)일").tag(day)
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
             }
-            .memdoField()
-
-            ScheduleEditorRow(icon: "clock", title: "시간", placeholder: "09:00", text: $schedule.time)
-            ScheduleEditorRow(icon: "mappin.and.ellipse", title: "장소", placeholder: "없음", text: $schedule.location)
-            ScheduleEditorRow(icon: "bell", title: "알림", placeholder: "없음", text: $schedule.reminder)
-            ScheduleEditorRow(icon: "repeat", title: "반복", placeholder: "반복 안 함", text: $schedule.repeatRule)
-
-            VStack(alignment: .leading, spacing: 10) {
-                Label("메모", systemImage: "note.text")
-                    .foregroundStyle(MemdoTheme.secondaryInk)
-                TextField("메모 없음", text: $schedule.memo, axis: .vertical)
-                    .lineLimit(3...6)
-            }
-            .memdoField()
+            TextField("시간 (예: 09:00)", text: $schedule.time)
         }
-    }
-}
 
-private struct ScheduleEditorRow: View {
-    let icon: String
-    let title: String
-    let placeholder: String
-    @Binding var text: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Label(title, systemImage: icon)
-                .foregroundStyle(MemdoTheme.secondaryInk)
-            Spacer()
-            TextField(placeholder, text: $text)
-                .multilineTextAlignment(.trailing)
+        Section("선택 정보") {
+            TextField("장소", text: $schedule.location)
+            TextField("알림", text: $schedule.reminder)
+            TextField("반복", text: $schedule.repeatRule)
         }
-        .memdoField()
+
+        Section("메모") {
+            TextField("메모 없음", text: $schedule.memo, axis: .vertical)
+                .lineLimit(3...6)
+        }
     }
 }
 
@@ -391,23 +331,19 @@ struct AddScheduleSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    Text("7월 \(draft.day)일")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(MemdoTheme.accent)
-                    ScheduleEditorFields(schedule: $draft)
-                }
-                .padding(20)
+            Form {
+                ScheduleEditorFields(schedule: $draft)
             }
-            .background(MemdoPageBackground())
+            .scrollContentBackground(.hidden)
+            .background(MemdoTheme.background)
             .navigationTitle("새 일정")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button("취소") { dismiss() }
+                        .foregroundStyle(MemdoTheme.accent)
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("추가") {
                         onSave(draft)
                         dismiss()
@@ -417,22 +353,12 @@ struct AddScheduleSheet: View {
                 }
             }
         }
-        .presentationDetents([.large])
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(MemdoTheme.background)
     }
 }
 
 private extension String {
     var nilFallback: String { isEmpty ? "없음" : self }
-}
-
-private extension View {
-    func memdoField() -> some View {
-        padding(.horizontal, 14)
-            .frame(minHeight: 50)
-            .background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous)
-                    .stroke(MemdoTheme.outline)
-            }
-    }
 }
