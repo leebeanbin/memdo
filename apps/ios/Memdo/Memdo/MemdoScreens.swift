@@ -48,6 +48,8 @@ struct AppShellView: View {
         .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             FloatingTabBar(selection: $selectedTab)
+                .frame(maxWidth: 350)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 14)
                 .padding(.bottom, 6)
         }
@@ -85,7 +87,7 @@ struct FloatingTabBar: View {
                             .lineLimit(1)
                     }
                     .foregroundStyle(selection == tab ? MemdoTheme.accent : MemdoTheme.secondaryInk)
-                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48)
                     .background(
                         selection == tab ? MemdoTheme.accentSoft : Color.clear,
                         in: RoundedRectangle(cornerRadius: 17, style: .continuous)
@@ -97,6 +99,7 @@ struct FloatingTabBar: View {
             }
         }
         .padding(6)
+        .frame(height: 60)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 25, style: .continuous)
