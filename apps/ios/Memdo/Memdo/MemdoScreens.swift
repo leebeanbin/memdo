@@ -133,9 +133,7 @@ struct CalendarView: View {
                         .font(.title3.bold())
                     Spacer()
                     Button("오늘") {
-                        selectedDay = 31
-                        showAll = false
-                        presentedDay = .init(day: 31)
+                        select(day: 31)
                     }
                         .buttonStyle(.bordered)
                 }
@@ -146,9 +144,7 @@ struct CalendarView: View {
                     }
                     ForEach(days, id: \.self) { day in
                         Button {
-                            selectedDay = day
-                            showAll = false
-                            presentedDay = .init(day: day)
+                            select(day: day)
                         } label: {
                             Text("\(day)")
                                 .font(.subheadline.weight(day == selectedDay ? .bold : .regular))
@@ -162,9 +158,25 @@ struct CalendarView: View {
                                 }
                         }
                         .buttonStyle(.plain)
+                        .simultaneousGesture(
+                            LongPressGesture(minimumDuration: 0.5)
+                                .onEnded { _ in
+                                    select(day: day)
+                                    presentedDay = .init(day: day)
+                                }
+                        )
+                        .accessibilityHint("길게 누르면 하루 일정 메뉴가 열립니다")
+                        .accessibilityAction(named: "하루 일정 메뉴 열기") {
+                            select(day: day)
+                            presentedDay = .init(day: day)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity)
+
+                Label("날짜를 길게 누르면 빠른 일정 메뉴가 열려요", systemImage: "hand.tap")
+                    .font(.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
             }
             .padding(18)
             .frame(maxWidth: .infinity)
@@ -174,9 +186,11 @@ struct CalendarView: View {
             if !selectedAgenda.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(Array(selectedAgenda.prefix(showAll ? selectedAgenda.count : 3).enumerated()), id: \.element.id) { index, item in
-                        ScheduleRow(schedule: item, context: .timeline) {
-                            selectedSchedule = item
-                        }
+                        ScheduleRow(
+                            schedule: item,
+                            context: .timeline,
+                            onOpen: { selectedSchedule = item }
+                        )
                         if index < min(showAll ? selectedAgenda.count : 3, selectedAgenda.count) - 1 {
                             Divider().padding(.leading, 72)
                         }
@@ -203,6 +217,11 @@ struct CalendarView: View {
         .sheet(item: $selectedSchedule) { schedule in
             ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
         }
+    }
+
+    private func select(day: Int) {
+        selectedDay = day
+        showAll = false
     }
 }
 
@@ -271,9 +290,11 @@ struct ScheduleSearchView: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(filteredResults) { item in
-                        ScheduleRow(schedule: item, context: .dated) {
-                            presentedSearchSheet = .detail(item)
-                        }
+                        ScheduleRow(
+                            schedule: item,
+                            context: .dated,
+                            onOpen: { presentedSearchSheet = .detail(item) }
+                        )
                         if item.id != filteredResults.last?.id {
                             Divider().padding(.leading, 58)
                         }
@@ -592,7 +613,6 @@ private struct DayAgendaSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScheduleStore.self) private var scheduleStore
     let day: Int
-    @State private var selectedSchedule: ScheduleDetail?
     @State private var showAddTask = false
 
     private var daySchedules: [ScheduleDetail] {
@@ -601,69 +621,54 @@ private struct DayAgendaSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 18) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(day == 31 ? "오늘" : day < 31 ? "지난 일정" : "예정")
-                        .font(.caption.bold())
-                        .foregroundStyle(MemdoTheme.accent)
-                    Text("7월 \(day)일")
-                        .font(.title2.bold())
-                    Text(daySchedules.isEmpty ? "아직 등록된 일정이 없어요." : "\(daySchedules.count)개의 일정을 확인해 보세요.")
-                        .font(.subheadline)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
+            List {
+                Section {
+                    LabeledContent(
+                        day == 31 ? "오늘" : day < 31 ? "지난 일정" : "예정",
+                        value: "\(daySchedules.count)개"
+                    )
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
                 if daySchedules.isEmpty {
                     ContentUnavailableView(
                         "비어 있는 하루예요",
                         systemImage: "calendar.badge.plus",
                         description: Text("편한 시간에 첫 일정을 추가해 보세요.")
                     )
-                    .frame(maxHeight: .infinity)
+                    .listRowBackground(Color.clear)
                 } else {
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            ForEach(daySchedules) { schedule in
-                                ScheduleRow(schedule: schedule, context: .timeline) {
-                                    selectedSchedule = schedule
-                                }
-                                if schedule.id != daySchedules.last?.id {
-                                    Divider().padding(.leading, 72)
-                                }
-                            }
+                    Section("일정") {
+                        ForEach(daySchedules) { schedule in
+                            ScheduleRow(schedule: schedule, context: .timeline)
+                            .listRowInsets(EdgeInsets())
                         }
-                        .background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     }
                 }
 
-                Button {
-                    showAddTask = true
-                } label: {
-                    Label("7월 \(day)일에 새 일정", systemImage: "plus")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity, minHeight: 52)
+                Section {
+                    Button {
+                        showAddTask = true
+                    } label: {
+                        Label("새 일정 추가", systemImage: "plus")
+                    }
                 }
-                .buttonStyle(.borderedProminent)
             }
-            .padding(20)
-            .background(MemdoPageBackground())
-            .navigationTitle("하루 일정")
+            .scrollContentBackground(.hidden)
+            .background(MemdoTheme.background)
+            .navigationTitle("7월 \(day)일")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("닫기") { dismiss() }
+                        .foregroundStyle(MemdoTheme.accent)
                 }
             }
-        }
-        .sheet(item: $selectedSchedule) { schedule in
-            ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
         }
         .sheet(isPresented: $showAddTask) {
             AddScheduleSheet(day: day, onSave: scheduleStore.save)
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .presentationBackground(MemdoTheme.background)
     }
 }
 
@@ -698,16 +703,19 @@ private struct SearchFilterSheet: View {
                     period = "전체 기간"
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(MemdoTheme.background)
             .navigationTitle("상세 필터")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("적용") { dismiss() }
                         .fontWeight(.semibold)
                 }
             }
         }
         .presentationDetents([.medium])
+        .presentationBackground(MemdoTheme.background)
     }
 }
 
