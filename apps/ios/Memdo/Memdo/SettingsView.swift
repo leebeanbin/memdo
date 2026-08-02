@@ -7,24 +7,27 @@ struct SettingsView: View {
     @State private var promptTime = Calendar.current.date(from: DateComponents(hour: 9)) ?? .now
     @State private var briefingKeywords: Set<String> = ["AI", "제품 디자인"]
     @State private var customKeywords: [String] = []
-    @State private var keywordDraft = ""
     @State private var presentedSheet: SettingsSheet?
-
-    private let suggestedKeywords = ["AI", "SwiftUI", "제품 디자인", "서울 로컬", "스타트업"]
 
     var body: some View {
         MemdoPage(title: "설정", subtitle: "Memdo를 나에게 맞게 조정하세요", eyebrow: "나만의 Memdo") {
             SettingsGroup(title: "하루") {
-                Toggle("오늘 요약 받기", isOn: $dailySummary)
+                Toggle("오늘 요약", isOn: $dailySummary)
                     .memdoSettingsRow()
+                if dailySummary {
+                    Divider()
+                    SettingsTimePicker(title: "요약 시간", selection: $summaryTime)
+                }
                 Divider()
-                SettingsTimePicker(title: "요약 시간", selection: $summaryTime)
-                    .disabled(!dailySummary)
-                Divider()
-                SettingsTimePicker(title: "계획이 없을 때", selection: $promptTime)
+                SettingsTimePicker(title: "계획 알림", selection: $promptTime)
                 Divider()
                 Toggle("알림", isOn: $notifications)
                     .memdoSettingsRow()
+                Divider()
+                Button { presentedSheet = .briefingKeywords } label: {
+                    SettingsDisclosureRow(title: "브리핑 키워드", value: "\(briefingKeywords.count)개 선택")
+                }
+                .buttonStyle(.plain)
             }
 
             SettingsGroup(title: "연결 및 데이터") {
@@ -49,49 +52,16 @@ struct SettingsView: View {
                 .buttonStyle(.plain)
             }
 
-            SettingsGroup(title: "브리핑 키워드") {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
-                        TextField("키워드 입력", text: $keywordDraft)
-                            .submitLabel(.done)
-                            .onSubmit(addKeyword)
-                        Button(action: addKeyword) {
-                            MemdoIconButtonLabel(systemImage: "plus")
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!canAddKeyword)
-                        .accessibilityLabel("브리핑 키워드 추가")
-                    }
-                    .padding(.leading, 12)
-                    .padding(.trailing, 4)
-                    .frame(minHeight: MemdoMetrics.touchTarget)
-                    .memdoFloatingSurface(radius: 22)
-
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 8) {
-                            ForEach(keywordOptions, id: \.self) { keyword in
-                                MemdoChoiceButton(
-                                    title: keyword,
-                                    isSelected: briefingKeywords.contains(keyword),
-                                    action: { toggleKeyword(keyword) }
-                                )
-                            }
-                        }
-                    }
-                    .scrollIndicators(.hidden)
-
-                    Text("\(briefingKeywords.count)/5 선택")
-                        .font(.caption)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
-                }
-                .padding(.vertical, 12)
-            }
-
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
             case .aiConsent:
                 AIConsentSheet()
+            case .briefingKeywords:
+                BriefingKeywordsSheet(
+                    selectedKeywords: $briefingKeywords,
+                    customKeywords: $customKeywords
+                )
             case .privacy:
                 PrivacySheet()
             case .slack:
@@ -101,36 +71,6 @@ struct SettingsView: View {
             }
         }
         .sensoryFeedback(.selection, trigger: briefingKeywords)
-    }
-
-    private var keywordOptions: [String] {
-        suggestedKeywords + customKeywords.filter { !suggestedKeywords.contains($0) }
-    }
-
-    private var normalizedDraft: String {
-        keywordDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var canAddKeyword: Bool {
-        !normalizedDraft.isEmpty
-            && normalizedDraft.count <= 30
-            && briefingKeywords.count < 5
-            && !keywordOptions.contains { $0.localizedCaseInsensitiveCompare(normalizedDraft) == .orderedSame }
-    }
-
-    private func addKeyword() {
-        guard canAddKeyword else { return }
-        customKeywords.append(normalizedDraft)
-        briefingKeywords.insert(normalizedDraft)
-        keywordDraft = ""
-    }
-
-    private func toggleKeyword(_ keyword: String) {
-        if briefingKeywords.contains(keyword) {
-            briefingKeywords.remove(keyword)
-        } else if briefingKeywords.count < 5 {
-            briefingKeywords.insert(keyword)
-        }
     }
 }
 
@@ -187,10 +127,104 @@ private struct SettingsTimePicker: View {
 
 private enum SettingsSheet: String, Identifiable {
     case aiConsent
+    case briefingKeywords
     case googleCalendar
     case privacy
     case slack
     var id: String { rawValue }
+}
+
+private struct BriefingKeywordsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selectedKeywords: Set<String>
+    @Binding var customKeywords: [String]
+    @State private var draft = ""
+
+    private let suggestedKeywords = ["AI", "SwiftUI", "제품 디자인", "서울 로컬", "스타트업"]
+
+    private var keywordOptions: [String] {
+        suggestedKeywords + customKeywords.filter { !suggestedKeywords.contains($0) }
+    }
+
+    private var normalizedDraft: String {
+        draft.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canAddKeyword: Bool {
+        !normalizedDraft.isEmpty
+            && normalizedDraft.count <= 30
+            && selectedKeywords.count < 5
+            && !keywordOptions.contains { $0.localizedCaseInsensitiveCompare(normalizedDraft) == .orderedSame }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
+                    Text("오늘의 브리핑에서 살펴볼 주제를 최대 5개 선택하세요.")
+                        .font(.subheadline)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+
+                    HStack(spacing: 8) {
+                        TextField("키워드 입력", text: $draft)
+                            .submitLabel(.done)
+                            .onSubmit(addKeyword)
+                        Button(action: addKeyword) {
+                            MemdoIconButtonLabel(systemImage: "plus")
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!canAddKeyword)
+                        .accessibilityLabel("브리핑 키워드 추가")
+                    }
+                    .padding(.leading, 12)
+                    .padding(.trailing, 4)
+                    .frame(minHeight: MemdoMetrics.touchTarget)
+                    .memdoFloatingSurface(radius: 22)
+
+                    MemdoSection(title: "키워드", trailing: "\(selectedKeywords.count)/5") {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 88), spacing: 8)],
+                            alignment: .leading,
+                            spacing: 8
+                        ) {
+                            ForEach(keywordOptions, id: \.self) { keyword in
+                                MemdoChoiceButton(
+                                    title: keyword,
+                                    isSelected: selectedKeywords.contains(keyword),
+                                    action: { toggleKeyword(keyword) }
+                                )
+                            }
+                        }
+                    }
+                }
+                .padding(MemdoMetrics.pagePadding)
+            }
+            .background(MemdoTheme.background)
+            .navigationTitle("브리핑 키워드")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("완료") { dismiss() }
+                }
+            }
+        }
+        .memdoSheetPresentation([.medium, .large])
+    }
+
+    private func addKeyword() {
+        guard canAddKeyword else { return }
+        customKeywords.append(normalizedDraft)
+        selectedKeywords.insert(normalizedDraft)
+        draft = ""
+    }
+
+    private func toggleKeyword(_ keyword: String) {
+        if selectedKeywords.contains(keyword) {
+            selectedKeywords.remove(keyword)
+        } else if selectedKeywords.count < 5 {
+            selectedKeywords.insert(keyword)
+        }
+    }
 }
 
 private struct GoogleCalendarConnectionSheet: View {
