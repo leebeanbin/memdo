@@ -1,6 +1,6 @@
 # Memdo Master UI/UX Design
 
-> 상태: UI/UX 기준선 확정 (`v1.3`)
+> 상태: UI/UX 기준선 확정 (`v1.4`)
 > 기준 기기: iPhone 15, 393×852pt  
 > 최소 지원: iOS 17  
 > 이 문서는 Memdo 앱과 위젯 UI/UX의 단일 기준 문서다.
@@ -115,7 +115,7 @@ flowchart LR
 | 카드 내부 요소 | 8–12pt |
 | 카드 내부 여백 | 12–16pt |
 | 같은 섹션의 항목 | 12–16pt |
-| 서로 다른 섹션 | 20–24pt |
+| 서로 다른 섹션 | 18pt |
 | 화면 좌우 여백 | 18pt |
 | Liquid Glass 탭 바 하단 여유 | 72pt 이상 |
 
@@ -205,9 +205,10 @@ Task 완료 원, Event 시간축, 브리핑 번호, 오늘 요약의 결정 행�
 
 - 페이지 제목은 `MemdoPageHeader`, 섹션은 `MemdoSection`으로 같은 정렬축을 공유한다.
 - 모든 최상위 탭의 헤더는 같은 NavigationStack 상단 인셋과 `18pt` 좌우 축을 사용한다.
-- 페이지 섹션 사이 간격은 `20pt`, 섹션 제목과 내용 사이는 `12pt`를 기본값으로 한다.
+- 페이지 섹션 사이 간격은 `18pt`, 섹션 제목과 내용 사이는 `10pt`를 기본값으로 한다.
 - 주요 행동은 화면당 하나를 우선하고, 보조 행동은 plain 또는 시스템 bordered 버튼으로 낮춘다.
-- 첫 viewport의 카드 수는 캘린더 최대 2개, 검색 최대 1개다. 오늘·요약·Agent는 열린 목록을 사용하고 설정은 섹션당 하나의 낮은 대비 Glass 그룹만 사용한다.
+- 일정이 있는 오늘·캘린더·검색·요약·설정·Agent는 열린 행과 상하 Divider를 사용한다. 계획이 없는 오늘의 intention prompt만 첫 행동 카드 1개를 허용한다.
+- Liquid Glass는 하단 탭바, 페이지 헤더 액션, 검색 입력, 필터, Agent composer처럼 떠 있는 조작층에만 적용한다. 월간 그리드·검색 결과·설정 행 같은 콘텐츠 그룹에는 적용하지 않는다.
 - 반복 항목은 카드 여러 개가 아니라 하나의 그룹 안에 행으로 배치하며 카드 안에 카드를 넣지 않는다.
 - 긴 목록은 첫 3개와 `MemdoDisclosureRow`로 단계적으로 펼친다. 오늘 화면은 약 120pt 위로 스크롤하면 자동 펼침하며 수동 펼침·접기와 VoiceOver 동작을 함께 유지한다.
 - Agent는 별도 페이지 없이 네 번째 시스템 탭 액션으로 둔다. 탭하면 직전 콘텐츠 탭을 유지한 채 Agent 시트를 연다.
@@ -371,9 +372,9 @@ AI 브리핑은 뉴스 피드처럼 전면에 나서지 않는다. AI가 뒤에�
 
 ## 10. 검색
 
-검색은 별도 탭이나 페이지를 차지하지 않는다. 기본 상태에서는 캘린더 제목 오른쪽에 기능성 Glass 검색 버튼이 있고, 탭하면 같은 헤더 아래에 검색 필드가 펼쳐진다. 닫으면 검색어와 결과를 비우고 월간 캘린더로 돌아간다.
+검색은 별도 탭이나 페이지를 차지하지 않는다. 기본 상태에서는 캘린더 제목 오른쪽에 기능성 Glass 검색 버튼이 있고, 탭하면 같은 헤더 아래에 Glass 검색 필드와 네이티브 segmented scope가 펼쳐진다. 닫으면 검색어와 결과를 비우고 월간 캘린더로 돌아간다.
 
-분리된 시스템 검색 툴바는 커스텀 페이지 제목과 다른 정렬축에 놓이고 탭 전환 시 표시 상태가 선점되는 문제가 있어 사용하지 않는다. 검색 입력은 시스템 `TextField`를 사용하고, 세 범위 버튼은 하나의 Glass 범위 그룹 안에서 선택 상태가 이동한다. 검색 필드와 범위 그룹은 iOS 26 `GlassEffectContainer`에서 함께 렌더링하고 구버전은 material fallback을 사용한다.
+분리된 시스템 검색 툴바는 커스텀 페이지 제목과 다른 정렬축에 놓이고 탭 전환 시 표시 상태가 선점되는 문제가 있어 사용하지 않는다. 검색 입력은 시스템 `TextField`와 iOS 26 interactive Glass를 사용하고, 세 범위는 요약 기간 선택과 같은 네이티브 segmented `Picker`를 재사용한다. 구버전 검색 입력은 material fallback을 사용한다.
 
 ### 배치
 
@@ -624,9 +625,11 @@ AI가 제안한 일정도 사용자가 승인한 뒤에는 일반 일정과 동�
 | `MemdoButtonLabel` | 주요·보조 텍스트 버튼의 서체와 최소 터치 높이 |
 | `MemdoIconButtonLabel` | 아이콘 버튼의 `44×44pt` 터치 영역 |
 | `MemdoScheduleCountDots` | 오늘·월간 캘린더의 일정 수를 같은 1–3개 밀도 점으로 표시 |
-| `memdoGlassPanel` | 설정처럼 비대화하지 않는 비상호작용 Glass 그룹과 구버전 material fallback |
+| `memdoFloatingSurface` | 검색·필터·헤더 액션·composer의 interactive Glass와 구버전 material fallback |
+| `memdoRowGroup` | 반복 콘텐츠의 상하 Divider 경계를 한 곳에서 적용 |
+| `memdoSystemList` | 모든 Form/List의 semantic 배경과 compact 섹션 간격 |
 | `memdoSheetPresentation` | 시트의 detent, drag indicator, 불투명 배경 |
-| `SettingsGroup` | 설정 섹션과 최소 `52pt` 행 높이 |
+| `SettingsGroup` | 열린 설정 섹션과 최소 `52pt` 행 높이 |
 | `SettingsTimePicker` | 보통·접근성 글자 크기에 맞춰 시간 라벨과 시스템 선택기를 재배치 |
 
 반복되는 컴포넌트만 공통화한다. 한 화면에서 한 번만 쓰는 구조를 미리 추상화하지 않는다.
