@@ -112,10 +112,14 @@ struct TodayWeekIndex: View {
                             .font(.caption2.weight(.semibold))
                         Text("\(date > 31 ? date - 31 : date)")
                             .font(.subheadline.weight(.semibold))
-                        Capsule()
-                            .fill(date == selectedDate ? MemdoTheme.onAccent : MemdoTheme.brand)
-                            .frame(width: min(CGFloat(count) * 3, 18), height: 3)
-                            .opacity(count == 0 ? 0 : 1)
+                        HStack(spacing: 3) {
+                            ForEach(0..<min(count, 3), id: \.self) { _ in
+                                Circle()
+                                    .fill(date == selectedDate ? MemdoTheme.onAccent : MemdoTheme.brand)
+                                    .frame(width: 3, height: 3)
+                            }
+                        }
+                        .frame(height: 3)
                     }
                     .foregroundStyle(date == selectedDate ? MemdoTheme.onAccent : MemdoTheme.secondaryInk)
                     .frame(maxWidth: .infinity, minHeight: 52)
@@ -222,8 +226,8 @@ struct TodayScheduleSection: View {
                     )
                 }
             }
-            .padding(.vertical, 4)
-            .memdoCard()
+            .overlay(alignment: .top) { Divider() }
+            .overlay(alignment: .bottom) { Divider() }
         }
     }
 }
@@ -245,7 +249,8 @@ struct TodayBriefingSection: View {
                     }
                 }
             }
-            .memdoCard()
+            .overlay(alignment: .top) { Divider() }
+            .overlay(alignment: .bottom) { Divider() }
         }
     }
 }

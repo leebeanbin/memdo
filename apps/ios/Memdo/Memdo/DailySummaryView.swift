@@ -23,7 +23,13 @@ struct DailySummaryView: View {
     var body: some View {
         MemdoPage(
             title: "오늘 요약",
-            subtitle: date.formatted(.dateTime.month(.wide).day().weekday(.wide)),
+            subtitle: date.formatted(
+                .dateTime
+                    .month(.wide)
+                    .day()
+                    .weekday(.wide)
+                    .locale(Locale(identifier: "ko_KR"))
+            ),
             eyebrow: "하루 마무리",
             headerActionIcon: "xmark",
             headerActionLabel: "오늘 요약 닫기",
@@ -126,7 +132,8 @@ private struct SummaryReviewSection: View {
                         }
                     }
                 }
-                .memdoCard()
+                .overlay(alignment: .top) { Divider() }
+                .overlay(alignment: .bottom) { Divider() }
             }
         }
     }
@@ -210,8 +217,9 @@ private struct SummaryReviewRow: View {
 
     private var tomorrowButton: some View {
         Button(action: onMoveToTomorrow) {
-            Label("내일", systemImage: "arrow.forward")
-                .font(.caption.weight(.semibold))
+            Image(systemName: "calendar.badge.clock")
+                .font(.subheadline.weight(.semibold))
+                .frame(width: MemdoMetrics.touchTarget)
                 .frame(minHeight: MemdoMetrics.touchTarget)
         }
         .buttonStyle(.plain)

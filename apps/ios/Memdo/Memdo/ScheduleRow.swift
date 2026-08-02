@@ -36,7 +36,7 @@ struct ScheduleRow: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 6)
         .contentShape(Rectangle())
     }
 
@@ -112,7 +112,9 @@ struct ScheduleRow: View {
         } else {
             timing = "할 일 · \(schedule.startTimeText)"
         }
-        return "\(timing) · \(schedule.calendar.title) · \(schedule.source)"
+        return schedule.isExternal
+            ? "\(timing) · \(schedule.calendar.title)"
+            : "\(timing) · \(schedule.calendar.title) · \(schedule.source)"
     }
 }
 
