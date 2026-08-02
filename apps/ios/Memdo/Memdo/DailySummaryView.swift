@@ -24,9 +24,13 @@ struct DailySummaryView: View {
         MemdoPage(
             title: "오늘 요약",
             subtitle: date.formatted(.dateTime.month(.wide).day().weekday(.wide)),
-            eyebrow: "하루 마무리"
+            eyebrow: "하루 마무리",
+            headerActionIcon: "xmark",
+            headerActionLabel: "오늘 요약 닫기",
+            headerAction: { dismiss() }
         ) {
             SummaryProgressLine(completedCount: tasks.count - reviews.count, totalCount: tasks.count)
+            SummaryInsightSection(remainingCount: reviews.count)
             SummaryReviewSection(
                 reviews: reviews,
                 onComplete: complete,
@@ -34,11 +38,6 @@ struct DailySummaryView: View {
                 onChooseDate: { pendingMove = $0 },
                 onDelete: { pendingDeletion = $0 }
             )
-            SummaryInsightSection(remainingCount: reviews.count)
-            Button { dismiss() } label: {
-                MemdoButtonLabel("정리 완료", fillsWidth: true)
-            }
-            .buttonStyle(.borderedProminent)
         }
         .memdoSheetPresentation([.large])
         .sheet(item: $pendingMove) { schedule in
@@ -81,24 +80,21 @@ private struct SummaryProgressLine: View {
     let totalCount: Int
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "sparkles")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(MemdoTheme.brand)
-                .frame(width: 28)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Agent가 정리한 오늘")
+        VStack(spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("완료 \(completedCount)")
                     .font(.subheadline.weight(.semibold))
-                Text("완료 \(completedCount)개 · 결정 필요 \(max(totalCount - completedCount, 0))개")
+                Text("확인 \(max(totalCount - completedCount, 0))")
                     .font(.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
+                Spacer(minLength: 0)
+                Text("\(completedCount)/\(totalCount)")
+                    .font(.caption.monospacedDigit().weight(.bold))
             }
-            Spacer(minLength: 0)
-            Text("\(completedCount)/\(totalCount)")
-                .font(.subheadline.monospacedDigit().weight(.bold))
+            ProgressView(value: totalCount == 0 ? 0 : Double(completedCount) / Double(totalCount))
+                .tint(MemdoTheme.accent)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
     }
 }
@@ -140,27 +136,18 @@ private struct SummaryInsightSection: View {
     let remainingCount: Int
 
     var body: some View {
-        MemdoSection(title: "Agent 메모") {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(remainingCount == 0
-                     ? "오늘의 할 일을 모두 정리했어요."
-                     : "남은 \(remainingCount)개 중 중요한 일만 날짜를 다시 정하고, 나머지는 완료 여부를 확인해 보세요.")
-                    .font(.subheadline)
-                    .foregroundStyle(MemdoTheme.secondaryInk)
-                if remainingCount > 0 {
-                    Label("이동 전 날짜를 직접 확인해요", systemImage: "calendar.badge.clock")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(MemdoTheme.accent)
-                }
-            }
-            .padding(.leading, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .leading) {
-                Capsule()
-                    .fill(MemdoTheme.brand)
-                    .frame(width: 3)
-            }
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(MemdoTheme.brand)
+                .accessibilityHidden(true)
+            Text(remainingCount == 0
+                 ? "Agent · 오늘의 할 일을 모두 정리했어요."
+                 : "Agent · 남은 \(remainingCount)개는 완료하거나 다음 날짜로 옮겨보세요.")
+                .font(.subheadline)
+                .foregroundStyle(MemdoTheme.secondaryInk)
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -173,48 +160,72 @@ private struct SummaryReviewRow: View {
     let onDelete: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "clock")
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(schedule.title).font(.body.bold())
-                    Text(schedule.displayTime).font(.caption).foregroundStyle(MemdoTheme.secondaryInk)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        completeButton
+                        titleBlock
+                    }
+                    HStack(spacing: 4) {
+                        Spacer(minLength: 0)
+                        tomorrowButton
+                        moreMenu
+                    }
                 }
-                Spacer()
-            }
-            reviewActionLayout {
-                if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-                Button(action: onComplete) {
-                    MemdoButtonLabel("완료", systemImage: "checkmark", size: actionSize)
+            } else {
+                HStack(spacing: 8) {
+                    completeButton
+                    titleBlock
+                    Spacer(minLength: 4)
+                    tomorrowButton
+                    moreMenu
                 }
-                .buttonStyle(.borderedProminent)
-
-                Button(action: onMoveToTomorrow) {
-                    MemdoButtonLabel("내일로", systemImage: "arrow.forward", size: actionSize)
-                }
-                .buttonStyle(.bordered)
-
-                Menu {
-                    Button("다른 날짜로", systemImage: "calendar", action: onChooseDate)
-                    Button("삭제", systemImage: "trash", role: .destructive, action: onDelete)
-                } label: {
-                    MemdoIconButtonLabel(systemImage: "ellipsis")
-                }
-                .accessibilityLabel("일정 더보기")
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
     }
 
-    private var actionSize: MemdoButtonLabel.Size {
-        dynamicTypeSize.isAccessibilitySize ? .regular : .compact
+    private var completeButton: some View {
+        Button(action: onComplete) {
+            Image(systemName: "circle")
+                .font(.title3)
+                .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(schedule.title) 완료")
     }
 
-    private var reviewActionLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-            : AnyLayout(HStackLayout(spacing: 6))
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(schedule.title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(2)
+            Text(schedule.displayTime)
+                .font(.caption)
+                .foregroundStyle(MemdoTheme.secondaryInk)
+        }
+    }
+
+    private var tomorrowButton: some View {
+        Button(action: onMoveToTomorrow) {
+            Label("내일", systemImage: "arrow.forward")
+                .font(.caption.weight(.semibold))
+                .frame(minHeight: MemdoMetrics.touchTarget)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(schedule.title) 내일로 이동")
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            Button("다른 날짜로", systemImage: "calendar", action: onChooseDate)
+            Button("삭제", systemImage: "trash", role: .destructive, action: onDelete)
+        } label: {
+            MemdoIconButtonLabel(systemImage: "ellipsis")
+        }
+        .accessibilityLabel("\(schedule.title) 더보기")
     }
 }
 

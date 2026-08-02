@@ -13,6 +13,7 @@ struct TodayView: View {
     @State private var presentedSheet: TodaySheetDestination?
     @State private var selectedDate = 31
     @State private var showAllSchedules = false
+    @State private var autoExpandArmed = true
 
     private var schedules: [ScheduleDetail] {
         scheduleStore.items(for: date(for: selectedDate))
@@ -93,7 +94,11 @@ struct TodayView: View {
                 .coordinateSpace(name: "today-scroll")
                 .scrollIndicators(.hidden)
                 .onPreferenceChange(TodayScrollOffsetKey.self) { offset in
-                    guard offset < -120, schedules.count > 3, !showAllSchedules else { return }
+                    if offset > -40 {
+                        autoExpandArmed = true
+                    }
+                    guard autoExpandArmed, offset < -120, schedules.count > 3, !showAllSchedules else { return }
+                    autoExpandArmed = false
                     withAnimation(.easeOut(duration: 0.2)) {
                         showAllSchedules = true
                     }
@@ -132,6 +137,7 @@ struct TodayView: View {
     private func selectDate(_ date: Int) {
         selectedDate = date
         showAllSchedules = false
+        autoExpandArmed = true
     }
 
     private func moveDate(by offset: Int) {
@@ -166,6 +172,9 @@ struct TodayView: View {
     private func toggleSchedules() {
         withAnimation(.easeOut(duration: 0.2)) {
             showAllSchedules.toggle()
+        }
+        if !showAllSchedules {
+            autoExpandArmed = false
         }
     }
 

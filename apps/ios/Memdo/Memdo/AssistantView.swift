@@ -2,8 +2,8 @@ import SwiftUI
 
 struct AgentSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var composer = ""
-    @State private var response = ""
+    @Binding var composer: String
+    @Binding var response: String
 
     let context: String
 
@@ -31,6 +31,10 @@ struct AgentSheet: View {
             .navigationTitle("Agent")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("새 대화", systemImage: "square.and.pencil", action: resetConversation)
+                        .disabled(composer.isEmpty && response.isEmpty)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("닫기") { dismiss() }
                 }
@@ -49,6 +53,11 @@ struct AgentSheet: View {
         guard !prompt.isEmpty else { return }
         response = "‘\(prompt)’ 요청을 확인했어요. 일정 변경안은 실행 전에 시작·종료·알림을 다시 보여드릴게요."
         composer = ""
+    }
+
+    private func resetConversation() {
+        composer = ""
+        response = ""
     }
 }
 

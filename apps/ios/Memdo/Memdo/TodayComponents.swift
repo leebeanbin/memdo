@@ -110,18 +110,12 @@ struct TodayWeekIndex: View {
                     VStack(spacing: 4) {
                         Text(day)
                             .font(.caption2.weight(.semibold))
-                        HStack(spacing: 3) {
-                            Text("\(date > 31 ? date - 31 : date)")
-                                .font(.subheadline.weight(.semibold))
-                            if count > 0 {
-                                Text("\(count)")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(date == selectedDate ? MemdoTheme.accent : MemdoTheme.onAccent)
-                                    .padding(.horizontal, 4)
-                                    .frame(minHeight: 12)
-                                    .background(date == selectedDate ? MemdoTheme.onAccent : MemdoTheme.accent, in: Capsule())
-                            }
-                        }
+                        Text("\(date > 31 ? date - 31 : date)")
+                            .font(.subheadline.weight(.semibold))
+                        Capsule()
+                            .fill(date == selectedDate ? MemdoTheme.onAccent : MemdoTheme.brand)
+                            .frame(width: min(CGFloat(count) * 3, 18), height: 3)
+                            .opacity(count == 0 ? 0 : 1)
                     }
                     .foregroundStyle(date == selectedDate ? MemdoTheme.onAccent : MemdoTheme.secondaryInk)
                     .frame(maxWidth: .infinity, minHeight: 52)

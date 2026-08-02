@@ -31,10 +31,18 @@ struct AppShellView: View {
     @State private var lastContentTab = AppTab.today
     @State private var showCalendarSearch = false
     @State private var presentedSheet: AppSheetDestination?
+    @State private var agentComposer = ""
+    @State private var agentResponse = ""
 
     var body: some View {
         appTabs
-            .modifier(AppShellBehavior(presentedSheet: $presentedSheet))
+            .modifier(
+                AppShellBehavior(
+                    presentedSheet: $presentedSheet,
+                    agentComposer: $agentComposer,
+                    agentResponse: $agentResponse
+                )
+            )
             .environment(scheduleStore)
     }
 
@@ -110,12 +118,18 @@ private enum AppSheetDestination: Identifiable {
 
 private struct AppShellBehavior: ViewModifier {
     @Binding var presentedSheet: AppSheetDestination?
+    @Binding var agentComposer: String
+    @Binding var agentResponse: String
 
     func body(content: Content) -> some View {
         content.sheet(item: $presentedSheet) { destination in
             switch destination {
             case .agent(let context):
-                AgentSheet(context: context)
+                AgentSheet(
+                    composer: $agentComposer,
+                    response: $agentResponse,
+                    context: context
+                )
             case .summary:
                 DailySummaryView()
             }
