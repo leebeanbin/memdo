@@ -3,6 +3,7 @@ import SwiftUI
 struct DailySummaryView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScheduleStore.self) private var scheduleStore
+    @State private var scope = SummaryScope.today
     @State private var pendingDeletion: ScheduleDetail?
     @State private var pendingMove: ScheduleDetail?
 
@@ -13,37 +14,52 @@ struct DailySummaryView: View {
     }
 
     private var tasks: [ScheduleDetail] {
-        scheduleStore.items(for: date).filter { $0.kind == .task }
+        let interval = scope.interval(endingAt: date)
+        return scheduleStore.schedules
+            .filter {
+                $0.kind == .task &&
+                $0.startAt >= interval.start &&
+                $0.startAt < interval.end
+            }
+            .sorted { scope == .today ? $0.timeSortKey < $1.timeSortKey : $0.timeSortKey > $1.timeSortKey }
     }
 
-    private var reviews: [ScheduleDetail] {
+    private var completedTasks: [ScheduleDetail] {
+        tasks.filter(\.isDone)
+    }
+
+    private var incompleteTasks: [ScheduleDetail] {
         tasks.filter { !$0.isDone }
     }
 
     var body: some View {
         MemdoPage(
-            title: "오늘 요약",
-            subtitle: date.formatted(
-                .dateTime
-                    .month(.wide)
-                    .day()
-                    .weekday(.wide)
-                    .locale(Locale(identifier: "ko_KR"))
-            ),
-            eyebrow: "하루 마무리",
+            title: scope.title,
+            subtitle: scope.subtitle(endingAt: date),
+            eyebrow: scope == .today ? "하루 마무리" : "기록 회고",
             headerActionIcon: "xmark",
-            headerActionLabel: "오늘 요약 닫기",
+            headerActionLabel: "요약 닫기",
             headerAction: { dismiss() }
         ) {
-            SummaryProgressLine(completedCount: tasks.count - reviews.count, totalCount: tasks.count)
-            SummaryInsightSection(remainingCount: reviews.count)
-            SummaryReviewSection(
-                reviews: reviews,
-                onComplete: complete,
-                onMoveToTomorrow: moveToTomorrow,
-                onChooseDate: { pendingMove = $0 },
-                onDelete: { pendingDeletion = $0 }
+            SummaryScopePicker(selection: $scope)
+            SummaryProgressLine(
+                completedCount: completedTasks.count,
+                totalCount: tasks.count,
+                incompleteLabel: scope == .today ? "확인" : "놓침"
             )
+            if scope == .today {
+                SummaryInsightSection(remainingCount: incompleteTasks.count)
+                SummaryReviewSection(
+                    reviews: incompleteTasks,
+                    onComplete: complete,
+                    onMoveToTomorrow: moveToTomorrow,
+                    onChooseDate: { pendingMove = $0 },
+                    onDelete: { pendingDeletion = $0 }
+                )
+            } else {
+                SummaryHistorySection(status: .completed, schedules: completedTasks)
+                SummaryHistorySection(status: .missed, schedules: incompleteTasks)
+            }
         }
         .memdoSheetPresentation([.large])
         .sheet(item: $pendingMove) { schedule in
@@ -81,16 +97,96 @@ struct DailySummaryView: View {
     }
 }
 
+private enum SummaryScope: String, CaseIterable, Identifiable {
+    case today
+    case week
+    case month
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .today: "오늘 요약"
+        case .week: "지난 7일"
+        case .month: "지난 30일"
+        }
+    }
+
+    var segmentTitle: String {
+        switch self {
+        case .today: "오늘"
+        case .week: "7일"
+        case .month: "30일"
+        }
+    }
+
+    func interval(endingAt date: Date) -> DateInterval {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: date)
+        switch self {
+        case .today:
+            return DateInterval(
+                start: startOfDay,
+                end: calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
+            )
+        case .week:
+            return DateInterval(
+                start: calendar.date(byAdding: .day, value: -7, to: startOfDay) ?? startOfDay,
+                end: startOfDay
+            )
+        case .month:
+            return DateInterval(
+                start: calendar.date(byAdding: .day, value: -30, to: startOfDay) ?? startOfDay,
+                end: startOfDay
+            )
+        }
+    }
+
+    func subtitle(endingAt date: Date) -> String {
+        let formatter = Date.FormatStyle.dateTime
+            .month(.wide)
+            .day()
+            .locale(Locale(identifier: "ko_KR"))
+        if self == .today {
+            return date.formatted(
+                .dateTime
+                    .month(.wide)
+                    .day()
+                    .weekday(.wide)
+                    .locale(Locale(identifier: "ko_KR"))
+            )
+        }
+        let range = interval(endingAt: date)
+        let lastDay = Calendar.current.date(byAdding: .day, value: -1, to: range.end) ?? range.end
+        return "\(range.start.formatted(formatter))–\(lastDay.formatted(formatter))"
+    }
+}
+
+private struct SummaryScopePicker: View {
+    @Binding var selection: SummaryScope
+
+    var body: some View {
+        Picker("요약 기간", selection: $selection) {
+            ForEach(SummaryScope.allCases) { scope in
+                Text(scope.segmentTitle).tag(scope)
+            }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityValue(selection.title)
+    }
+}
+
 private struct SummaryProgressLine: View {
     let completedCount: Int
     let totalCount: Int
+    let incompleteLabel: String
 
     var body: some View {
         VStack(spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text("완료 \(completedCount)")
                     .font(.subheadline.weight(.semibold))
-                Text("확인 \(max(totalCount - completedCount, 0))")
+                Text("\(incompleteLabel) \(max(totalCount - completedCount, 0))")
                     .font(.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
                 Spacer(minLength: 0)
@@ -100,6 +196,94 @@ private struct SummaryProgressLine: View {
             ProgressView(value: totalCount == 0 ? 0 : Double(completedCount) / Double(totalCount))
                 .tint(MemdoTheme.accent)
         }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private enum SummaryHistoryStatus {
+    case completed
+    case missed
+
+    var title: String {
+        switch self {
+        case .completed: "잘 끝낸 작업"
+        case .missed: "놓치고 지난 작업"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .completed: "checkmark.circle.fill"
+        case .missed: "clock.badge.exclamationmark"
+        }
+    }
+}
+
+private struct SummaryHistorySection: View {
+    @State private var isExpanded = false
+    let status: SummaryHistoryStatus
+    let schedules: [ScheduleDetail]
+
+    private var visibleSchedules: [ScheduleDetail] {
+        Array(schedules.prefix(isExpanded ? schedules.count : 3))
+    }
+
+    var body: some View {
+        MemdoSection(title: status.title, trailing: "\(schedules.count)개") {
+            if schedules.isEmpty {
+                ContentUnavailableView(
+                    status == .completed ? "완료 기록이 없어요" : "놓친 작업이 없어요",
+                    systemImage: status.systemImage
+                )
+                .frame(maxWidth: .infinity, minHeight: 120)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(visibleSchedules) { schedule in
+                        SummaryHistoryRow(schedule: schedule, status: status)
+                        if schedule.id != visibleSchedules.last?.id {
+                            Divider().padding(.leading, MemdoMetrics.rowContentLeading)
+                        }
+                    }
+                    if schedules.count > 3 {
+                        Divider().padding(.leading, MemdoMetrics.rowContentLeading)
+                        MemdoDisclosureRow(
+                            isExpanded: isExpanded,
+                            hiddenCount: schedules.count - 3,
+                            totalCount: schedules.count,
+                            action: { withAnimation(.easeOut(duration: 0.2)) { isExpanded.toggle() } }
+                        )
+                    }
+                }
+                .overlay(alignment: .top) { Divider() }
+                .overlay(alignment: .bottom) { Divider() }
+            }
+        }
+    }
+}
+
+private struct SummaryHistoryRow: View {
+    let schedule: ScheduleDetail
+    let status: SummaryHistoryStatus
+
+    var body: some View {
+        HStack(spacing: MemdoMetrics.rowSpacing) {
+            Image(systemName: status.systemImage)
+                .font(.title3)
+                .foregroundStyle(status == .completed ? MemdoTheme.secondaryInk : MemdoTheme.brand)
+                .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(schedule.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                Text("\(schedule.dateText) · \(schedule.displayTime)")
+                    .font(.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, MemdoMetrics.rowInset)
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
     }

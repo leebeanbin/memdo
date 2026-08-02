@@ -221,6 +221,8 @@ extension ScheduleDetail {
         ScheduleDetail(day: 30, time: "11:00", title: "프로토타입 흐름 점검", isDone: true, memo: "날짜 선택과 상세 진입 흐름 확인", kind: .task),
         ScheduleDetail(day: 30, time: "16:30", title: "문서 구조 정리", isDone: true, kind: .task),
         ScheduleDetail(day: 29, time: "19:00", title: "저녁 산책", isDone: true, location: "동네 공원", kind: .task, durationMinutes: 30),
+        ScheduleDetail(day: 28, time: "18:30", title: "주간 운동 계획", kind: .task, durationMinutes: 30),
+        ScheduleDetail(day: 25, time: "20:00", title: "회고 메모 정리", kind: .task, durationMinutes: 30),
         ScheduleDetail(day: 24, time: "11:00", title: "위젯 디자인 리뷰", isDone: true, memo: "잠금화면 위젯 정보 밀도 확인", kind: .task),
         ScheduleDetail(day: 18, time: "16:00", title: "디자인 시스템 정리", isDone: true, kind: .task),
         ScheduleDetail(day: 8, time: "19:30", title: "저녁 산책", isDone: true, location: "동네 공원", kind: .task, durationMinutes: 30)
