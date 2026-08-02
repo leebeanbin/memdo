@@ -174,6 +174,7 @@ Agent는 별도 AI 페이지가 아니라 현재 앱 문맥 위에 열리는 com
 - 사용자가 요청하면 빠른 요청 목록은 사라지고 결과에 공간을 양보한다.
 - Agent 응답은 말풍선 피드가 아니라 짧은 본문과 3pt 브랜드 기준선으로 표시한다.
 - composer는 키보드와 함께 고정되며 현재 콘텐츠를 과도하게 가리지 않는다.
+- draft와 응답은 시트 재진입에도 유지하며, 초기화는 명시적인 `새 대화`로만 수행한다.
 - 무의미한 회전, 빠른 morph, 자동 이동 애니메이션을 쓰지 않는다.
 
 ### 6.2 생성형 UI 허용 범위
@@ -203,7 +204,7 @@ Agent가 임의의 화면을 만드는 것이 아니라 정해진 데이터 유�
 | 오늘 | 날짜 → 날짜 레일 → 일정/빈 날 → 브리핑 | 2 이하 | 일정 `+` | 요약은 헤더 완료 링 |
 | 캘린더 | 월 → 월간 그리드 → 선택 날짜 일정 | 2 이하 | 일정 `+` | 필터 Menu, 날짜 long press |
 | 검색 | 검색 입력 → scope → 필터 상태 → 결과 | 1 | 결과 선택 | 상세 필터 Sheet, 분석은 공통 Agent |
-| 오늘 요약 | 완료 수 → 미완료 결정 → Agent 메모 → 완료 | 1 | 정리 완료 | 다른 날짜·삭제는 Menu |
+| 오늘 요약 | 완료 수 → Agent 메모 → 미완료 결정 | 1 | 완료 원·내일 | 다른 날짜·삭제는 Menu |
 | 설정 | 하루 → 연결·권한 → 키워드 → 개인정보 | 0 | 직접 설정 | 연결 설명 Sheet |
 | Agent | 문맥 → 요청/결과 → composer | 0 | 보내기 | 변경안 승인 UI |
 
@@ -219,11 +220,11 @@ Agent가 임의의 화면을 만드는 것이 아니라 정해진 데이터 유�
 
 | 시트 | 기본 컨테이너 | Detent | 주요 toolbar/action | 상태 계약 |
 |---|---|---|---|---|
-| Agent | `ScrollView` + composer | medium/large | 닫기, 보내기 | empty/result/approval/error |
+| Agent | `ScrollView` + composer | medium/large | 새 대화, 닫기, 보내기 | empty/result/approval/error |
 | 새 일정 | `Form` | medium/large | 취소/추가 | invalid input은 추가 비활성 |
 | 일정 상세 | `Form` | medium/large | 닫기/수정 | 수정 시 취소/저장 |
 | 날짜 일정 | `List` | medium/large | 닫기 | empty/list/add |
-| 오늘 요약 | `MemdoPage` | large | 정리 완료 | empty/review/complete |
+| 오늘 요약 | `MemdoPage` | large | 닫기, 완료 원, 내일 | empty/review/complete |
 | 다른 날짜 이동 | `Form` | medium | 취소/이동 | DatePicker |
 | 브리핑 상세 | `ScrollView` | medium | 닫기 | source/reason/impact |
 | 검색 필터 | `Form` | medium | 적용 | reset/active |
