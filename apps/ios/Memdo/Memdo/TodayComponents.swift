@@ -112,14 +112,10 @@ struct TodayWeekIndex: View {
                             .font(.caption2.weight(.semibold))
                         Text("\(date > 31 ? date - 31 : date)")
                             .font(.subheadline.weight(.semibold))
-                        HStack(spacing: 4) {
-                            ForEach(0..<min(count, 3), id: \.self) { _ in
-                                Circle()
-                                    .fill(date == selectedDate ? MemdoTheme.onAccent : MemdoTheme.brand)
-                                    .frame(width: 3, height: 3)
-                            }
-                        }
-                        .frame(height: 3)
+                        MemdoScheduleCountDots(
+                            count: count,
+                            isEmphasized: date == selectedDate
+                        )
                     }
                     .foregroundStyle(date == selectedDate ? MemdoTheme.onAccent : MemdoTheme.secondaryInk)
                     .frame(maxWidth: .infinity, minHeight: 52)

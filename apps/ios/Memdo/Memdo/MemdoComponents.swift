@@ -253,6 +253,23 @@ struct MemdoIconButtonLabel: View {
     }
 }
 
+struct MemdoScheduleCountDots: View {
+    let count: Int
+    let isEmphasized: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<min(count, 3), id: \.self) { _ in
+                Circle()
+                    .fill(isEmphasized ? MemdoTheme.onAccent : MemdoTheme.brand)
+                    .frame(width: 3, height: 3)
+            }
+        }
+        .frame(height: 4)
+        .accessibilityHidden(true)
+    }
+}
+
 struct MemdoChoiceButton: View {
     let title: String
     let isSelected: Bool

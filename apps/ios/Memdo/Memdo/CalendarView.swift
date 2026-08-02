@@ -312,11 +312,8 @@ private struct CalendarMonthCard: View {
                 .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
                 .background(isSelected ? MemdoTheme.accent : .clear, in: Circle())
                 .overlay(alignment: .bottom) {
-                    if count > 0 {
-                        Text(count > 9 ? "9+" : "\(count)")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(isSelected ? MemdoTheme.onAccent : MemdoTheme.secondaryInk)
-                    }
+                    MemdoScheduleCountDots(count: count, isEmphasized: isSelected)
+                        .padding(.bottom, 4)
                 }
         }
         .buttonStyle(.plain)

@@ -207,7 +207,10 @@ struct ScheduleEditorFields: View {
                 } label: {
                     LabeledContent("장소", value: schedule.location.nilFallback)
                 }
-                TextField("알림", text: $schedule.reminder)
+                LabeledContent("알림") {
+                    TextField("예: 30분 전", text: $schedule.reminder)
+                        .multilineTextAlignment(.trailing)
+                }
                 Picker("반복", selection: $schedule.repeatRule) {
                     ForEach(ScheduleRepeatRule.allCases) { rule in
                         Text(rule.rawValue).tag(rule)
