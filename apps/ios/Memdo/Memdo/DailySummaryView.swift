@@ -293,14 +293,16 @@ private struct SummaryProgressLine: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text("완료 \(completedCount)")
+                Text("\(completedCount)/\(totalCount)")
                     .font(.subheadline.weight(.semibold))
-                Text("\(incompleteLabel) \(max(totalCount - completedCount, 0))")
+                    .monospacedDigit()
+                Text("완료")
                     .font(.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
                 Spacer(minLength: 0)
-                Text("\(completedCount)/\(totalCount)")
-                    .font(.caption.monospacedDigit().weight(.bold))
+                Text("\(max(totalCount - completedCount, 0)) \(incompleteLabel)")
+                    .font(.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
             }
             ProgressView(value: totalCount == 0 ? 0 : Double(completedCount) / Double(totalCount))
                 .tint(MemdoTheme.accent)

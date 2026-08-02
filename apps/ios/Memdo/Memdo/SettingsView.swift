@@ -22,9 +22,12 @@ struct SettingsView: View {
                     .disabled(!dailySummary)
                 Divider()
                 SettingsTimePicker(title: "계획이 없을 때", selection: $promptTime)
+                Divider()
+                Toggle("알림", isOn: $notifications)
+                    .memdoSettingsRow()
             }
 
-            SettingsGroup(title: "연결 및 권한") {
+            SettingsGroup(title: "연결 및 데이터") {
                 Button { presentedSheet = .googleCalendar } label: {
                     SettingsDisclosureRow(title: "Google Calendar", value: "연결 안 됨")
                 }
@@ -40,16 +43,14 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 Divider()
-                Toggle("알림", isOn: $notifications)
-                    .memdoSettingsRow()
+                Button { presentedSheet = .privacy } label: {
+                    SettingsDisclosureRow(title: "개인정보 및 데이터", value: "보관·철회")
+                }
+                .buttonStyle(.plain)
             }
 
             SettingsGroup(title: "브리핑 키워드") {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("오늘의 브리핑이 찾아볼 주제를 키워드로 골라요.")
-                        .font(.subheadline)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
-
+                VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
                         TextField("키워드 입력", text: $keywordDraft)
                             .submitLabel(.done)
@@ -66,35 +67,26 @@ struct SettingsView: View {
                     .frame(minHeight: MemdoMetrics.touchTarget)
                     .memdoFloatingSurface(radius: 22)
 
-                    Divider()
-
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 88), spacing: 8)],
-                        alignment: .leading,
-                        spacing: 8
-                    ) {
-                        ForEach(keywordOptions, id: \.self) { keyword in
-                            MemdoChoiceButton(
-                                title: keyword,
-                                isSelected: briefingKeywords.contains(keyword),
-                                action: { toggleKeyword(keyword) }
-                            )
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 8) {
+                            ForEach(keywordOptions, id: \.self) { keyword in
+                                MemdoChoiceButton(
+                                    title: keyword,
+                                    isSelected: briefingKeywords.contains(keyword),
+                                    action: { toggleKeyword(keyword) }
+                                )
+                            }
                         }
                     }
+                    .scrollIndicators(.hidden)
 
-                    Text("\(briefingKeywords.count)/5 · 선택한 단어는 브리핑 검색과 정렬에만 사용해요.")
+                    Text("\(briefingKeywords.count)/5 선택")
                         .font(.caption)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                 }
                 .padding(.vertical, 12)
             }
 
-            SettingsGroup(title: "개인정보") {
-                Button { presentedSheet = .privacy } label: {
-                    SettingsDisclosureRow(title: "개인정보 및 데이터", value: "보관·철회")
-                }
-                .buttonStyle(.plain)
-            }
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {

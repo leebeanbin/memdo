@@ -26,18 +26,12 @@ struct ScheduleSearchView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
-            SearchFilterBar(
-                scope: scope,
-                filterDescription: activeFilterDescription,
-                onOpenFilters: { presentedSheet = .filters }
-            )
-            SearchResultsSection(
-                query: query,
-                schedules: filteredResults,
-                onOpenSchedule: { presentedSheet = .detail($0) }
-            )
-        }
+        SearchResultsSection(
+            schedules: filteredResults,
+            filterDescription: activeFilterDescription,
+            onOpenFilters: { presentedSheet = .filters },
+            onOpenSchedule: { presentedSheet = .detail($0) }
+        )
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
             case .detail(let schedule):
@@ -65,54 +59,30 @@ enum ScheduleSearchScope: String, CaseIterable, Identifiable {
     }
 }
 
-private struct SearchFilterBar: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    let scope: ScheduleSearchScope
+private struct SearchResultsSection: View {
+    let schedules: [ScheduleDetail]
     let filterDescription: String?
     let onOpenFilters: () -> Void
-
-    var body: some View {
-        filterLayout {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(scope.title)에서 검색 중")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(MemdoTheme.ink)
-                Text(filterDescription ?? "완료 상태와 기간을 더 좁힐 수 있어요")
-                    .font(.caption)
-                    .foregroundStyle(MemdoTheme.secondaryInk)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Button(action: onOpenFilters) {
-                MemdoIconButtonLabel(systemImage: "line.3.horizontal.decrease")
-            }
-            .buttonStyle(.plain)
-            .memdoFloatingSurface(radius: 22)
-            .accessibilityLabel("상세 필터")
-        }
-        .overlay(alignment: .bottom) { Divider() }
-    }
-
-    private var filterLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-            : AnyLayout(HStackLayout(spacing: 12))
-    }
-}
-
-private struct SearchResultsSection: View {
-    let query: String
-    let schedules: [ScheduleDetail]
     let onOpenSchedule: (ScheduleDetail) -> Void
 
     var body: some View {
-        MemdoSection(title: "검색 결과", trailing: "\(schedules.count)개") {
+        MemdoSection(
+            title: "검색 결과",
+            trailing: "\(schedules.count)개",
+            actionIcon: "line.3.horizontal.decrease",
+            actionLabel: "상세 필터",
+            action: onOpenFilters
+        ) {
+            if let filterDescription {
+                Text(filterDescription)
+                    .font(.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
             if schedules.isEmpty {
                 ContentUnavailableView(
                     "검색 결과가 없어요",
                     systemImage: "magnifyingglass",
-                    description: Text("검색어를 바꾸거나 상세 필터를 초기화해 보세요.")
+                    description: Text("검색어 또는 필터를 바꿔보세요.")
                 )
                 .frame(maxWidth: .infinity, minHeight: 120)
             } else {

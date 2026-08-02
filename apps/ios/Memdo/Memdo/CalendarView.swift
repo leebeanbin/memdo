@@ -33,7 +33,6 @@ struct CalendarView: View {
             subtitle: isSearchPresented ? "일정, 메모, 장소를 찾아보세요" : displayedMonth.memdoYearMonth,
             eyebrow: "나의 시간",
             headerActionIcon: isSearchPresented ? "xmark" : "magnifyingglass",
-            headerActionTitle: isSearchPresented ? "닫기" : "검색",
             headerActionLabel: isSearchPresented ? "검색 닫기" : "일정 검색",
             headerAction: toggleSearch
         ) {

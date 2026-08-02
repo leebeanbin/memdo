@@ -5,7 +5,6 @@ struct MemdoPage<Content: View>: View {
     let subtitle: String
     let eyebrow: String
     let headerActionIcon: String?
-    let headerActionTitle: String?
     let headerActionLabel: String
     let headerAction: () -> Void
     @ViewBuilder let content: Content
@@ -15,7 +14,6 @@ struct MemdoPage<Content: View>: View {
         subtitle: String,
         eyebrow: String,
         headerActionIcon: String? = nil,
-        headerActionTitle: String? = nil,
         headerActionLabel: String = "",
         headerAction: @escaping () -> Void = {},
         @ViewBuilder content: () -> Content
@@ -24,7 +22,6 @@ struct MemdoPage<Content: View>: View {
         self.subtitle = subtitle
         self.eyebrow = eyebrow
         self.headerActionIcon = headerActionIcon
-        self.headerActionTitle = headerActionTitle
         self.headerActionLabel = headerActionLabel
         self.headerAction = headerAction
         self.content = content()
@@ -41,7 +38,6 @@ struct MemdoPage<Content: View>: View {
                             subtitle: subtitle,
                             eyebrow: eyebrow,
                             actionIcon: headerActionIcon,
-                            actionTitle: headerActionTitle,
                             actionLabel: headerActionLabel,
                             action: headerAction
                         )
@@ -65,7 +61,6 @@ struct MemdoPageHeader: View {
     let subtitle: String
     let eyebrow: String
     var actionIcon: String?
-    var actionTitle: String?
     var actionLabel = ""
     var action: () -> Void = {}
 
@@ -107,14 +102,7 @@ struct MemdoPageHeader: View {
     private var actionButton: some View {
         if let actionIcon {
             Button(action: action) {
-                if let actionTitle {
-                    Label(actionTitle, systemImage: actionIcon)
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: MemdoMetrics.touchTarget)
-                } else {
-                    MemdoIconButtonLabel(systemImage: actionIcon)
-                }
+                MemdoIconButtonLabel(systemImage: actionIcon)
             }
             .buttonStyle(.plain)
             .memdoFloatingSurface(radius: 22)
@@ -196,51 +184,6 @@ struct MemdoSection<Content: View>: View {
             .buttonStyle(.plain)
             .accessibilityLabel(actionLabel)
         }
-    }
-}
-
-struct MemdoButtonLabel: View {
-    enum Size {
-        case regular
-        case compact
-
-        var font: Font {
-            switch self {
-            case .regular: .headline
-            case .compact: .subheadline.weight(.semibold)
-            }
-        }
-    }
-
-    let title: String
-    let systemImage: String?
-    let fillsWidth: Bool
-    let size: Size
-
-    init(
-        _ title: String,
-        systemImage: String? = nil,
-        fillsWidth: Bool = false,
-        size: Size = .regular
-    ) {
-        self.title = title
-        self.systemImage = systemImage
-        self.fillsWidth = fillsWidth
-        self.size = size
-    }
-
-    var body: some View {
-        Group {
-            if let systemImage {
-                Label(title, systemImage: systemImage)
-            } else {
-                Text(title)
-            }
-        }
-        .font(size.font)
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
-        .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: size == .regular ? 32 : 28)
     }
 }
 
