@@ -119,6 +119,17 @@ flowchart LR
 | 화면 좌우 여백 | 18pt |
 | Liquid Glass 탭 바 하단 여유 | 72pt 이상 |
 
+일정·브리핑처럼 서로 다른 행이 한 화면에 이어질 때는 다음 내부 열을 공유한다.
+
+| 내부 행 열 | 값 |
+|---|---:|
+| 행 좌우 inset | 12pt |
+| 상태·시간·번호 선행 열 | 44pt |
+| 선행 열과 본문 간격 | 8pt |
+| 본문 시작점 | 행 시작 + 64pt |
+
+Task 완료 원, Event 시간축, 브리핑 번호는 선행 열의 중심에 정렬하고 일정·브리핑 제목은 동일한 본문 시작점에 둔다.
+
 ### 5.3 모서리와 표면
 
 - 기본 카드 반경: `16pt`
@@ -195,7 +206,7 @@ flowchart LR
 - 페이지 제목은 `MemdoPageHeader`, 섹션은 `MemdoSection`으로 같은 정렬축을 공유한다.
 - 페이지 섹션 사이 간격은 `20pt`, 섹션 제목과 내용 사이는 `12pt`를 기본값으로 한다.
 - 주요 행동은 화면당 하나를 우선하고, 보조 행동은 plain 또는 시스템 bordered 버튼으로 낮춘다.
-- 첫 viewport의 카드 수는 캘린더 최대 2개, 검색 최대 1개다. 오늘·요약·설정·Agent는 열린 목록을 사용한다.
+- 첫 viewport의 카드 수는 캘린더 최대 2개, 검색 최대 1개다. 오늘·요약·Agent는 열린 목록을 사용하고 설정은 섹션당 하나의 낮은 대비 Glass 그룹만 사용한다.
 - 반복 항목은 카드 여러 개가 아니라 하나의 그룹 안에 행으로 배치하며 카드 안에 카드를 넣지 않는다.
 - 긴 목록은 첫 3개와 `MemdoDisclosureRow`로 단계적으로 펼친다. 오늘 화면은 약 120pt 위로 스크롤하면 자동 펼침하며 수동 펼침·접기와 VoiceOver 동작을 함께 유지한다.
 - Agent는 별도 페이지 없이 네 번째 시스템 탭 액션으로 둔다. 탭하면 직전 콘텐츠 탭을 유지한 채 Agent 시트를 연다.
@@ -359,13 +370,13 @@ AI 브리핑은 뉴스 피드처럼 전면에 나서지 않는다. AI가 뒤에�
 
 검색은 별도 탭이나 페이지를 차지하지 않는다. 기본 상태에서는 캘린더 제목 오른쪽에 기능성 Glass 검색 버튼이 있고, 탭하면 같은 헤더 아래에 검색 필드가 펼쳐진다. 닫으면 검색어와 결과를 비우고 월간 캘린더로 돌아간다.
 
-분리된 시스템 검색 툴바는 커스텀 페이지 제목과 다른 정렬축에 놓이고 탭 전환 시 표시 상태가 선점되는 문제가 있어 사용하지 않는다. 검색 입력 자체는 시스템 `TextField`, 범위는 segmented `Picker`, 표면은 iOS 26 Glass와 구버전 material fallback을 사용한다.
+분리된 시스템 검색 툴바는 커스텀 페이지 제목과 다른 정렬축에 놓이고 탭 전환 시 표시 상태가 선점되는 문제가 있어 사용하지 않는다. 검색 입력은 시스템 `TextField`를 사용하고, 세 범위 버튼은 하나의 Glass 범위 그룹 안에서 선택 상태가 이동한다. 검색 필드와 범위 그룹은 iOS 26 `GlassEffectContainer`에서 함께 렌더링하고 구버전은 material fallback을 사용한다.
 
 ### 배치
 
 `Header Search Action + Inline Search Field + Search Scope + Filter Summary + Result List`
 
-- 기본 캘린더: 제목과 같은 행에 검색 아이콘 노출
+- 기본 캘린더: 제목과 같은 행에 `검색` 라벨이 포함된 Glass 버튼 노출
 - 검색 아이콘 탭: 헤더 아래 검색 필드로 확장하고 키보드 포커스
 - 검색 활성화: 전체·내 일정·Google scope 표시
 - 검색어 입력: 월간 캘린더 대신 검색 결과 표시
@@ -586,7 +597,7 @@ AI가 제안한 일정도 사용자가 승인한 뒤에는 일반 일정과 동�
 | Date Rail | 인접 날짜 이동 |
 | Intention Prompt | 계획이 없을 때 첫 행동 |
 | Schedule Row | 오늘·캘린더·검색에서 시간, 제목, 출처, 완료를 문맥별 표시 |
-| Briefing Row | 분야 아이콘, 제목, AI 요약 |
+| Briefing Row | 공통 44pt 선행 열의 번호, 제목, 출처·선정 이유 |
 | Schedule Source Icon | 직접 일정과 외부 일정의 아이콘·색상 |
 | Schedule Editor Fields | 네이티브 Form 섹션으로 추가·수정의 날짜, 시간, 장소, 알림, 반복, 메모 공유 |
 | Schedule Detail Sheet | 네이티브 Form 기반 조회, 완료 토글, 수정·저장 |
@@ -596,6 +607,7 @@ AI가 제안한 일정도 사용자가 승인한 뒤에는 일반 일정과 동�
 | `MemdoChoiceButton` | 2–5개의 짧은 선택 항목, 체크 아이콘, 선택 접근성 상태 |
 | `MemdoButtonLabel` | 주요·보조 텍스트 버튼의 서체와 최소 터치 높이 |
 | `MemdoIconButtonLabel` | 아이콘 버튼의 `44×44pt` 터치 영역 |
+| `memdoGlassPanel` | 설정처럼 비대화하지 않는 비상호작용 Glass 그룹과 구버전 material fallback |
 | `memdoSheetPresentation` | 시트의 detent, drag indicator, 불투명 배경 |
 | `SettingsGroup` | 설정 섹션과 최소 `52pt` 행 높이 |
 | `SettingsTimePicker` | 보통·접근성 글자 크기에 맞춰 시간 라벨과 시스템 선택기를 재배치 |
