@@ -212,12 +212,12 @@ struct TodayScheduleSection: View {
                         onToggleDone: { onToggleDone(schedule) }
                     )
                     if schedule.id != visibleSchedules.last?.id {
-                        Divider().padding(.leading, 76)
+                        Divider().padding(.leading, MemdoMetrics.rowContentLeading)
                     }
                 }
 
                 if schedules.count > 3 {
-                    Divider().padding(.leading, 76)
+                    Divider().padding(.leading, MemdoMetrics.rowContentLeading)
                     MemdoDisclosureRow(
                         isExpanded: isExpanded,
                         hiddenCount: schedules.count - 3,
@@ -245,7 +245,7 @@ struct TodayBriefingSection: View {
                     .buttonStyle(.plain)
 
                     if index < BriefingItem.samples.count - 1 {
-                        Divider().padding(.leading, 48)
+                        Divider().padding(.leading, MemdoMetrics.rowContentLeading)
                     }
                 }
             }
@@ -339,11 +339,11 @@ private struct BriefingRow: View {
     let item: BriefingItem
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: MemdoMetrics.rowSpacing) {
             Text(String(format: "%02d", index))
                 .font(.caption.monospacedDigit().weight(.bold))
                 .foregroundStyle(MemdoTheme.brand)
-                .frame(width: 24, alignment: .leading)
+                .frame(width: MemdoMetrics.rowLeadingWidth, alignment: .center)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
@@ -358,7 +358,7 @@ private struct BriefingRow: View {
 
             Spacer(minLength: 4)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, MemdoMetrics.rowInset)
         .frame(minHeight: 56)
         .contentShape(Rectangle())
     }

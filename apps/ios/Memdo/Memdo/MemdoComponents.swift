@@ -5,6 +5,7 @@ struct MemdoPage<Content: View>: View {
     let subtitle: String
     let eyebrow: String
     let headerActionIcon: String?
+    let headerActionTitle: String?
     let headerActionLabel: String
     let headerAction: () -> Void
     @ViewBuilder let content: Content
@@ -14,6 +15,7 @@ struct MemdoPage<Content: View>: View {
         subtitle: String,
         eyebrow: String,
         headerActionIcon: String? = nil,
+        headerActionTitle: String? = nil,
         headerActionLabel: String = "",
         headerAction: @escaping () -> Void = {},
         @ViewBuilder content: () -> Content
@@ -22,6 +24,7 @@ struct MemdoPage<Content: View>: View {
         self.subtitle = subtitle
         self.eyebrow = eyebrow
         self.headerActionIcon = headerActionIcon
+        self.headerActionTitle = headerActionTitle
         self.headerActionLabel = headerActionLabel
         self.headerAction = headerAction
         self.content = content()
@@ -38,6 +41,7 @@ struct MemdoPage<Content: View>: View {
                             subtitle: subtitle,
                             eyebrow: eyebrow,
                             actionIcon: headerActionIcon,
+                            actionTitle: headerActionTitle,
                             actionLabel: headerActionLabel,
                             action: headerAction
                         )
@@ -61,6 +65,7 @@ struct MemdoPageHeader: View {
     let subtitle: String
     let eyebrow: String
     var actionIcon: String?
+    var actionTitle: String?
     var actionLabel = ""
     var action: () -> Void = {}
 
@@ -102,7 +107,14 @@ struct MemdoPageHeader: View {
     private var actionButton: some View {
         if let actionIcon {
             Button(action: action) {
-                MemdoIconButtonLabel(systemImage: actionIcon)
+                if let actionTitle {
+                    Label(actionTitle, systemImage: actionIcon)
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: MemdoMetrics.touchTarget)
+                } else {
+                    MemdoIconButtonLabel(systemImage: actionIcon)
+                }
             }
             .buttonStyle(.plain)
             .memdoFloatingSurface(radius: 22)

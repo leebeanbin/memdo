@@ -25,7 +25,7 @@ struct ScheduleRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MemdoMetrics.rowSpacing) {
             leadingMarker
 
             if let onOpen {
@@ -35,7 +35,7 @@ struct ScheduleRow: View {
                 rowContent
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, MemdoMetrics.rowInset)
         .padding(.vertical, 6)
         .contentShape(Rectangle())
     }
@@ -48,7 +48,7 @@ struct ScheduleRow: View {
                     Image(systemName: schedule.isDone ? "checkmark.circle.fill" : "circle")
                         .font(.title3)
                         .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : MemdoTheme.brand)
-                        .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+                        .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(schedule.isDone ? "완료 취소" : "완료로 표시")
@@ -56,7 +56,7 @@ struct ScheduleRow: View {
                 Image(systemName: schedule.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : MemdoTheme.brand)
-                    .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+                    .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                     .accessibilityHidden(true)
             }
         } else if context == .timeline && !dynamicTypeSize.isAccessibilitySize {
@@ -65,7 +65,7 @@ struct ScheduleRow: View {
             Image(systemName: schedule.isExternal ? "calendar" : "clock")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(MemdoTheme.secondaryInk)
-                .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+                .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                 .accessibilityHidden(true)
         }
     }
@@ -138,7 +138,7 @@ private struct EventTimeMarker: View {
             }
         }
         .foregroundStyle(MemdoTheme.secondaryInk)
-        .frame(width: MemdoMetrics.touchTarget)
+        .frame(width: MemdoMetrics.rowLeadingWidth)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(schedule.displayTime)
     }

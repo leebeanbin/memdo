@@ -123,7 +123,7 @@ private struct SearchResultsSection: View {
                             onOpen: { onOpenSchedule(schedule) }
                         )
                         if schedule.id != schedules.last?.id {
-                            Divider().padding(.leading, 58)
+                            Divider().padding(.leading, MemdoMetrics.rowContentLeading)
                         }
                     }
                 }

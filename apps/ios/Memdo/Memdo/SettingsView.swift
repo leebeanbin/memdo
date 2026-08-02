@@ -61,6 +61,11 @@ struct SettingsView: View {
                         .disabled(!canAddKeyword)
                         .accessibilityLabel("브리핑 키워드 추가")
                     }
+                    .padding(.leading, 12)
+                    .padding(.trailing, 4)
+                    .frame(minHeight: 52)
+                    .background(MemdoTheme.background.opacity(0.78), in: Capsule())
+                    .overlay(Capsule().stroke(MemdoTheme.controlOutline.opacity(0.45)))
 
                     Divider()
 
@@ -351,8 +356,10 @@ private struct SettingsGroup<Content: View>: View {
     var body: some View {
         MemdoSection(title: title) {
             VStack(spacing: 0) { content }
+                .padding(.horizontal, 12)
                 .overlay(alignment: .top) { Divider() }
                 .overlay(alignment: .bottom) { Divider() }
+                .memdoGlassPanel()
         }
     }
 }

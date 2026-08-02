@@ -34,6 +34,10 @@ enum MemdoTheme {
 
 enum MemdoMetrics {
     static let pagePadding: CGFloat = 18
+    static let rowInset: CGFloat = 12
+    static let rowLeadingWidth: CGFloat = 44
+    static let rowSpacing: CGFloat = 8
+    static let rowContentLeading = rowInset + rowLeadingWidth + rowSpacing
     static let cardRadius: CGFloat = 16
     static let fieldRadius: CGFloat = 12
     static let touchTarget: CGFloat = 44
@@ -62,6 +66,19 @@ extension View {
     func memdoFloatingSurface(radius: CGFloat) -> some View {
         if #available(iOS 26.0, *) {
             glassEffect(.regular.interactive(), in: .rect(cornerRadius: radius))
+        } else {
+            background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .stroke(MemdoTheme.controlOutline)
+                )
+        }
+    }
+
+    @ViewBuilder
+    func memdoGlassPanel(radius: CGFloat = 18) -> some View {
+        if #available(iOS 26.0, *) {
+            glassEffect(.regular, in: .rect(cornerRadius: radius))
         } else {
             background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
                 .overlay(
