@@ -73,7 +73,7 @@ private struct SearchFilterBar: View {
 
     var body: some View {
         filterLayout {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("\(scope.title)에서 검색 중")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(MemdoTheme.ink)

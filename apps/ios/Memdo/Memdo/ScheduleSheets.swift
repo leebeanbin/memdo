@@ -108,11 +108,11 @@ private struct ScheduleDetailHeader: View {
     let schedule: ScheduleDetail
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 12) {
             if !dynamicTypeSize.isAccessibilitySize {
                 ScheduleSourceIcon(schedule: schedule)
             }
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(schedule.source)
                     .font(.caption.bold())
                     .foregroundStyle(MemdoTheme.secondaryInk)
@@ -401,7 +401,7 @@ private struct LocationPickerView: View {
                 } else {
                     ForEach(Array(results.enumerated()), id: \.offset) { _, item in
                         Button { select(item) } label: {
-                            VStack(alignment: .leading, spacing: 3) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 Text(item.name ?? "이름 없는 장소")
                                     .foregroundStyle(MemdoTheme.ink)
                                 if let address = item.placemark.title {

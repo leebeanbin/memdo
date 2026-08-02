@@ -100,7 +100,7 @@ private struct SummaryProgressLine: View {
             ProgressView(value: totalCount == 0 ? 0 : Double(completedCount) / Double(totalCount))
                 .tint(MemdoTheme.accent)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
     }
 }
@@ -128,7 +128,7 @@ private struct SummaryReviewSection: View {
                             onDelete: { onDelete(schedule) }
                         )
                         if schedule.id != reviews.last?.id {
-                            Divider().padding(.leading, 16)
+                            Divider().padding(.leading, MemdoMetrics.rowContentLeading)
                         }
                     }
                 }
@@ -143,10 +143,11 @@ private struct SummaryInsightSection: View {
     let remainingCount: Int
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: MemdoMetrics.rowSpacing) {
             Image(systemName: "sparkles")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(MemdoTheme.brand)
+                .frame(width: MemdoMetrics.rowLeadingWidth)
                 .accessibilityHidden(true)
             Text(remainingCount == 0
                  ? "Agent · 오늘의 할 일을 모두 정리했어요."
@@ -154,6 +155,7 @@ private struct SummaryInsightSection: View {
                 .font(.subheadline)
                 .foregroundStyle(MemdoTheme.secondaryInk)
         }
+        .padding(.horizontal, MemdoMetrics.rowInset)
         .accessibilityElement(children: .combine)
     }
 }
@@ -169,8 +171,8 @@ private struct SummaryReviewRow: View {
     var body: some View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: MemdoMetrics.rowSpacing) {
                         completeButton
                         titleBlock
                     }
@@ -181,7 +183,7 @@ private struct SummaryReviewRow: View {
                     }
                 }
             } else {
-                HStack(spacing: 8) {
+                HStack(spacing: MemdoMetrics.rowSpacing) {
                     completeButton
                     titleBlock
                     Spacer(minLength: 4)
@@ -190,8 +192,8 @@ private struct SummaryReviewRow: View {
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MemdoMetrics.rowInset)
+        .padding(.vertical, 4)
     }
 
     private var completeButton: some View {
@@ -205,7 +207,7 @@ private struct SummaryReviewRow: View {
     }
 
     private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(schedule.title)
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(2)

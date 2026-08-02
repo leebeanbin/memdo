@@ -88,7 +88,6 @@ struct TodayView: View {
                         TodayBriefingSection(onOpen: openBriefing)
                     }
                     .padding(.horizontal, MemdoMetrics.pagePadding)
-                    .padding(.top, 12)
                     .padding(.bottom, MemdoMetrics.tabBarClearance)
                 }
                 .coordinateSpace(name: "today-scroll")
@@ -117,6 +116,7 @@ struct TodayView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .toolbarBackground(.hidden, for: .navigationBar)
         }
         .tint(MemdoTheme.accent)
         .sensoryFeedback(.selection, trigger: selectedDate)

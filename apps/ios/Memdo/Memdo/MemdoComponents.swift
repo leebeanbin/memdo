@@ -72,7 +72,7 @@ struct MemdoPageHeader: View {
     var body: some View {
         Group {
             if dynamicTypeSize.isAccessibilitySize, actionIcon != nil {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     titleGroup
                     HStack {
                         Spacer()
@@ -90,7 +90,7 @@ struct MemdoPageHeader: View {
     }
 
     private var titleGroup: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(eyebrow)
                 .font(.caption.weight(.bold))
                 .foregroundStyle(MemdoTheme.brand)
@@ -110,7 +110,7 @@ struct MemdoPageHeader: View {
                 if let actionTitle {
                     Label(actionTitle, systemImage: actionIcon)
                         .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 14)
+                        .padding(.horizontal, 16)
                         .frame(minHeight: MemdoMetrics.touchTarget)
                 } else {
                     MemdoIconButtonLabel(systemImage: actionIcon)
@@ -260,7 +260,7 @@ struct MemdoChoiceButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 if isSelected {
                     Image(systemName: "checkmark")
                         .accessibilityHidden(true)

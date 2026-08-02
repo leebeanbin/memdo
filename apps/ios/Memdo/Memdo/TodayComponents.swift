@@ -30,7 +30,7 @@ struct TodayHeader: View {
     }
 
     private var titleGroup: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
                 Text(eyebrow)
                     .font(.caption.weight(.bold))
                     .foregroundStyle(MemdoTheme.brand)
@@ -99,7 +99,7 @@ struct TodayWeekIndex: View {
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
         .overlay(alignment: .bottom) { Divider() }
     }
 
@@ -112,7 +112,7 @@ struct TodayWeekIndex: View {
                             .font(.caption2.weight(.semibold))
                         Text("\(date > 31 ? date - 31 : date)")
                             .font(.subheadline.weight(.semibold))
-                        HStack(spacing: 3) {
+                        HStack(spacing: 4) {
                             ForEach(0..<min(count, 3), id: \.self) { _ in
                                 Circle()
                                     .fill(date == selectedDate ? MemdoTheme.onAccent : MemdoTheme.brand)
@@ -147,8 +147,8 @@ struct TodayIntentionPrompt: View {
 
     var body: some View {
         Button(action: onAdd) {
-            HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
                     Label("오늘의 방향", systemImage: "sparkle")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(MemdoTheme.peach)
@@ -345,7 +345,7 @@ private struct BriefingRow: View {
                 .foregroundStyle(MemdoTheme.brand)
                 .frame(width: MemdoMetrics.rowLeadingWidth, alignment: .center)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(MemdoTheme.ink)
@@ -371,7 +371,7 @@ struct BriefingDetailSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 20) {
                     Label(item.channel.label, systemImage: item.icon)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(item.tint)
@@ -383,7 +383,7 @@ struct BriefingDetailSheet: View {
                     Text(item.summary)
                         .font(.body)
                         .foregroundStyle(MemdoTheme.secondaryInk)
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 8) {
                         Label("선정 이유", systemImage: "sparkles")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(MemdoTheme.brand)

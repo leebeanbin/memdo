@@ -76,7 +76,7 @@ extension View {
     }
 
     @ViewBuilder
-    func memdoGlassPanel(radius: CGFloat = 18) -> some View {
+    func memdoGlassPanel(radius: CGFloat = MemdoMetrics.cardRadius) -> some View {
         if #available(iOS 26.0, *) {
             glassEffect(.regular, in: .rect(cornerRadius: radius))
         } else {

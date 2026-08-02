@@ -36,7 +36,7 @@ struct ScheduleRow: View {
             }
         }
         .padding(.horizontal, MemdoMetrics.rowInset)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
         .contentShape(Rectangle())
     }
 
@@ -127,7 +127,7 @@ private struct EventTimeMarker: View {
                 Text("종일")
                     .font(.caption2.weight(.semibold))
             } else {
-                VStack(spacing: 2) {
+                VStack(spacing: 4) {
                     Text(schedule.startTimeText)
                     Capsule()
                         .fill(MemdoTheme.controlOutline)

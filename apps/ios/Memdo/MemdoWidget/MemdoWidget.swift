@@ -56,7 +56,7 @@ struct MemdoWidgetView: View {
                 WidgetWeek()
                     .frame(width: 130)
                 Divider()
-                VStack(alignment: .leading, spacing: 9) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("오늘 일정").font(.headline)
                     WidgetTask(icon: "person.fill", time: "10:00", title: "기획 문서")
                     WidgetTask(icon: "calendar", time: "14:30", title: "디자인 확인")
@@ -116,7 +116,7 @@ private struct WidgetWeek: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("7월").font(.headline)
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 ForEach(Array(zip(["월", "화", "수", "목", "금"], [27, 28, 29, 30, 31])), id: \.1) { day, date in
                     VStack(spacing: 4) {
                         Text(day).font(.caption2)
@@ -220,10 +220,10 @@ struct MemdoCalendarWidgetView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(entry.date.formatted(.dateTime.month(.wide).year()))
                 .font(.headline)
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 ForEach(weekDates, id: \.self) { date in
                     let isToday = Calendar.current.isDateInToday(date)
-                    VStack(spacing: 5) {
+                    VStack(spacing: 4) {
                         Text(date.formatted(.dateTime.weekday(.narrow)))
                             .font(.caption2)
                         Text(date.formatted(.dateTime.day()))
@@ -246,7 +246,7 @@ struct MemdoCalendarWidgetView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(entry.date.formatted(.dateTime.month(.wide).year()))
                 .font(.headline)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 5) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 4) {
                 ForEach(["월", "화", "수", "목", "금", "토", "일"], id: \.self) {
                     Text($0)
                         .font(.caption2.bold())

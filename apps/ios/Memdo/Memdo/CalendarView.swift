@@ -164,7 +164,7 @@ private struct CalendarSearchControls: View {
             }
             .padding(.horizontal, 12)
             .frame(minHeight: 52)
-            .memdoFloatingSurface(radius: 22)
+            .memdoFloatingSurface(radius: 26)
 
             HStack(spacing: 4) {
                 ForEach(ScheduleSearchScope.allCases) { option in
@@ -223,17 +223,17 @@ private struct CalendarMonthCard: View {
     }
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 12) {
             HStack(spacing: 8) {
                 HStack(spacing: 0) {
                     Button { onMoveMonth(-1) } label: {
                         Image(systemName: "chevron.left")
-                            .frame(width: 36, height: MemdoMetrics.touchTarget)
+                            .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("이전 달")
 
-                    VStack(spacing: 1) {
+                    VStack(spacing: 4) {
                     Text(month.memdoMonth)
                             .font(.headline)
                     if filter != .all {
@@ -246,7 +246,7 @@ private struct CalendarMonthCard: View {
 
                     Button { onMoveMonth(1) } label: {
                         Image(systemName: "chevron.right")
-                            .frame(width: 36, height: MemdoMetrics.touchTarget)
+                            .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("다음 달")
@@ -276,7 +276,7 @@ private struct CalendarMonthCard: View {
             .contentShape(Rectangle())
             .highPriorityGesture(monthSwipeGesture)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
                 ForEach(weekdays, id: \.self) { weekday in
                     Text(weekday)
                         .font(.caption.bold())
@@ -293,7 +293,7 @@ private struct CalendarMonthCard: View {
             .dynamicTypeSize(.small ... .large)
 
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity)
         .memdoCard()
         .accessibilityAction(named: "이전 달") { onMoveMonth(-1) }

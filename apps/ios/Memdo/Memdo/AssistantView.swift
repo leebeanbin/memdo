@@ -25,7 +25,7 @@ struct AgentSheet: View {
             .safeAreaInset(edge: .bottom) {
                 AgentComposer(text: $composer, onSend: send)
                     .padding(.horizontal, MemdoMetrics.pagePadding)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, 8)
                     .background(.bar)
             }
             .navigationTitle("Agent")
@@ -65,7 +65,7 @@ private struct AgentSheetHeader: View {
     let context: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 4) {
             Label("\(context) 문맥 사용 중", systemImage: "sparkles")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(MemdoTheme.brand)
@@ -111,7 +111,7 @@ private struct AgentQuickActions: View {
             VStack(spacing: 0) {
                 ForEach(Array(prompts.enumerated()), id: \.offset) { index, item in
                     Button { onSelect(item.1) } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: 8) {
                             Image(systemName: "arrow.up.right")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(MemdoTheme.brand)

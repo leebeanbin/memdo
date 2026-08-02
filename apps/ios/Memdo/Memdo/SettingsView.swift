@@ -87,7 +87,7 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                 }
-                .padding(.vertical, 14)
+                .padding(.vertical, 16)
             }
 
             SettingsGroup(title: "개인정보") {
@@ -150,7 +150,7 @@ private struct SettingsDisclosureRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                 if dynamicTypeSize.isAccessibilitySize {
                     Text(value)
