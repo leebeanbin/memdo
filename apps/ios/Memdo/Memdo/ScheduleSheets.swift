@@ -166,43 +166,32 @@ struct ScheduleEditorFields: View {
                 } label: {
                     LabeledContent("분류", value: "\(schedule.kind.rawValue) · \(schedule.calendar.title)")
                 }
-                Toggle("하루 종일", isOn: $schedule.isAllDay)
             }
 
             Section("언제") {
-                DatePicker("날짜", selection: dateBinding, displayedComponents: .date)
-
-                if !schedule.isAllDay {
-                    HStack(spacing: 8) {
-                        Text("시간")
-                        Spacer(minLength: 8)
-                        DatePicker("시작 시간", selection: startTimeBinding, displayedComponents: .hourAndMinute)
-                            .labelsHidden()
-                        Image(systemName: "arrow.right")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(MemdoTheme.secondaryInk)
-                            .accessibilityHidden(true)
-                        DatePicker("종료 시간", selection: $schedule.endAt, displayedComponents: .hourAndMinute)
-                            .labelsHidden()
-                    }
-                }
-
-                if spansMultipleDays {
-                    DatePicker("종료 날짜", selection: $schedule.endAt, in: schedule.startAt..., displayedComponents: .date)
-                    Button("같은 날 일정으로 변경", systemImage: "arrow.uturn.backward", action: makeSingleDay)
-                } else {
-                    Button("여러 날 일정", systemImage: "calendar.badge.plus", action: makeMultiDay)
-                }
+                DatePicker("시작", selection: startBinding, displayedComponents: datePickerComponents)
+                    .datePickerStyle(.compact)
+                DatePicker(
+                    "종료",
+                    selection: $schedule.endAt,
+                    in: schedule.startAt...,
+                    displayedComponents: datePickerComponents
+                )
+                .datePickerStyle(.compact)
+                Toggle("종일", isOn: $schedule.isAllDay)
 
                 if !schedule.isTimeRangeValid {
                     Label("종료는 시작보다 뒤여야 해요", systemImage: "exclamationmark.circle")
                         .font(.footnote)
                         .foregroundStyle(.red)
                 }
+            }
 
-                if schedule.kind == .task {
+            if schedule.kind == .task {
+                Section("마감") {
                     if schedule.dueAt != nil {
                         DatePicker("마감", selection: dueBinding, displayedComponents: [.date, .hourAndMinute])
+                            .datePickerStyle(.compact)
                         Button("마감일 제거", role: .destructive, action: removeDueDate)
                     } else {
                         Button("마감일 추가", systemImage: "flag", action: addDueDate)
@@ -258,34 +247,17 @@ struct ScheduleEditorFields: View {
         }
     }
 
-    private var spansMultipleDays: Bool {
-        !Calendar.current.isDate(schedule.startAt, inSameDayAs: schedule.endAt)
+    private var datePickerComponents: DatePicker.Components {
+        schedule.isAllDay ? [.date] : [.date, .hourAndMinute]
     }
 
-    private var dateBinding: Binding<Date> {
-        Binding(
-            get: { schedule.startAt },
-            set: { newDate in
-                let duration = schedule.endAt.timeIntervalSince(schedule.startAt)
-                schedule.startAt = Calendar.current.date(
-                    bySettingHour: Calendar.current.component(.hour, from: schedule.startAt),
-                    minute: Calendar.current.component(.minute, from: schedule.startAt),
-                    second: 0,
-                    of: newDate
-                ) ?? newDate
-                schedule.endAt = schedule.startAt.addingTimeInterval(max(duration, 60))
-            }
-        )
-    }
-
-    private var startTimeBinding: Binding<Date> {
+    private var startBinding: Binding<Date> {
         Binding(
             get: { schedule.startAt },
             set: { newStart in
+                let duration = max(schedule.endAt.timeIntervalSince(schedule.startAt), 60)
                 schedule.startAt = newStart
-                if schedule.endAt <= newStart {
-                    schedule.endAt = Calendar.current.date(byAdding: .hour, value: 1, to: newStart) ?? newStart
-                }
+                schedule.endAt = newStart.addingTimeInterval(duration)
             }
         )
     }
@@ -315,23 +287,6 @@ struct ScheduleEditorFields: View {
             schedule.calendar = calendar
         }
         newCalendarName = ""
-    }
-
-    private func makeMultiDay() {
-        schedule.endAt = Calendar.current.date(byAdding: .day, value: 1, to: schedule.endAt) ?? schedule.endAt
-    }
-
-    private func makeSingleDay() {
-        let components = Calendar.current.dateComponents([.hour, .minute], from: schedule.endAt)
-        let end = Calendar.current.date(
-            bySettingHour: components.hour ?? 10,
-            minute: components.minute ?? 0,
-            second: 0,
-            of: schedule.startAt
-        ) ?? schedule.startAt
-        schedule.endAt = end > schedule.startAt
-            ? end
-            : Calendar.current.date(byAdding: .hour, value: 1, to: schedule.startAt) ?? schedule.startAt
     }
 
     private func tidyNote() {
