@@ -56,6 +56,20 @@ on public.todos (user_id, scheduled_date, start_at, sort_order, id)
 where deleted_at is null;
 ```
 
+월간 캘린더의 `entry_kind in ('event','task')` 필터도 먼저 `user_id + scheduled_date` 범위로 줄인 뒤 적용한다. 초기 50명 규모에서는 날짜당 행이 작으므로 `entry_kind` 단일 인덱스를 추가하지 않는다. 월간 필터 조회의 `EXPLAIN ANALYZE`가 50ms를 넘거나 사용자·월 활성 행이 1,000개를 넘을 때 `(user_id, scheduled_date, entry_kind, start_at, id)`로 교체를 검토한다. Task의 마감 조회가 실제 제품 경로가 되기 전에는 `due_at` 단일 인덱스를 만들지 않으며, 사용자별 미완료 마감 조회 p95가 50ms를 넘을 때 부분 인덱스를 검토한다.
+
+`calendar_id`의 개인·업무 필터도 같은 사용자·날짜 범위 안에서 적용하므로 초기에는 Todo용 복합 인덱스를 더 만들지 않는다. 대신 사용자 캘린더 이름 중복과 정렬 조회만 다음 제약으로 고정한다.
+
+```sql
+create unique index calendars_user_name_uidx
+on public.calendars (user_id, lower(name));
+
+create index calendars_user_order_idx
+on public.calendars (user_id, is_visible, sort_order, id);
+```
+
+장소 좌표에는 초기 50명 규모에서 공간 인덱스를 만들지 않는다. Memdo가 반경 검색을 제품 기능으로 제공할 때만 PostGIS와 GiST 도입을 검토한다.
+
 ### Q2 하루 요약 대상
 
 ```sql
