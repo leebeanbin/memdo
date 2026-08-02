@@ -363,9 +363,9 @@ AI 브리핑은 뉴스 피드처럼 전면에 나서지 않는다. AI가 뒤에�
 
 ### 9.3 날짜 인덱싱
 
-- 점: 해당 날짜에 일정이 있음
+- 밀도 점: 오늘의 주간 인덱스와 월간 캘린더 모두 미완료 일정 수를 `1–3개` 점으로 축약한다. 완료한 Task는 제외한다.
 - 검은 원: 선택한 날짜
-- 헤더 숫자: 선택 날짜의 전체 일정 수
+- 헤더 숫자: 선택 날짜의 전체 일정 수. 정확한 수는 날짜의 VoiceOver 값에도 제공한다.
 - Event 행: 왼쪽 시작·종료 시간축, 제목, 캘린더, 출처
 - Task 행: 왼쪽 완료 원, 제목, 마감 또는 배정 시간, 캘린더, 출처
 
@@ -610,6 +610,7 @@ AI가 제안한 일정도 사용자가 승인한 뒤에는 일반 일정과 동�
 | `MemdoChoiceButton` | 2–5개의 짧은 선택 항목, 체크 아이콘, 선택 접근성 상태 |
 | `MemdoButtonLabel` | 주요·보조 텍스트 버튼의 서체와 최소 터치 높이 |
 | `MemdoIconButtonLabel` | 아이콘 버튼의 `44×44pt` 터치 영역 |
+| `MemdoScheduleCountDots` | 오늘·월간 캘린더의 일정 수를 같은 1–3개 밀도 점으로 표시 |
 | `memdoGlassPanel` | 설정처럼 비대화하지 않는 비상호작용 Glass 그룹과 구버전 material fallback |
 | `memdoSheetPresentation` | 시트의 detent, drag indicator, 불투명 배경 |
 | `SettingsGroup` | 설정 섹션과 최소 `52pt` 행 높이 |
