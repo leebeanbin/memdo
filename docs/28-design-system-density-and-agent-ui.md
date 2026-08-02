@@ -204,7 +204,7 @@ Agent가 임의의 화면을 만드는 것이 아니라 정해진 데이터 유�
 | 오늘 | 날짜 → 날짜 레일 → 일정/빈 날 → 브리핑 | 0 | 일정 `+` | 요약은 헤더 완료 링 |
 | 캘린더 | 월 → 월간 그리드 → 선택 날짜 일정 | 2 이하 | 일정 `+` | 필터 Menu, 날짜 long press |
 | 검색 | 검색 입력 → scope → 필터 상태 → 결과 | 1 | 결과 선택 | 상세 필터 Sheet, 분석은 공통 Agent |
-| 오늘 요약 | 완료 수 → Agent 메모 → 미완료 결정 | 0 | 완료 원·날짜 이동 | 다른 날짜·삭제는 Menu |
+| 오늘 요약 | 기간 → 완료 수 → Agent 분석 → 결정 또는 완료·놓침 기록 | 0 | Agent와 정리·오늘의 완료 원 | 다른 날짜·삭제는 Menu |
 | 설정 | 하루 → 연결·권한 → 키워드 → 개인정보 | 0 | 직접 설정 | 연결 설명 Sheet |
 | Agent | 문맥 → 요청/결과 → composer | 0 | 보내기 | 변경안 승인 UI |
 
@@ -224,7 +224,7 @@ Agent가 임의의 화면을 만드는 것이 아니라 정해진 데이터 유�
 | 새 일정 | `Form` | medium/large | 취소/추가 | invalid input은 추가 비활성 |
 | 일정 상세 | `Form` | medium/large | 닫기/수정 | 수정 시 취소/저장 |
 | 날짜 일정 | `List` | medium/large | 닫기 | empty/list/add |
-| 오늘 요약 | `MemdoPage` | large | 닫기, 완료 원, 내일 | empty/review/complete |
+| 오늘 요약 | `MemdoPage` | large | 기간 전환, Agent, 오늘의 완료 원·내일 | empty/today/history/complete |
 | 다른 날짜 이동 | `Form` | medium | 취소/이동 | DatePicker |
 | 브리핑 상세 | `ScrollView` | medium | 닫기 | source/reason/impact |
 | 검색 필터 | `Form` | medium | 적용 | reset/active |

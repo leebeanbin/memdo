@@ -1,6 +1,6 @@
 # Memdo Master UI/UX Design
 
-> 상태: UI/UX 기준선 확정 (`v1.2`)
+> 상태: UI/UX 기준선 확정 (`v1.3`)
 > 기준 기기: iPhone 15, 393×852pt  
 > 최소 지원: iOS 17  
 > 이 문서는 Memdo 앱과 위젯 UI/UX의 단일 기준 문서다.
@@ -460,13 +460,19 @@ MVP는 기기에서 예약하는 로컬 알림을 기본으로 한다. 서버에
 
 ### 12.3 페이지 배치
 
-`Completion Progress + AI Insight + Decision Queue`
+`Today / 7 Days / 30 Days Scope + Completion Progress + Agent Digest + Decision or History Lists`
 
 ![오늘 요약 페이지](../../../design/previews/06-summary.png)
 
+- `오늘`: 선택 날짜의 Task 완료율, Agent 해석, 미완료 결정 목록을 표시한다.
+- `지난 7일`: 오늘을 제외한 직전 7일의 완료 Task와 미완료로 지나간 Task를 나눈다.
+- `지난 30일`: 오늘을 제외한 직전 30일을 같은 규칙으로 집계한다.
+- 기간 선택은 한 번에 하나만 고르는 네이티브 segmented Picker를 사용한다.
+- 이 화면의 완료율과 놓침 수에는 완료 상태가 없는 Event를 포함하지 않는다.
+
 ### 12.4 미완료 일정 처리
 
-각 일정에는 다음 행동을 제공한다.
+오늘 범위의 미완료 일정에만 다음 행동을 제공한다.
 
 - 완료
 - 내일로 이동
@@ -479,6 +485,11 @@ MVP는 기기에서 예약하는 로컬 알림을 기본으로 한다. 서버에
 ### 12.5 AI 인사이트
 
 AI 인사이트는 감상문이 아니라 다음 행동을 돕는 근거와 제안이어야 한다.
+
+- 완료·놓침 개수뿐 아니라 실제 작업명 최대 두 개를 근거로 사용한다.
+- 카드 배경을 추가하지 않고 3pt 브랜드 기준선, 제목, 근거, `Agent와 함께 정리` 인라인 행동으로 표현한다.
+- Agent 시트는 선택한 기간 문맥을 유지하고 `완료 흐름`, `놓친 작업`, `다음 계획` 빠른 요청을 제공한다.
+- 지난 기간의 작업 목록은 완료와 놓침을 분리하고 각각 처음 3개만 보여준 뒤 펼치기로 확장한다.
 
 좋은 예:
 
@@ -606,7 +617,9 @@ AI가 제안한 일정도 사용자가 승인한 뒤에는 일반 일정과 동�
 | Schedule Detail Sheet | 네이티브 Form 기반 조회, 완료 토글, 수정·저장 |
 | Proposal Card | AI 일정 제안과 승인 |
 | Decision Row | 완료·이동 + `…` 삭제 메뉴 |
-| Summary Insight | AI 근거와 다음 행동 |
+| Summary Scope Picker | 오늘·지난 7일·지난 30일 회고 범위 전환 |
+| Summary Agent Digest | 완료·놓침 근거, 짧은 해석, 기간 문맥 Agent 진입 |
+| Summary History Row | 지난 기간의 완료 작업과 놓친 작업 표시 |
 | `MemdoChoiceButton` | 2–5개의 짧은 선택 항목, 체크 아이콘, 선택 접근성 상태 |
 | `MemdoButtonLabel` | 주요·보조 텍스트 버튼의 서체와 최소 터치 높이 |
 | `MemdoIconButtonLabel` | 아이콘 버튼의 `44×44pt` 터치 영역 |
