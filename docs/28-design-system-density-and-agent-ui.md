@@ -213,7 +213,7 @@ Agent가 임의의 화면을 만드는 것이 아니라 정해진 데이터 유�
 | 캘린더 | 월 → 월간 그리드 → 선택 날짜 일정 | 0 | 일정 `+` | 필터 Menu, 날짜 long press |
 | 검색 | 검색 입력 → scope → 결과·필터 아이콘 | 0 | 결과 선택 | 상세 필터 Sheet, 분석은 공통 Agent |
 | 오늘 요약 | 기간 → 완료 수 → Agent 분석 → 결정 또는 완료·놓침 기록 | 0 | Agent와 정리·오늘의 완료 원 | 다른 날짜·삭제는 Menu |
-| 설정 | 하루·알림·키워드 상태 → 연결·데이터 | 0 | 직접 설정 | 키워드 편집·연결·개인정보 Sheet |
+| 설정 | 하루·알림·키워드 상태 → Agent MCP 도구·데이터 범위 | 0 | 직접 설정 | 키워드 편집·연결·개인정보 Sheet |
 | Agent | 문맥 → 요청/결과 → composer | 0 | 보내기 | 변경안 승인 UI |
 
 ### 이번 감사에서 제거한 중복
@@ -238,7 +238,7 @@ Agent가 임의의 화면을 만드는 것이 아니라 정해진 데이터 유�
 | 다른 날짜 이동 | `Form` | medium | 취소/이동 | DatePicker |
 | 브리핑 상세 | `ScrollView` | medium | 닫기 | source/reason/impact |
 | 검색 필터 | `Form` | medium | 적용 | reset/active |
-| Google·Slack 연결 | `List` | medium | 닫기 | 설명/권한/미연결 |
+| Google·Slack 연결 | `List` | large | 닫기 | 공식 마크/Agent 능력/권한/미연결 |
 | AI 동의·개인정보 | `List` | medium/large | 닫기 | 읽음/안 읽음/철회 원칙 |
 | 장소 선택 | `List` + `.searchable` | navigation | 시스템 back | idle/loading/result/empty |
 

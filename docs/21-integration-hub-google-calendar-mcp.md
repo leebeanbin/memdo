@@ -531,3 +531,21 @@ POST /change-proposals/{id}/approve
 ```
 
 Google Calendar, Slack, MCP 모두 별도 실행 경로를 만들지 않고 `change_proposals` 승인 모델을 공유한다.
+
+### 17.1 연결 도구의 UI 메타데이터
+
+설정 화면은 공급자 연결을 일반 Toggle로 표현하지 않는다. 각 연결 정의는 다음 표시 메타데이터를 제공한다.
+
+| 필드 | 예 | 용도 |
+|---|---|---|
+| `providerDisplayName` | `Google Calendar` | 사용자에게 보이는 정식 서비스명 |
+| `providerIconAsset` | `GoogleCalendar` | 공식 제품 마크를 담은 로컬 앱 자산 |
+| `agentCapabilitySummary` | `일정 읽기 · 승인 후 쓰기` | Agent가 실제 사용하는 최소 능력 |
+| `transportLabel` | `MCP` | 내부 연결 방식을 설명하는 선택 메타데이터 |
+| `connectionState` | `disconnected` | `미연결`, `관리자 승인 필요`, `연결됨`, `오류` 상태의 원천 |
+
+- 회사 로고는 공급자의 공식 배포 자산을 비율·색상 변경 없이 사용한다.
+- MCP 로고를 공급자 로고 대신 사용하지 않는다. 사용자는 어떤 서비스에 권한을 주는지 먼저 식별해야 한다.
+- 연결 상태는 텍스트를 반드시 포함하고 색만으로 표현하지 않는다.
+- UI의 능력 설명은 실제 OAuth scope와 tool schema에서 파생하며, 구현되지 않은 읽기·쓰기 기능을 미리 표시하지 않는다.
+- 현재 자산 출처는 Google Brand Resource Center의 Calendar 제품 아이콘과 Slack Media Kit의 Slack mark다.
