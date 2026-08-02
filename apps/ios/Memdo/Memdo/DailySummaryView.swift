@@ -5,7 +5,9 @@ struct DailySummaryView: View {
     @Environment(ScheduleStore.self) private var scheduleStore
     @State private var scope = SummaryScope.today
     @State private var pendingDeletion: ScheduleDetail?
-    @State private var pendingMove: ScheduleDetail?
+    @State private var presentedSheet: SummarySheetDestination?
+    @State private var agentComposer = ""
+    @State private var agentResponse = ""
 
     let date: Date
 
@@ -47,13 +49,18 @@ struct DailySummaryView: View {
                 totalCount: tasks.count,
                 incompleteLabel: scope == .today ? "확인" : "놓침"
             )
+            SummaryAgentDigest(
+                scope: scope,
+                completed: completedTasks,
+                incomplete: incompleteTasks,
+                onOpenAgent: { presentedSheet = .agent(scope) }
+            )
             if scope == .today {
-                SummaryInsightSection(remainingCount: incompleteTasks.count)
                 SummaryReviewSection(
                     reviews: incompleteTasks,
                     onComplete: complete,
                     onMoveToTomorrow: moveToTomorrow,
-                    onChooseDate: { pendingMove = $0 },
+                    onChooseDate: { presentedSheet = .move($0) },
                     onDelete: { pendingDeletion = $0 }
                 )
             } else {
@@ -62,9 +69,18 @@ struct DailySummaryView: View {
             }
         }
         .memdoSheetPresentation([.large])
-        .sheet(item: $pendingMove) { schedule in
-            MoveScheduleSheet(schedule: schedule) { newDate in
-                scheduleStore.move(id: schedule.id, to: newDate)
+        .sheet(item: $presentedSheet) { destination in
+            switch destination {
+            case .agent(let scope):
+                AgentSheet(
+                    composer: $agentComposer,
+                    response: $agentResponse,
+                    context: scope.agentContext
+                )
+            case .move(let schedule):
+                MoveScheduleSheet(schedule: schedule) { newDate in
+                    scheduleStore.move(id: schedule.id, to: newDate)
+                }
             }
         }
         .confirmationDialog(
@@ -97,6 +113,18 @@ struct DailySummaryView: View {
     }
 }
 
+private enum SummarySheetDestination: Identifiable {
+    case agent(SummaryScope)
+    case move(ScheduleDetail)
+
+    var id: String {
+        switch self {
+        case .agent: "agent"
+        case .move(let schedule): "move-\(schedule.id)"
+        }
+    }
+}
+
 private enum SummaryScope: String, CaseIterable, Identifiable {
     case today
     case week
@@ -117,6 +145,14 @@ private enum SummaryScope: String, CaseIterable, Identifiable {
         case .today: "오늘"
         case .week: "7일"
         case .month: "30일"
+        }
+    }
+
+    var agentContext: String {
+        switch self {
+        case .today: "오늘 요약"
+        case .week: "지난 7일 회고"
+        case .month: "지난 30일 회고"
         }
     }
 
@@ -159,6 +195,79 @@ private enum SummaryScope: String, CaseIterable, Identifiable {
         let range = interval(endingAt: date)
         let lastDay = Calendar.current.date(byAdding: .day, value: -1, to: range.end) ?? range.end
         return "\(range.start.formatted(formatter))–\(lastDay.formatted(formatter))"
+    }
+}
+
+private struct SummaryAgentDigest: View {
+    let scope: SummaryScope
+    let completed: [ScheduleDetail]
+    let incomplete: [ScheduleDetail]
+    let onOpenAgent: () -> Void
+
+    private var headline: String {
+        if scope == .today {
+            if incomplete.isEmpty {
+                return completed.isEmpty ? "오늘은 정리할 작업이 없어요" : "오늘의 작업을 모두 마쳤어요"
+            }
+            return "\(completed.count)개를 마쳤고 \(incomplete.count)개는 결정을 기다려요"
+        }
+        if incomplete.isEmpty {
+            return "\(completed.count)개를 끝내고 놓친 작업 없이 지나왔어요"
+        }
+        return "\(completed.count)개를 끝내고 \(incomplete.count)개를 놓쳤어요"
+    }
+
+    private var evidence: String {
+        if scope == .today {
+            guard let next = incomplete.first else {
+                return completed.isEmpty ? "계획이 필요하면 Agent와 내일의 첫 일정을 정해보세요." : "완료한 흐름을 내일 계획으로 이어갈 수 있어요."
+            }
+            return "먼저 확인할 작업은 ‘\(next.title)’이에요. 아래에서 완료하거나 날짜를 다시 정할 수 있어요."
+        }
+
+        let done = completed.prefix(2).map(\.title).joined(separator: " · ")
+        let missed = incomplete.prefix(2).map(\.title).joined(separator: " · ")
+        switch (done.isEmpty, missed.isEmpty) {
+        case (false, false): return "완료 흐름: \(done). 다시 볼 일: \(missed)."
+        case (false, true): return "완료 흐름: \(done). 놓치고 지난 작업은 없어요."
+        case (true, false): return "다시 볼 일: \(missed). 다음 계획에서 시간을 다시 잡아보세요."
+        case (true, true): return "분석할 작업 기록이 아직 없어요."
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Agent 분석", systemImage: "sparkles")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(MemdoTheme.brand)
+            Text(headline)
+                .font(.headline)
+                .foregroundStyle(MemdoTheme.ink)
+            Text(evidence)
+                .font(.subheadline)
+                .foregroundStyle(MemdoTheme.secondaryInk)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(action: onOpenAgent) {
+                HStack(spacing: 8) {
+                    Text("Agent와 함께 정리")
+                    Spacer(minLength: 0)
+                    Image(systemName: "arrow.up.right")
+                        .accessibilityHidden(true)
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(MemdoTheme.brand)
+                .frame(minHeight: MemdoMetrics.touchTarget)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .overlay(alignment: .top) { Divider() }
+        }
+        .padding(.leading, 12)
+        .overlay(alignment: .leading) {
+            Capsule()
+                .fill(MemdoTheme.brand)
+                .frame(width: 3)
+        }
     }
 }
 
@@ -320,27 +429,6 @@ private struct SummaryReviewSection: View {
                 .overlay(alignment: .bottom) { Divider() }
             }
         }
-    }
-}
-
-private struct SummaryInsightSection: View {
-    let remainingCount: Int
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: MemdoMetrics.rowSpacing) {
-            Image(systemName: "sparkles")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(MemdoTheme.brand)
-                .frame(width: MemdoMetrics.rowLeadingWidth)
-                .accessibilityHidden(true)
-            Text(remainingCount == 0
-                 ? "Agent · 오늘의 할 일을 모두 정리했어요."
-                 : "Agent · 남은 \(remainingCount)개는 완료하거나 다음 날짜로 옮겨보세요.")
-                .font(.subheadline)
-                .foregroundStyle(MemdoTheme.secondaryInk)
-        }
-        .padding(.horizontal, MemdoMetrics.rowInset)
-        .accessibilityElement(children: .combine)
     }
 }
 
