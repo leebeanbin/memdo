@@ -63,9 +63,8 @@ struct SettingsView: View {
                     }
                     .padding(.leading, 12)
                     .padding(.trailing, 4)
-                    .frame(minHeight: 52)
-                    .background(MemdoTheme.background.opacity(0.78), in: Capsule())
-                    .overlay(Capsule().stroke(MemdoTheme.controlOutline.opacity(0.45)))
+                    .frame(minHeight: MemdoMetrics.touchTarget)
+                    .memdoFloatingSurface(radius: 22)
 
                     Divider()
 
@@ -87,7 +86,7 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                 }
-                .padding(.vertical, 16)
+                .padding(.vertical, 12)
             }
 
             SettingsGroup(title: "개인정보") {
@@ -224,8 +223,7 @@ private struct GoogleCalendarConnectionSheet: View {
                     Text("Google OAuth 클라이언트와 서버 콜백을 등록한 뒤 활성화돼요.")
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(MemdoTheme.background)
+            .memdoSystemList()
             .navigationTitle("Google Calendar")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -266,8 +264,7 @@ private struct SlackConnectionSheet: View {
                     Text("Slack OAuth 앱, /memdo 명령, 서버 콜백을 등록한 뒤 활성화돼요. 비공개 채널은 앱 초대와 groups:read 동의가 추가로 필요해요.")
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(MemdoTheme.background)
+            .memdoSystemList()
             .navigationTitle("Slack")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -303,8 +300,7 @@ private struct PrivacySheet: View {
                         .foregroundStyle(MemdoTheme.secondaryInk)
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(MemdoTheme.background)
+            .memdoSystemList()
             .navigationTitle("개인정보 및 데이터")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -335,8 +331,7 @@ private struct AIConsentSheet: View {
                     Label("일정 변경은 확인 후 실행", systemImage: "checkmark.shield")
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(MemdoTheme.background)
+            .memdoSystemList()
             .navigationTitle("AI 데이터 접근")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -357,9 +352,7 @@ private struct SettingsGroup<Content: View>: View {
         MemdoSection(title: title) {
             VStack(spacing: 0) { content }
                 .padding(.horizontal, 12)
-                .overlay(alignment: .top) { Divider() }
-                .overlay(alignment: .bottom) { Divider() }
-                .memdoGlassPanel()
+                .memdoRowGroup()
         }
     }
 }

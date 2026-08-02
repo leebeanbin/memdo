@@ -129,21 +129,13 @@ private struct CalendarSearchControls: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        Group {
-            if #available(iOS 26.0, *) {
-                GlassEffectContainer(spacing: 12) {
-                    controls
-                }
-            } else {
-                controls
-            }
-        }
-        .transition(.move(edge: .top).combined(with: .opacity))
-        .onAppear { isFocused = true }
+        controls
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .onAppear { isFocused = true }
     }
 
     private var controls: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MemdoMetrics.sectionContentSpacing) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(MemdoTheme.secondaryInk)
@@ -163,30 +155,16 @@ private struct CalendarSearchControls: View {
                 }
             }
             .padding(.horizontal, 12)
-            .frame(minHeight: 52)
-            .memdoFloatingSurface(radius: 26)
+            .frame(minHeight: MemdoMetrics.touchTarget)
+            .memdoFloatingSurface(radius: 22)
 
-            HStack(spacing: 4) {
+            Picker("검색 범위", selection: $scope) {
                 ForEach(ScheduleSearchScope.allCases) { option in
-                    Button {
-                        withAnimation(.easeOut(duration: 0.18)) {
-                            scope = option
-                        }
-                    } label: {
-                        Text(option.title)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(scope == option ? MemdoTheme.onAccent : MemdoTheme.ink)
-                            .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
-                            .background(scope == option ? MemdoTheme.accent : Color.clear, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(scope == option ? .isSelected : [])
+                    Text(option.title).tag(option)
                 }
             }
-            .padding(4)
-            .memdoFloatingSurface(radius: 26)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("검색 범위")
+            .pickerStyle(.segmented)
+            .accessibilityValue(scope.title)
         }
     }
 }
@@ -223,7 +201,7 @@ private struct CalendarMonthCard: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MemdoMetrics.sectionContentSpacing) {
             HStack(spacing: 8) {
                 HStack(spacing: 0) {
                     Button { onMoveMonth(-1) } label: {
@@ -234,13 +212,13 @@ private struct CalendarMonthCard: View {
                     .accessibilityLabel("이전 달")
 
                     VStack(spacing: 4) {
-                    Text(month.memdoMonth)
+                        Text(month.memdoMonth)
                             .font(.headline)
-                    if filter != .all {
-                        Text(filter.title)
+                        if filter != .all {
+                            Text(filter.title)
                                 .font(.caption2.weight(.semibold))
-                            .foregroundStyle(MemdoTheme.brand)
-                    }
+                                .foregroundStyle(MemdoTheme.brand)
+                        }
                     }
                     .frame(minWidth: 52)
 
@@ -251,6 +229,11 @@ private struct CalendarMonthCard: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("다음 달")
                 }
+                Spacer(minLength: 4)
+                Button("오늘", action: onGoToday)
+                    .font(.caption.weight(.semibold))
+                    .frame(minHeight: MemdoMetrics.touchTarget)
+                    .buttonStyle(.plain)
                 Menu {
                     Picker("표시 일정", selection: $filter) {
                         ForEach(CalendarDisplayFilter.allCases) { filter in
@@ -258,20 +241,12 @@ private struct CalendarMonthCard: View {
                         }
                     }
                 } label: {
-                    Label(filter.title, systemImage: "line.3.horizontal.decrease")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: MemdoMetrics.touchTarget)
+                    MemdoIconButtonLabel(systemImage: "line.3.horizontal.decrease")
                 }
                 .buttonStyle(.plain)
                 .memdoFloatingSurface(radius: 22)
                 .accessibilityLabel("일정 필터")
                 .accessibilityValue(filter.title)
-                Spacer(minLength: 4)
-                Button("오늘", action: onGoToday)
-                    .font(.caption.weight(.semibold))
-                    .frame(minHeight: MemdoMetrics.touchTarget)
-                    .buttonStyle(.plain)
             }
             .contentShape(Rectangle())
             .highPriorityGesture(monthSwipeGesture)
@@ -293,9 +268,9 @@ private struct CalendarMonthCard: View {
             .dynamicTypeSize(.small ... .large)
 
         }
-        .padding(16)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
-        .memdoCard()
+        .memdoRowGroup()
         .accessibilityAction(named: "이전 달") { onMoveMonth(-1) }
         .accessibilityAction(named: "다음 달") { onMoveMonth(1) }
     }
@@ -391,7 +366,7 @@ private struct CalendarAgendaSection: View {
                     systemImage: "calendar.badge.plus",
                     description: Text("위의 + 또는 날짜 길게 누르기로 시작해 보세요.")
                 )
-                .frame(maxWidth: .infinity, minHeight: 160)
+                .frame(maxWidth: .infinity, minHeight: 120)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(visibleSchedules.enumerated()), id: \.element.id) { index, schedule in
@@ -415,7 +390,7 @@ private struct CalendarAgendaSection: View {
                         )
                     }
                 }
-                .memdoCard()
+                .memdoRowGroup()
             }
         }
     }
@@ -475,8 +450,7 @@ private struct DayAgendaSheet: View {
                 }
 
             }
-            .scrollContentBackground(.hidden)
-            .background(MemdoTheme.background)
+            .memdoSystemList()
             .navigationTitle(date.memdoMonthDay)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

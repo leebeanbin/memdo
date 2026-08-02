@@ -364,8 +364,7 @@ private struct SummaryHistorySection: View {
                         )
                     }
                 }
-                .overlay(alignment: .top) { Divider() }
-                .overlay(alignment: .bottom) { Divider() }
+                .memdoRowGroup()
             }
         }
     }
@@ -425,8 +424,7 @@ private struct SummaryReviewSection: View {
                         }
                     }
                 }
-                .overlay(alignment: .top) { Divider() }
-                .overlay(alignment: .bottom) { Divider() }
+                .memdoRowGroup()
             }
         }
     }
@@ -535,8 +533,7 @@ private struct MoveScheduleSheet: View {
                     DatePicker("날짜", selection: $selectedDate, displayedComponents: .date)
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(MemdoTheme.background)
+            .memdoSystemList()
             .navigationTitle("일정 이동")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

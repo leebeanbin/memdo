@@ -41,7 +41,8 @@ enum MemdoMetrics {
     static let cardRadius: CGFloat = 16
     static let fieldRadius: CGFloat = 12
     static let touchTarget: CGFloat = 44
-    static let sectionSpacing: CGFloat = 20
+    static let sectionSpacing: CGFloat = 18
+    static let sectionContentSpacing: CGFloat = 10
     static let tabBarClearance: CGFloat = 72
 }
 
@@ -52,33 +53,26 @@ struct MemdoPageBackground: View {
 }
 
 extension View {
-    func memdoCard(radius: CGFloat = MemdoMetrics.cardRadius) -> some View {
-        background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-    }
-
     func memdoSettingsRow() -> some View {
         frame(minHeight: 52)
-            .padding(.vertical, 8)
             .contentShape(Rectangle())
+    }
+
+    func memdoRowGroup() -> some View {
+        overlay(alignment: .top) { Divider() }
+            .overlay(alignment: .bottom) { Divider() }
+    }
+
+    func memdoSystemList() -> some View {
+        scrollContentBackground(.hidden)
+            .background(MemdoTheme.background)
+            .listSectionSpacing(.compact)
     }
 
     @ViewBuilder
     func memdoFloatingSurface(radius: CGFloat) -> some View {
         if #available(iOS 26.0, *) {
             glassEffect(.regular.interactive(), in: .rect(cornerRadius: radius))
-        } else {
-            background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .stroke(MemdoTheme.controlOutline)
-                )
-        }
-    }
-
-    @ViewBuilder
-    func memdoGlassPanel(radius: CGFloat = MemdoMetrics.cardRadius) -> some View {
-        if #available(iOS 26.0, *) {
-            glassEffect(.regular, in: .rect(cornerRadius: radius))
         } else {
             background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
                 .overlay(

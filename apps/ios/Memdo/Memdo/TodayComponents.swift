@@ -222,8 +222,7 @@ struct TodayScheduleSection: View {
                     )
                 }
             }
-            .overlay(alignment: .top) { Divider() }
-            .overlay(alignment: .bottom) { Divider() }
+            .memdoRowGroup()
         }
     }
 }
@@ -245,8 +244,7 @@ struct TodayBriefingSection: View {
                     }
                 }
             }
-            .overlay(alignment: .top) { Divider() }
-            .overlay(alignment: .bottom) { Divider() }
+            .memdoRowGroup()
         }
     }
 }

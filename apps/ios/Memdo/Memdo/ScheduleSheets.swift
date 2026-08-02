@@ -57,8 +57,7 @@ struct ScheduleDetailSheet: View {
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(MemdoTheme.background)
+            .memdoSystemList()
             .navigationTitle("일정 상세")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -334,8 +333,7 @@ struct AddScheduleSheet: View {
             Form {
                 ScheduleEditorFields(schedule: $draft)
             }
-            .scrollContentBackground(.hidden)
-            .background(MemdoTheme.background)
+            .memdoSystemList()
             .navigationTitle("새 일정")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -427,8 +425,7 @@ private struct LocationPickerView: View {
                 }
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(MemdoTheme.background)
+        .memdoSystemList()
         .searchable(text: $query, prompt: "건물, 상호, 주소")
         .onSubmit(of: .search, search)
         .navigationTitle("장소")

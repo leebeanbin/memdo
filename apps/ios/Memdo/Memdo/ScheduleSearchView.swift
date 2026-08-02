@@ -88,6 +88,7 @@ private struct SearchFilterBar: View {
                 MemdoIconButtonLabel(systemImage: "line.3.horizontal.decrease")
             }
             .buttonStyle(.plain)
+            .memdoFloatingSurface(radius: 22)
             .accessibilityLabel("상세 필터")
         }
         .overlay(alignment: .bottom) { Divider() }
@@ -113,7 +114,7 @@ private struct SearchResultsSection: View {
                     systemImage: "magnifyingglass",
                     description: Text("검색어를 바꾸거나 상세 필터를 초기화해 보세요.")
                 )
-                    .frame(maxWidth: .infinity, minHeight: 160)
+                .frame(maxWidth: .infinity, minHeight: 120)
             } else {
                 VStack(spacing: 0) {
                     ForEach(schedules) { schedule in
@@ -127,7 +128,7 @@ private struct SearchResultsSection: View {
                         }
                     }
                 }
-                .memdoCard()
+                .memdoRowGroup()
             }
         }
     }
@@ -161,8 +162,7 @@ private struct SearchFilterSheet: View {
                 }
                 Button("필터 초기화", action: resetFilters)
             }
-            .scrollContentBackground(.hidden)
-            .background(MemdoTheme.background)
+            .memdoSystemList()
             .navigationTitle("상세 필터")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

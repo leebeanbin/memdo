@@ -149,7 +149,7 @@ struct MemdoSection<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MemdoMetrics.sectionContentSpacing) {
             if dynamicTypeSize.isAccessibilitySize {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
