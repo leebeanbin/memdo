@@ -37,3 +37,33 @@ targets:
         SKIP_INSTALL: YES
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: MemdoWidget/Info.plist
+schemes:
+  Memdo:
+    build:
+      targets:
+        Memdo: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+  MemdoWidget:
+    build:
+      targets:
+        MemdoWidget: all
+        Memdo: all
+    run:
+      config: Debug
+      executable: Memdo
+    profile:
+      config: Release
+      executable: Memdo
+    analyze:
+      config: Debug
+    archive:
+      config: Release
