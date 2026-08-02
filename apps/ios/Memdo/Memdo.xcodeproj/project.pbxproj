@@ -17,6 +17,7 @@
 		5C8DB08635A4922DF0808F7B /* TodayComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E81203EAFA09124BA54F8AE7 /* TodayComponents.swift */; };
 		6D52CEFC8B695B018FB30EAD /* MemdoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B25474359568B8C6264B6E8 /* MemdoApp.swift */; };
 		78F5DD11294A40F25A5A9524 /* DailySummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6561C352731005322618C740 /* DailySummaryView.swift */; };
+		78FEB722CFF3DC8EE7034FBD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A5FCF0E385E87960B56A11F4 /* Assets.xcassets */; };
 		8440D2E9F99B1C9848CF21ED /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD6B2D482673663626353C2 /* CalendarView.swift */; };
 		98172737F1AC51B31154A93D /* ScheduleRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19BD21007334C06C0B2028F9 /* ScheduleRow.swift */; };
 		A09C21CAE62B67DF6753F375 /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C57EC467343059432D7D60D /* AssistantView.swift */; };
@@ -63,6 +64,7 @@
 		83EC68D64631B324F171F399 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8FD6B2D482673663626353C2 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
 		9B25474359568B8C6264B6E8 /* MemdoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoApp.swift; sourceTree = "<group>"; };
+		A5FCF0E385E87960B56A11F4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AE1B6FFACC369DADAFC99ADB /* MemdoWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MemdoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B4D119A0D929FA9AE7D47773 /* AppShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellView.swift; sourceTree = "<group>"; };
 		C4EA7A02C55094DEBD06AF37 /* MemdoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoWidget.swift; sourceTree = "<group>"; };
@@ -94,6 +96,7 @@
 			isa = PBXGroup;
 			children = (
 				B4D119A0D929FA9AE7D47773 /* AppShellView.swift */,
+				A5FCF0E385E87960B56A11F4 /* Assets.xcassets */,
 				2C57EC467343059432D7D60D /* AssistantView.swift */,
 				8FD6B2D482673663626353C2 /* CalendarView.swift */,
 				6561C352731005322618C740 /* DailySummaryView.swift */,
@@ -146,6 +149,7 @@
 			buildConfigurationList = A98668BF3B00C961DCAB3EDF /* Build configuration list for PBXNativeTarget "Memdo" */;
 			buildPhases = (
 				B6EAAEBBCBA9992C43C1B8A5 /* Sources */,
+				5468C02C0083065B4D28CB4B /* Resources */,
 				7250461EED3A93CB14C80824 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -190,6 +194,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5468C02C0083065B4D28CB4B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				78FEB722CFF3DC8EE7034FBD /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		9512733DD05B73EA1C4A0BCA /* Sources */ = {
@@ -271,7 +286,7 @@
 		41EAE821237ABD4E305ABC97 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Memdo/Info.plist;
@@ -356,7 +371,7 @@
 		6B7BD2B29544DDBE5903B871 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Memdo/Info.plist;

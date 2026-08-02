@@ -30,24 +30,49 @@ struct SettingsView: View {
                 .buttonStyle(.plain)
             }
 
-            SettingsGroup(title: "연결 및 데이터") {
+            SettingsGroup(
+                title: "내 Agent 연결",
+                subtitle: "서비스는 MCP 도구로 연결되고, 실행은 항상 내 확인을 거쳐요."
+            ) {
                 Button { presentedSheet = .googleCalendar } label: {
-                    SettingsDisclosureRow(title: "Google Calendar", value: "연결 안 됨")
+                    AgentConnectionRow(
+                        icon: .asset("GoogleCalendar"),
+                        title: "Google Calendar",
+                        capability: "일정 읽기 · 승인 후 쓰기",
+                        status: "미연결",
+                        badge: "MCP"
+                    )
                 }
                 .buttonStyle(.plain)
                 Divider()
                 Button { presentedSheet = .slack } label: {
-                    SettingsDisclosureRow(title: "Slack", value: "연결 안 됨")
+                    AgentConnectionRow(
+                        icon: .asset("Slack"),
+                        title: "Slack",
+                        capability: "요약 전송 · 알림 예약",
+                        status: "미연결",
+                        badge: "MCP"
+                    )
                 }
                 .buttonStyle(.plain)
                 Divider()
                 Button { presentedSheet = .aiConsent } label: {
-                    SettingsDisclosureRow(title: "AI 데이터 접근", value: "일정 제목·시간")
+                    AgentConnectionRow(
+                        icon: .system("sparkles"),
+                        title: "Memdo Agent",
+                        capability: "일정 제목 · 시간만 사용",
+                        status: "범위 설정"
+                    )
                 }
                 .buttonStyle(.plain)
                 Divider()
                 Button { presentedSheet = .privacy } label: {
-                    SettingsDisclosureRow(title: "개인정보 및 데이터", value: "보관·철회")
+                    AgentConnectionRow(
+                        icon: .system("hand.raised.fill"),
+                        title: "데이터 관리",
+                        capability: "보관 · 철회 · 연결 해제",
+                        status: "확인"
+                    )
                 }
                 .buttonStyle(.plain)
             }
@@ -71,6 +96,99 @@ struct SettingsView: View {
             }
         }
         .sensoryFeedback(.selection, trigger: briefingKeywords)
+    }
+}
+
+private enum ConnectionIcon {
+    case asset(String)
+    case system(String)
+}
+
+private struct ConnectionMark: View {
+    let icon: ConnectionIcon
+
+    var body: some View {
+        Group {
+            switch icon {
+            case .asset(let name):
+                Image(name)
+                    .resizable()
+                    .scaledToFit()
+            case .system(let name):
+                Image(systemName: name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MemdoTheme.brand)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(MemdoTheme.brandSoft)
+            }
+        }
+        .frame(width: 32, height: 32)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .accessibilityHidden(true)
+    }
+}
+
+private struct AgentConnectionRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let icon: ConnectionIcon
+    let title: String
+    let capability: String
+    let status: String
+    var badge: String?
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            ConnectionMark(icon: icon)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                    if let badge {
+                        ConnectionBadge(title: badge)
+                    }
+                }
+                Text(capability)
+                    .font(.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+                if dynamicTypeSize.isAccessibilitySize {
+                    Text(status)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                }
+            }
+
+            Spacer(minLength: 8)
+            if !dynamicTypeSize.isAccessibilitySize {
+                Text(status)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+            Image(systemName: "chevron.right")
+                .font(.caption.bold())
+                .foregroundStyle(MemdoTheme.secondaryInk)
+                .accessibilityHidden(true)
+        }
+        .multilineTextAlignment(.leading)
+        .padding(.vertical, 6)
+        .frame(minHeight: 60)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(capability), \(status)")
+    }
+}
+
+private struct ConnectionBadge: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 9, weight: .bold, design: .rounded))
+            .tracking(0.4)
+            .foregroundStyle(MemdoTheme.brand)
+            .padding(.horizontal, 6)
+            .frame(height: 18)
+            .background(MemdoTheme.brandSoft, in: Capsule())
     }
 }
 
@@ -233,6 +351,15 @@ private struct GoogleCalendarConnectionSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    MCPToolIdentityRow(
+                        icon: .asset("GoogleCalendar"),
+                        title: "Google Calendar",
+                        summary: "내 Agent가 일정 문맥을 읽고 변경안을 만들어요."
+                    )
+                } header: {
+                    Text("Agent MCP 도구")
+                }
                 Section("연결하면 가능한 일") {
                     Label("바쁜 시간만 확인해 일정 추천", systemImage: "clock.badge.checkmark")
                     Label("선택한 캘린더 일정 가져오기", systemImage: "calendar")
@@ -268,6 +395,15 @@ private struct SlackConnectionSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    MCPToolIdentityRow(
+                        icon: .asset("Slack"),
+                        title: "Slack",
+                        summary: "내 Agent가 승인된 요약과 알림만 전송해요."
+                    )
+                } header: {
+                    Text("Agent MCP 도구")
+                }
                 Section("MVP에서 실제 지원") {
                     LabeledContent("일정·오늘 요약 보내기", value: "chat.postMessage")
                     LabeledContent("정한 시간에 알림 예약", value: "chat.scheduleMessage")
@@ -300,6 +436,30 @@ private struct SlackConnectionSheet: View {
             }
         }
         .memdoSheetPresentation([.large])
+    }
+}
+
+private struct MCPToolIdentityRow: View {
+    let icon: ConnectionIcon
+    let title: String
+    let summary: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ConnectionMark(icon: icon)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                    ConnectionBadge(title: "MCP")
+                }
+                Text(summary)
+                    .font(.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -372,13 +532,31 @@ private struct AIConsentSheet: View {
 
 private struct SettingsGroup<Content: View>: View {
     let title: String
+    let subtitle: String?
     @ViewBuilder let content: Content
+
+    init(
+        title: String,
+        subtitle: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.content = content()
+    }
 
     var body: some View {
         MemdoSection(title: title) {
-            VStack(spacing: 0) { content }
-                .padding(.horizontal, 12)
-                .memdoRowGroup()
+            VStack(alignment: .leading, spacing: 8) {
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                }
+                VStack(spacing: 0) { content }
+                    .padding(.horizontal, 12)
+                    .memdoRowGroup()
+            }
         }
     }
 }
