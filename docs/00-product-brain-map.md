@@ -7,7 +7,9 @@
 ```mermaid
 flowchart TD
     V["왜 만드는가?<br/>01 PRD"] --> UX["사용자는 어떻게 경험하는가?<br/>02 UX"]
-    UX --> UI["어떤 화면 규칙으로 구현하는가?<br/>iOS DESIGN"]
+    UX --> PAGEUI["페이지별 상태와 행동은 무엇인가?<br/>27 페이지 UI/UX"]
+    PAGEUI --> DENSITY["얼마나, 어떻게 보여주는가?<br/>28 밀도·Agent UI"]
+    DENSITY --> UI["어떤 화면 규칙으로 구현하는가?<br/>iOS DESIGN"]
     V --> DEC["어떤 원칙을 지키는가?<br/>10 결정 기록"]
     UX --> DATA["어떤 상태와 데이터를 갖는가?<br/>04 데이터"]
     UX --> POLICY["무엇을 허용하고 보호하는가?<br/>06 개인정보"]
@@ -61,29 +63,31 @@ flowchart TD
 3. [제품 요구사항](./01-product-requirements.md)
 4. [결정 기록](./10-decisions-and-open-questions.md)
 5. [UX와 화면](./02-ux-and-screens.md)
-6. [최종 UI/UX 기준선](../apps/ios/Memdo/DESIGN.md)
-7. [개인정보·동의·AI 정책](./06-privacy-consent-ai-policy.md)
-8. [데이터 모델](./04-data-model.md)
-9. [알림과 하루 요약](./07-notification-and-daily-review.md)
-10. [기술 아키텍처](./03-technical-architecture.md)
-11. [OpenAPI](./05-api-spec.yaml)
-12. [요구사항 추적표](./12-requirements-traceability.md)
-13. [테스트와 출시](./08-test-and-release-plan.md)
-14. [로드맵](./09-roadmap-and-backlog.md)
-15. [문서 변경 규칙](./13-document-governance.md)
-16. [DB 성능·운영](./14-database-performance-and-operations.md)
-17. [외부 API 통합](./15-external-integrations-and-naming.md)
-18. [엔지니어링·커밋 규칙](./16-engineering-and-commit-rules.md)
-19. [데이터 파이프라인](./17-data-pipeline.md)
-20. [일정 검색 파이프라인](./18-todo-search-pipeline.md)
-21. [트랜잭션 경계](./19-transaction-boundaries.md)
-22. [AI Agent 설계](./20-ai-agent-architecture.md)
-23. [Integration Hub](./21-integration-hub-google-calendar-mcp.md)
-24. [기술 스택 기준선](./22-technology-stack-baseline.md)
-25. [관찰 가능성](./23-observability-and-alerting.md)
-26. [환경·CI/CD·백업](./24-environments-ci-cd-backup.md)
-27. [API 계약 완성도](./25-api-contract-completeness.md)
-28. [전체 문서 정합성 감사](./26-document-consistency-audit.md)
+6. [페이지별 UI/UX 계약](./27-page-ui-ux-contract.md)
+7. [디자인 시스템·밀도·Agent UI 계약](./28-design-system-density-and-agent-ui.md)
+8. [최종 UI/UX 기준선](../apps/ios/Memdo/DESIGN.md)
+9. [개인정보·동의·AI 정책](./06-privacy-consent-ai-policy.md)
+10. [데이터 모델](./04-data-model.md)
+11. [알림과 하루 요약](./07-notification-and-daily-review.md)
+12. [기술 아키텍처](./03-technical-architecture.md)
+13. [OpenAPI](./05-api-spec.yaml)
+14. [요구사항 추적표](./12-requirements-traceability.md)
+15. [테스트와 출시](./08-test-and-release-plan.md)
+16. [로드맵](./09-roadmap-and-backlog.md)
+17. [문서 변경 규칙](./13-document-governance.md)
+18. [DB 성능·운영](./14-database-performance-and-operations.md)
+19. [외부 API 통합](./15-external-integrations-and-naming.md)
+20. [엔지니어링·커밋 규칙](./16-engineering-and-commit-rules.md)
+21. [데이터 파이프라인](./17-data-pipeline.md)
+22. [일정 검색 파이프라인](./18-todo-search-pipeline.md)
+23. [트랜잭션 경계](./19-transaction-boundaries.md)
+24. [AI Agent 설계](./20-ai-agent-architecture.md)
+25. [Integration Hub](./21-integration-hub-google-calendar-mcp.md)
+26. [기술 스택 기준선](./22-technology-stack-baseline.md)
+27. [관찰 가능성](./23-observability-and-alerting.md)
+28. [환경·CI/CD·백업](./24-environments-ci-cd-backup.md)
+29. [API 계약 완성도](./25-api-contract-completeness.md)
+30. [전체 문서 정합성 감사](./26-document-consistency-audit.md)
 
 구현자는 첫 migration 또는 API client 생성 전에 `26`의 P0 항목이 해소됐는지 확인한다.
 
@@ -92,13 +96,13 @@ flowchart TD
 ### 제품 기획
 
 ```text
-00 → 11 → 01 → 10 → 02 → 06 → 12 → 09
+00 → 11 → 01 → 10 → 02 → 27 → 28 → 06 → 12 → 09
 ```
 
 ### iOS 개발
 
 ```text
-00 → 11 → 01 → 02 → iOS DESIGN → 04 → 07 → 03 → 05 → 08
+00 → 11 → 01 → 02 → 27 → 28 → iOS DESIGN → 04 → 07 → 03 → 05 → 08
 ```
 
 ### 백엔드 개발
@@ -110,7 +114,7 @@ flowchart TD
 ### 디자인
 
 ```text
-00 → 11 → 01 → 10 → 02 → iOS DESIGN → 06 → 07
+00 → 11 → 01 → 10 → 02 → 27 → 28 → iOS DESIGN → 06 → 07
 ```
 
 ### QA
@@ -149,12 +153,12 @@ flowchart TD
 → 상태 전이 및 실제 알림 테스트
 ```
 
-### AI 계획
+### 상시 Agent 계획
 
 ```text
 자연어로 계획하고 싶음
-→ PRD-013~014
-→ AI 초안 확인 화면
+→ PRD-013~016
+→ 시스템 탭바 Agent 액션 + 변경안 확인 시트
 → Consent + AgentRun + Draft
 → /ai/plan-drafts + commit
 → 동의·미승인 저장 방지 테스트
