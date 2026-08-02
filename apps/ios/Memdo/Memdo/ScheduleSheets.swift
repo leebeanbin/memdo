@@ -73,7 +73,7 @@ struct ScheduleDetailSheet: View {
                 }
             }
         }
-        .memdoSheetPresentation()
+        .memdoSheetPresentation([.large])
     }
 
     private func updateCompletion(_ isDone: Bool) {
@@ -392,7 +392,7 @@ struct AddScheduleSheet: View {
                 }
             }
         }
-        .memdoSheetPresentation()
+        .memdoSheetPresentation([.large])
     }
 
     private func save() {
@@ -424,57 +424,57 @@ private struct LocationPickerView: View {
     let onSelect: (String) -> Void
 
     var body: some View {
-        NavigationStack {
-            List {
-                if !currentLocation.isEmpty {
-                    Section("현재 장소") {
-                        Button(currentLocation) {
-                            onSelect(currentLocation)
-                            dismiss()
-                        }
+        List {
+            if !currentLocation.isEmpty {
+                Section("현재 장소") {
+                    Button(currentLocation) {
+                        onSelect(currentLocation)
+                        dismiss()
                     }
                 }
+            }
 
-                Section("검색 결과") {
-                    if isSearching {
-                        ProgressView("장소를 찾는 중")
-                    } else if results.isEmpty {
-                        ContentUnavailableView(
-                            "장소를 검색해 보세요",
-                            systemImage: "map",
-                            description: Text("건물명, 상호 또는 주소를 입력하세요.")
-                        )
-                    } else {
-                        ForEach(Array(results.enumerated()), id: \.offset) { _, item in
-                            Button { select(item) } label: {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(item.name ?? "이름 없는 장소")
-                                        .foregroundStyle(MemdoTheme.ink)
-                                    if let address = item.placemark.title {
-                                        Text(address)
-                                            .font(.caption)
-                                            .foregroundStyle(MemdoTheme.secondaryInk)
-                                    }
+            Section("검색 결과") {
+                if isSearching {
+                    ProgressView("장소를 찾는 중")
+                } else if results.isEmpty {
+                    ContentUnavailableView(
+                        "장소를 검색해 보세요",
+                        systemImage: "map",
+                        description: Text("건물명, 상호 또는 주소를 입력하세요.")
+                    )
+                } else {
+                    ForEach(Array(results.enumerated()), id: \.offset) { _, item in
+                        Button { select(item) } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(item.name ?? "이름 없는 장소")
+                                    .foregroundStyle(MemdoTheme.ink)
+                                if let address = item.placemark.title {
+                                    Text(address)
+                                        .font(.caption)
+                                        .foregroundStyle(MemdoTheme.secondaryInk)
                                 }
                             }
                         }
                     }
                 }
+            }
 
-                if !currentLocation.isEmpty {
-                    Section {
-                        Button("장소 지우기", role: .destructive) {
-                            onSelect("")
-                            dismiss()
-                        }
+            if !currentLocation.isEmpty {
+                Section {
+                    Button("장소 지우기", role: .destructive) {
+                        onSelect("")
+                        dismiss()
                     }
                 }
             }
-            .searchable(text: $query, prompt: "건물, 상호, 주소")
-            .onSubmit(of: .search, search)
-            .navigationTitle("장소")
-            .navigationBarTitleDisplayMode(.inline)
         }
+        .scrollContentBackground(.hidden)
+        .background(MemdoTheme.background)
+        .searchable(text: $query, prompt: "건물, 상호, 주소")
+        .onSubmit(of: .search, search)
+        .navigationTitle("장소")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func search() {

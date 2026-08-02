@@ -446,17 +446,20 @@ private struct DayAgendaSheet: View {
                     }
                 }
 
-                Section {
-                    Button { presentedSheet = .add } label: {
-                        Label("새 일정 추가", systemImage: "plus")
-                    }
-                }
             }
             .scrollContentBackground(.hidden)
             .background(MemdoTheme.background)
             .navigationTitle(date.memdoMonthDay)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        presentedSheet = .add
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("새 일정 추가")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("닫기") { dismiss() }
                         .foregroundStyle(MemdoTheme.accent)

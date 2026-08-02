@@ -229,7 +229,7 @@ private struct GoogleCalendarConnectionSheet: View {
                 }
             }
         }
-        .memdoSheetPresentation([.medium])
+        .memdoSheetPresentation([.large])
     }
 }
 
@@ -271,7 +271,7 @@ private struct SlackConnectionSheet: View {
                 }
             }
         }
-        .memdoSheetPresentation([.medium])
+        .memdoSheetPresentation([.large])
     }
 }
 
@@ -308,7 +308,7 @@ private struct PrivacySheet: View {
                 }
             }
         }
-        .memdoSheetPresentation([.medium, .large])
+        .memdoSheetPresentation([.large])
     }
 }
 
@@ -340,7 +340,7 @@ private struct AIConsentSheet: View {
                 }
             }
         }
-        .memdoSheetPresentation([.medium])
+        .memdoSheetPresentation([.large])
     }
 }
 
@@ -351,7 +351,6 @@ private struct SettingsGroup<Content: View>: View {
     var body: some View {
         MemdoSection(title: title) {
             VStack(spacing: 0) { content }
-                .padding(.horizontal, 4)
                 .overlay(alignment: .top) { Divider() }
                 .overlay(alignment: .bottom) { Divider() }
         }
