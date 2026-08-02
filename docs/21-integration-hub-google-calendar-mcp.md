@@ -203,7 +203,8 @@ UI에서 “인덱싱”은 출처와 의미를 안정적으로 분류해 검색
 
 ```text
 entryKind:
-  todo
+  event
+  task
   external_event
   proposal
 
@@ -455,3 +456,78 @@ GET  /.well-known/oauth-authorization-server
 
 MCP부터 만들지 않는다. Google read-only 통합과 출처 인덱싱이 먼저 안정돼야 외부 AI도 같은 데이터를 신뢰할 수 있다.
 
+## 15. 장소와 지도
+
+초기 iOS 앱은 새 지도 SDK를 추가하지 않고 MapKit의 `MKLocalSearch`로 장소를 검색한다. 사용자가 결과를 선택하면 표시명, 주소, 좌표, `locationProvider=apple_maps`를 저장한다. 상세 화면의 `지도에서 보기`는 Google Maps Universal URL의 `query`로 같은 장소를 연다.
+
+Google Places SDK는 Google Place ID, Google 지도 내 자동완성 품질, 장소 사진이 실제 요구될 때만 추가한다. 추가 시에는 Google의 세션 토큰과 attribution 규칙을 지키고 API key를 앱 소스에 저장하지 않는다.
+
+참조:
+
+- https://developer.apple.com/documentation/mapkit/mklocalsearch
+- https://developers.google.com/maps/documentation/places/ios-sdk/google-places-swift
+- https://developers.google.com/maps/documentation/places/ios-sdk/place-autocomplete
+
+## 16. 반복 프리셋
+
+UI는 다음 프리셋만 전면에 둔다.
+
+| UI | API preset | RRULE 변환 |
+|---|---|---|
+| 매일 | `daily` | `FREQ=DAILY` |
+| 평일마다 | `weekdays` | `FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR` |
+| 매주 | `weekly` | `FREQ=WEEKLY` + 시작 요일 |
+| 2주마다 | `biweekly` | `FREQ=WEEKLY;INTERVAL=2` |
+| 매월 | `monthly` | `FREQ=MONTHLY` + 시작 일자 |
+| 매년 | `yearly` | `FREQ=YEARLY` + 시작 월·일 |
+
+`직접 설정`은 간격, 요일, 종료 조건을 함께 설계하기 전까지 노출하지 않는다. 프리셋 저장은 `POST /schedule-rules` 하나에서 규칙과 최초 발생분을 같은 DB 트랜잭션으로 만든다.
+
+## 17. Slack 업무 연결
+
+Slack은 캘린더 동기화 공급자가 아니라 사용자가 명시적으로 호출하는 전송·초안 입력 도구다.
+
+```text
+설정에서 Slack 연결
+→ OAuth state/PKCE 검증
+→ 워크스페이스 설치
+→ 사용자가 공개 채널 선택
+→ Agent가 slack_message 변경안 생성
+→ 전송 문구와 채널 확인
+→ 승인 후 chat.postMessage 또는 chat.scheduleMessage
+```
+
+초기 범위:
+
+- `message_write` → `chat:write`: 승인한 요약·일정을 `chat.postMessage`로 전송하고, 예약 시 `chat.scheduleMessage` 사용
+- `channel_select` → `channels:read`: 공개 채널 이름과 ID만 `conversations.list`로 조회
+- `slash_command` → `commands`: `/memdo add ...` 또는 메시지 바로가기로 사용자가 보낸 텍스트만 할 일 초안으로 변환
+- `private_channel_select` → `groups:read`: 비공개 채널 지원을 켠 사용자에게만 추가 요청하며 앱이 초대된 채널만 취급
+- 채널 기록, DM, 임의 메시지 수집은 MVP 범위가 아니며 history scope를 요청하지 않음
+- 개인 캘린더는 Slack 제안의 기본 입력과 출력에서 제외
+- Slash command 원문은 초안 생성 후 기본 미보관하고 생성된 할 일 초안만 24시간 보관
+- 워크스페이스 관리자가 앱 설치를 제한한 경우 연결 실패가 아니라 `관리자 승인 필요` 상태로 표시
+
+`/memdo` 요청은 Slack Signing Secret으로 `X-Slack-Signature`를 검증하고, `X-Slack-Request-Timestamp`가 5분을 넘으면 재전송 공격으로 거부한다. OAuth token과 signing secret은 서버 secret store에만 저장한다.
+
+외부 호출은 DB 트랜잭션 안에 묶지 않는다. proposal을 `executing`으로 바꾼 뒤 Slack 호출을 하고, 성공 시 메시지 timestamp와 `applied`, 실패 시 재시도 가능한 `failed`를 짧은 트랜잭션으로 저장한다.
+
+참조:
+
+- https://api.slack.com/authentication/oauth-v2
+- https://docs.slack.dev/reference/methods/chat.postMessage
+- https://docs.slack.dev/reference/methods/chat.scheduleMessage
+- https://docs.slack.dev/interactivity/implementing-slash-commands
+- https://docs.slack.dev/authentication/verifying-requests-from-slack
+
+## 18. 연결 API 이름
+
+```text
+POST /connections/slack/authorize
+GET  /connections/slack/callback
+GET  /slack/channels
+POST /slack/message-proposals
+POST /change-proposals/{id}/approve
+```
+
+Google Calendar, Slack, MCP 모두 별도 실행 경로를 만들지 않고 `change_proposals` 승인 모델을 공유한다.

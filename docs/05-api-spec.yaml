@@ -71,6 +71,64 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/DailyPlan' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /calendars:
+    get:
+      summary: List user calendars used for personal and work grouping
+      responses:
+        '200':
+          description: Ordered calendars
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/UserCalendar' }
+    post:
+      summary: Create a user calendar
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 50 }
+                purpose: { type: string, enum: [personal, work, custom], default: custom }
+                colorToken: { type: [string, 'null'] }
+      responses:
+        '201':
+          description: Calendar created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserCalendar' }
+  /calendars/{calendarId}:
+    patch:
+      summary: Rename, reorder, or hide a user calendar
+      parameters:
+        - name: calendarId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name: { type: string, minLength: 1, maxLength: 50 }
+                colorToken: { type: [string, 'null'] }
+                isVisible: { type: boolean }
+                sortOrder: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: Calendar updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserCalendar' }
   /todos:
     get:
       summary: List todos
@@ -472,6 +530,77 @@ paths:
                 required: [authorizationUrl]
                 properties:
                   authorizationUrl: { type: string, format: uri }
+  /connections/slack/authorize:
+    post:
+      summary: Start Slack OAuth with selected workspace capabilities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [capabilities, returnUrl]
+              properties:
+                capabilities:
+                  type: array
+                  minItems: 1
+                  uniqueItems: true
+                  items:
+                    type: string
+                    enum: [message_write, channel_select, slash_command, private_channel_select]
+                returnUrl: { type: string, format: uri }
+      responses:
+        '200':
+          description: Authorization URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authorizationUrl]
+                properties:
+                  authorizationUrl: { type: string, format: uri }
+  /connections/slack/callback:
+    get:
+      summary: Complete Slack OAuth and bind the installation to the current user
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema: { type: string }
+        - name: state
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '302': { description: Redirect to the validated app return URL }
+  /slack/channels:
+    get:
+      summary: List channels visible to the installed app for explicit allowlisting
+      responses:
+        '200':
+          description: Slack channels
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SlackChannel' }
+  /slack/message-proposals:
+    post:
+      summary: Create a typed Slack message proposal; approval sends the message
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlackMessageInput' }
+      responses:
+        '201':
+          description: Pending approval proposal
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangeProposal' }
   /calendar-sources:
     get:
       summary: List connected calendar sources
@@ -538,7 +667,7 @@ paths:
             type: array
             items:
               type: string
-              enum: [todo, external_event, proposal]
+              enum: [event, task, external_event, proposal]
         - name: q
           in: query
           schema: { type: string, maxLength: 100 }
@@ -611,10 +740,10 @@ paths:
                     properties:
                       operationType:
                         type: string
-                        enum: [create, update, reschedule, complete, skip]
+                        enum: [create, update, reschedule, complete, skip, send]
                       targetType:
                         type: string
-                        enum: [todo, google_calendar_event]
+                        enum: [todo, google_calendar_event, slack_message]
                       targetId: { type: [string, 'null'], format: uuid }
                       proposedChanges: { type: object }
       responses:
@@ -684,9 +813,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UserPreferences' }
-  /interests:
+  /briefing-keywords:
     get:
-      summary: List news interests
+      summary: List briefing search keywords
       responses:
         '200':
           description: Interests
@@ -694,9 +823,9 @@ paths:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/Interest' }
+                items: { $ref: '#/components/schemas/BriefingKeyword' }
     post:
-      summary: Create an interest
+      summary: Create a briefing keyword
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -714,12 +843,12 @@ paths:
           description: Created
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Interest' }
-  /interests/{interestId}:
+              schema: { $ref: '#/components/schemas/BriefingKeyword' }
+  /briefing-keywords/{briefingKeywordId}:
     patch:
       summary: Update an interest
       parameters:
-        - $ref: '#/components/parameters/InterestId'
+        - $ref: '#/components/parameters/BriefingKeywordId'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
@@ -736,11 +865,11 @@ paths:
           description: Updated
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Interest' }
+              schema: { $ref: '#/components/schemas/BriefingKeyword' }
     delete:
       summary: Delete an interest
       parameters:
-        - $ref: '#/components/parameters/InterestId'
+        - $ref: '#/components/parameters/BriefingKeywordId'
       responses:
         '204': { description: Deleted }
   /briefings:
@@ -1179,8 +1308,8 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
-    InterestId:
-      name: interestId
+    BriefingKeywordId:
+      name: briefingKeywordId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -1304,11 +1433,9 @@ components:
         checkedAt: { type: string, format: date-time }
     UserPreferences:
       type: object
-      required: [timezone, theme, accentColor, widgetStyle, hideWidgetContent, dailyReview, newsBriefing]
+      required: [timezone, widgetStyle, hideWidgetContent, dailyReview, newsBriefing]
       properties:
         timezone: { type: string, examples: [Asia/Seoul] }
-        theme: { type: string, enum: [warmPaper, quietBlue, softSage, sunset, midnight] }
-        accentColor: { type: string, enum: [coral, amber, sage, sky, indigo, violet] }
         widgetStyle: { type: string, enum: [nextTodo, dailyIntention] }
         defaultMood: { type: [string, 'null'], enum: [focus, relaxed, active, recovery, excited, null] }
         hideWidgetContent: { type: boolean }
@@ -1319,7 +1446,7 @@ components:
           items: { type: string }
         dailyReview: { $ref: '#/components/schemas/DailyReviewSettings' }
         newsBriefing: { $ref: '#/components/schemas/NewsBriefingSettings' }
-    Interest:
+    BriefingKeyword:
       type: object
       required: [id, name, query, enabled, createdAt]
       properties:
@@ -1434,6 +1561,53 @@ components:
           enum: [not_required, pending, approved, rejected, null]
         createdAt: { type: string, format: date-time }
         completedAt: { type: [string, 'null'], format: date-time }
+    UserCalendar:
+      type: object
+      required: [id, name, purpose, isVisible, sortOrder, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        purpose: { type: string, enum: [personal, work, custom] }
+        colorToken: { type: [string, 'null'] }
+        isVisible: { type: boolean }
+        sortOrder: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Location:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        address: { type: [string, 'null'], maxLength: 500 }
+        latitude: { type: [number, 'null'], minimum: -90, maximum: 90 }
+        longitude: { type: [number, 'null'], minimum: -180, maximum: 180 }
+        provider:
+          type: [string, 'null']
+          enum: [apple_maps, google_places, manual, null]
+        providerId: { type: [string, 'null'], maxLength: 500 }
+    SlackChannel:
+      type: object
+      required: [id, name, isPrivate, isAllowed]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        isPrivate: { type: boolean }
+        isAllowed: { type: boolean }
+    SlackMessageInput:
+      type: object
+      required: [channelId, text]
+      properties:
+        channelId: { type: string }
+        text: { type: string, minLength: 1, maxLength: 4000 }
+        scheduledAt:
+          type: [string, 'null']
+          format: date-time
+          description: When set, approval uses chat.scheduleMessage; Slack accepts at most 120 days ahead
+        sourceCalendarEntryIds:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items: { type: string, format: uuid }
     Todo:
       allOf:
         - $ref: '#/components/schemas/TodoInput'
@@ -1467,10 +1641,13 @@ components:
         appliedFilters: { type: object, additionalProperties: true }
     TodoInput:
       type: object
-      required: [scheduledDate, title, timeBucket]
+      required: [scheduledDate, calendarId, title, entryKind, isAllDay, timeBucket]
       properties:
         scheduledDate: { type: string, format: date }
+        calendarId: { type: string, format: uuid }
         title: { type: string, minLength: 1, maxLength: 120 }
+        entryKind: { type: string, enum: [event, task] }
+        isAllDay: { type: boolean, default: false }
         note: { type: [string, 'null'], maxLength: 2000 }
         emoji: { type: [string, 'null'] }
         color:
@@ -1478,6 +1655,11 @@ components:
           enum: [coral, amber, sage, sky, indigo, violet, null]
         startAt: { type: [string, 'null'], format: date-time }
         endAt: { type: [string, 'null'], format: date-time }
+        dueAt: { type: [string, 'null'], format: date-time, description: Task-only deadline; null for Event }
+        location:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/Location'
         timeBucket:
           type: string
           enum: [morning, afternoon, evening, anytime]
@@ -1487,6 +1669,16 @@ components:
           maximum: 1440
         sortOrder: { type: integer, default: 0 }
         reminderOffsetMinutes: { type: [integer, 'null'], minimum: 0, maximum: 10080 }
+      allOf:
+        - if:
+            properties: { entryKind: { const: event } }
+            required: [entryKind]
+          then:
+            required: [startAt, endAt]
+            properties: { dueAt: { type: 'null' } }
+      x-validation:
+        - endAt must be later than startAt when both are present
+        - dueAt is accepted only when entryKind is task
     TodoPatch:
       type: object
       required: [baseVersion]
@@ -1494,7 +1686,10 @@ components:
       properties:
         baseVersion: { type: integer, minimum: 1 }
         scheduledDate: { type: string, format: date }
+        calendarId: { type: string, format: uuid }
         title: { type: string, minLength: 1, maxLength: 120 }
+        entryKind: { type: string, enum: [event, task] }
+        isAllDay: { type: boolean }
         note: { type: [string, 'null'], maxLength: 2000 }
         emoji: { type: [string, 'null'] }
         color:
@@ -1502,12 +1697,19 @@ components:
           enum: [coral, amber, sage, sky, indigo, violet, null]
         startAt: { type: [string, 'null'], format: date-time }
         endAt: { type: [string, 'null'], format: date-time }
+        dueAt: { type: [string, 'null'], format: date-time, description: Task-only deadline; null for Event }
+        location:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/Location'
         timeBucket:
           type: string
           enum: [morning, afternoon, evening, anytime]
         estimatedMinutes: { type: [integer, 'null'], minimum: 1, maximum: 1440 }
         sortOrder: { type: integer }
         reminderOffsetMinutes: { type: [integer, 'null'], minimum: 0, maximum: 10080 }
+      x-validation:
+        - validate startAt, endAt, and dueAt against the resulting entryKind after patch merge
     RescheduleTodoInput:
       type: object
       required: [baseVersion, targetDate, timeBucket]
@@ -1519,18 +1721,26 @@ components:
         timeBucket: { type: string, enum: [morning, afternoon, evening, anytime] }
     ScheduleRuleInput:
       type: object
-      required: [title, rrule, timezone, startsOn]
+      required: [title, timezone, startsOn]
       properties:
         title: { type: string, maxLength: 120 }
+        preset:
+          type: string
+          enum: [daily, weekdays, weekly, biweekly, monthly, yearly]
         rrule:
           type: string
-          pattern: '^FREQ=(DAILY|WEEKLY)(;INTERVAL=[1-9][0-9]?)?(;BYDAY=(MO|TU|WE|TH|FR|SA|SU)(,(MO|TU|WE|TH|FR|SA|SU))*)?$'
+          description: RFC 5545 subset for custom recurrence; simple UI options send preset instead
         localStartTime: { type: [string, 'null'], format: time }
         durationMinutes: { type: [integer, 'null'], minimum: 1 }
         timezone: { type: string }
         startsOn: { type: string, format: date }
         endsOn: { type: [string, 'null'], format: date }
         reminderOffsetMinutes: { type: [integer, 'null'], minimum: 0, maximum: 10080 }
+      oneOf:
+        - required: [preset]
+        - required: [rrule]
+      x-validation:
+        - supported custom frequencies are DAILY, WEEKLY, MONTHLY, and YEARLY
     ScheduleRulePatch:
       type: object
       required: [baseVersion]
@@ -1540,7 +1750,7 @@ components:
         title: { type: string, maxLength: 120 }
         rrule:
           type: string
-          pattern: '^FREQ=(DAILY|WEEKLY)(;INTERVAL=[1-9][0-9]?)?(;BYDAY=(MO|TU|WE|TH|FR|SA|SU)(,(MO|TU|WE|TH|FR|SA|SU))*)?$'
+          description: RFC 5545 subset supporting DAILY, WEEKLY, MONTHLY, and YEARLY
         localStartTime: { type: [string, 'null'], format: time }
         durationMinutes: { type: [integer, 'null'], minimum: 1, maximum: 1440 }
         timezone: { type: string }
@@ -1805,22 +2015,30 @@ components:
         lastSyncedAt: { type: [string, 'null'], format: date-time }
     CalendarEntry:
       type: object
-      required: [id, entryKind, sourceProvider, sourceLabel, ownership, title, startAt, endAt, resourceUrl]
+      required: [id, entryKind, sourceProvider, sourceLabel, ownership, title, isAllDay, startAt, endAt, resourceUrl]
       properties:
         id: { type: string, format: uuid }
         entryKind:
           type: string
-          enum: [todo, external_event, proposal]
+          enum: [event, task, external_event, proposal]
         sourceProvider:
           type: string
           enum: [myday, google_calendar, apple_eventkit]
         sourceLabel: { type: string }
+        calendarId: { type: [string, 'null'], format: uuid }
+        calendarLabel: { type: [string, 'null'] }
         ownership:
           type: string
           enum: [owned, mirrored, proposed]
         title: { type: string }
+        isAllDay: { type: boolean }
         startAt: { type: string, format: date-time }
         endAt: { type: string, format: date-time }
+        dueAt: { type: [string, 'null'], format: date-time }
+        location:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/Location'
         resourceUrl: { type: string, format: uri }
     ChangeProposal:
       type: object
@@ -1844,9 +2062,9 @@ components:
             properties:
               operationType:
                 type: string
-                enum: [create, update, reschedule, complete, skip]
+                enum: [create, update, reschedule, complete, skip, send]
               targetType:
                 type: string
-                enum: [todo, google_calendar_event]
+                enum: [todo, google_calendar_event, slack_message]
               targetId: { type: [string, 'null'], format: uuid }
               proposedChanges: { type: object }

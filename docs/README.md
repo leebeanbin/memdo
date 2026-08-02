@@ -56,6 +56,9 @@
 | 24 | [환경·CI/CD·백업](./24-environments-ci-cd-backup.md) | 배포·migration·R2 복구 |
 | 25 | [API 계약 완성도](./25-api-contract-completeness.md) | 공통 오류·rate limit·버전 규칙 |
 | 26 | [전체 문서 정합성 감사](./26-document-consistency-audit.md) | 미결정·충돌·구현 전 보완 항목 |
+| 27 | [페이지별 UI/UX 계약](./27-page-ui-ux-contract.md) | 페이지 목적·위계·행동·상태·완료 조건 |
+| 28 | [디자인 시스템·밀도·Agent UI 계약](./28-design-system-density-and-agent-ui.md) | 사용자 취향·카드 예산·Agent·모달 전수 규칙 |
+| 29 | [UI 그리드·모달 감사](./29-ui-grid-and-modal-audit.md) | iPhone 15 실기 정렬·시트 높이·진입점 검사 결과 |
 | UI | [최종 UI/UX 기준선](../apps/ios/Memdo/DESIGN.md) | 확정 색상·화면·내비게이션·위젯·모션 |
 
 ## MVP 성공 조건
