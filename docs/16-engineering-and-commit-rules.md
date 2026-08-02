@@ -50,6 +50,17 @@ tests/
 - SwiftData 모델과 API DTO를 동일 타입으로 강제하지 않는다.
 - Widget은 App Group 스냅샷만 읽는다.
 
+### SwiftUI 화면·컴포넌트 경계
+
+- 최상위 페이지는 `*View.swift` 파일 하나를 갖고 상태 소유와 화면 조정만 담당한다.
+- 페이지의 독립적인 섹션은 작은 `View` 타입으로 분리하고 값·`Binding`·콜백만 명시적으로 전달한다.
+- 화면 파일이 300줄을 넘거나 서로 다른 페이지를 포함하면 파일 분리를 검토한다.
+- 로컬 `@State`를 그대로 복제하는 ViewModel은 만들지 않는다. 공유 데이터는 `@Environment`, 페이지 상태는 `@State`를 기본으로 한다.
+- 공통 컴포넌트는 두 화면 이상에서 같은 책임으로 반복될 때만 `MemdoComponents.swift`로 올린다.
+- 버튼의 행동은 상태 소유 화면에 두고, 반복되는 라벨·터치 영역·선택 표현만 공통 컴포넌트로 재사용한다.
+- 툴바, Form, List, Toggle, Picker와 기본 버튼 스타일은 SwiftUI 네이티브 구현을 우선한다.
+- Xcode 프로젝트 파일을 직접 추가하지 않는다. `project.yml`을 수정하고 `xcodegen generate`로 재생성한다.
+
 ### 동시성
 
 - 새 비동기 코드는 async/await를 사용한다.

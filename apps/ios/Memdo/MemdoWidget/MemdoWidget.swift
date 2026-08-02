@@ -2,6 +2,12 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
+private enum MemdoWidgetTheme {
+    static let background = Color(uiColor: .systemBackground)
+    static let accent = Color(uiColor: .label)
+    static let onAccent = Color(uiColor: .systemBackground)
+}
+
 struct MemdoWidgetEntry: TimelineEntry {
     let date: Date
 }
@@ -50,7 +56,7 @@ struct MemdoWidgetView: View {
                 WidgetWeek()
                     .frame(width: 130)
                 Divider()
-                VStack(alignment: .leading, spacing: 9) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("오늘 일정").font(.headline)
                     WidgetTask(icon: "person.fill", time: "10:00", title: "기획 문서")
                     WidgetTask(icon: "calendar", time: "14:30", title: "디자인 확인")
@@ -67,7 +73,7 @@ struct MemdoWidgetView: View {
                         Text("7월").font(.caption2)
                         Text("31")
                             .font(.title.bold())
-                            .foregroundStyle(Color(red: 0.357, green: 0.302, blue: 0.718))
+                            .foregroundStyle(MemdoWidgetTheme.accent)
                     }
                     Spacer()
                     Label("7개", systemImage: "calendar")
@@ -110,17 +116,17 @@ private struct WidgetWeek: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("7월").font(.headline)
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 ForEach(Array(zip(["월", "화", "수", "목", "금"], [27, 28, 29, 30, 31])), id: \.1) { day, date in
                     VStack(spacing: 4) {
                         Text(day).font(.caption2)
                         Text("\(date)").font(.caption.bold())
                     }
-                    .foregroundStyle(date == 31 ? Color.white : .primary)
+                    .foregroundStyle(date == 31 ? MemdoWidgetTheme.onAccent : .primary)
                     .frame(width: 22, height: 42)
                     .background(
                         date == 31
-                            ? Color(red: 0.357, green: 0.302, blue: 0.718)
+                            ? MemdoWidgetTheme.accent
                             : Color.clear,
                         in: Capsule()
                     )
@@ -140,7 +146,7 @@ struct MemdoTodayWidget: Widget {
         StaticConfiguration(kind: kind, provider: MemdoWidgetProvider()) { _ in
             MemdoWidgetView()
                 .containerBackground(
-                    Color(red: 0.973, green: 0.972, blue: 0.976),
+                    MemdoWidgetTheme.background,
                     for: .widget
                 )
                 .widgetURL(URL(string: "memdo://today"))
@@ -198,6 +204,7 @@ struct CalendarWidgetProvider: AppIntentTimelineProvider {
 }
 
 struct MemdoCalendarWidgetView: View {
+    @Environment(\.widgetFamily) private var family
     let entry: CalendarWidgetEntry
 
     var body: some View {
@@ -213,18 +220,18 @@ struct MemdoCalendarWidgetView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(entry.date.formatted(.dateTime.month(.wide).year()))
                 .font(.headline)
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 ForEach(weekDates, id: \.self) { date in
                     let isToday = Calendar.current.isDateInToday(date)
-                    VStack(spacing: 5) {
+                    VStack(spacing: 4) {
                         Text(date.formatted(.dateTime.weekday(.narrow)))
                             .font(.caption2)
                         Text(date.formatted(.dateTime.day()))
                             .font(.caption.bold())
                     }
-                    .foregroundStyle(isToday ? .white : .primary)
+                    .foregroundStyle(isToday ? MemdoWidgetTheme.onAccent : .primary)
                     .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(isToday ? Color(red: 0.357, green: 0.302, blue: 0.718) : .clear, in: Capsule())
+                    .background(isToday ? MemdoWidgetTheme.accent : .clear, in: Capsule())
                 }
             }
             Divider()
@@ -239,7 +246,7 @@ struct MemdoCalendarWidgetView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(entry.date.formatted(.dateTime.month(.wide).year()))
                 .font(.headline)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 5) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 4) {
                 ForEach(["월", "화", "수", "목", "금", "토", "일"], id: \.self) {
                     Text($0)
                         .font(.caption2.bold())
@@ -250,13 +257,21 @@ struct MemdoCalendarWidgetView: View {
                         let isToday = Calendar.current.isDateInToday(date)
                         Text(date.formatted(.dateTime.day()))
                             .font(.caption2.weight(isToday ? .bold : .regular))
-                            .foregroundStyle(isToday ? .white : .primary)
-                            .frame(maxWidth: .infinity, minHeight: 20)
-                            .background(isToday ? Color(red: 0.357, green: 0.302, blue: 0.718) : .clear, in: Circle())
+                            .foregroundStyle(isToday ? MemdoWidgetTheme.onAccent : .primary)
+                            .frame(maxWidth: .infinity, minHeight: family == .systemLarge ? 28 : 20)
+                            .background(isToday ? MemdoWidgetTheme.accent : .clear, in: Circle())
                     } else {
-                        Color.clear.frame(height: 20)
+                        Color.clear.frame(height: family == .systemLarge ? 28 : 20)
                     }
                 }
+            }
+            if family == .systemLarge {
+                Divider()
+                Text("오늘 일정")
+                    .font(.headline)
+                WidgetTask(icon: "person.fill", time: "10:00", title: "기획 문서 다듬기")
+                WidgetTask(icon: "calendar", time: "14:30", title: "디자인 시안 확인")
+                WidgetTask(icon: "figure.walk", time: "19:00", title: "30분 산책")
             }
         }
         .padding(4)
@@ -294,7 +309,7 @@ struct MemdoCalendarWidget: Widget {
         ) { entry in
             MemdoCalendarWidgetView(entry: entry)
                 .containerBackground(
-                    Color(red: 0.973, green: 0.972, blue: 0.976),
+                    MemdoWidgetTheme.background,
                     for: .widget
                 )
                 .widgetURL(URL(string: "memdo://calendar"))

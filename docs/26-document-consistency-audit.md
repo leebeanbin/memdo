@@ -1,8 +1,8 @@
 # 전체 문서 정합성 감사와 해결 기록
 
-상태: GAP-001~017 해결  
-점검 범위: `00`~`25`, OpenAPI 3.1  
-최종 반영일: 2026-07-30
+상태: GAP-001~018 해결
+점검 범위: `00`~`27`, iOS DESIGN, OpenAPI 3.1
+최종 반영일: 2026-08-01
 
 ## 1. 결과
 
@@ -34,10 +34,11 @@ P1 구현 전 보완: 9 → 0
 | 011 DailyPlan 편집 | 날짜별 GET·PUT과 version 계약 | 05 |
 | 012 P1 추적성 | PRD-101~108과 TEST-101~108 연결 | 01, 12 |
 | 013 schema inventory | 물리 테이블 PK·FK·unique·보존·RLS 표 | 04 |
-| 014 theme token | theme·accent 고정 enum과 fallback | 02, 05, 10 |
+| 014 외형 token | ADR-058로 theme·accent 서버 enum을 제거하고 iOS semantic Light/Dark + 고정 brand point로 대체 | 02, 05, 10, 27 |
 | 015 자동 브리핑 | localTime·days·timezone, 하루 1회 | 02, 05, 17 |
 | 016 반복 규칙 | DAILY·WEEKLY 부분집합, 예외·version 정책 | 03, 05, 10 |
 | 017 알림 예산 | 7일·48개 rolling window와 reconciliation | 07, 10 |
+| 018 일정 유형·Agent IA | 임시 milestone/AI 페이지를 event·task·dueAt과 3개 콘텐츠 탭+Agent 액션으로 교체하고 PRD·UX·ERD·OpenAPI·TEST를 동기화 | 01, 02, 04, 05, 10, 11, 12, 27, iOS DESIGN |
 
 ## 3. 출시 게이트
 

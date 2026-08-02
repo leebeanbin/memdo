@@ -20,6 +20,8 @@
 | PRD-012 알림 거절 허용 | 권한 안내 | 설정 상태 | 해당 없음 | 권한 상태 분기 | TEST-012 |
 | PRD-013 AI 승인 전 미저장 | AI 초안 | PlanDraft | draft + commit | ADR-006 | TEST-013 |
 | PRD-014 세분화 동의 | AI·개인정보 | ConsentRecord | /privacy/consents | PRIV 정책 | TEST-014 |
+| PRD-015 Event/Task/마감 | 일정 생성·캘린더 필터 | Todo.entryKind·startAt·endAt·dueAt | TodoInput·/calendar-entries | ADR-059 | TEST-015 |
+| PRD-016 상시 Agent | 탭바 Agent 액션·노트 도구 | PlanDraft·AgentRun | draft + commit | ADR-060 | TEST-016 |
 
 ## 2. 테스트 시나리오
 
@@ -79,13 +81,21 @@ planned·in_progress·partial만 포함되고 completed·skipped·rescheduled·c
 
 동의하지 않은 일정 제목·메모가 AI 요청과 로그에 포함되지 않는다.
 
+### TEST-015 Event/Task/마감일
+
+시간 일정은 시작·종료가 저장되고 완료 컨트롤이 없다. 할 일은 완료 상태와 선택적 마감일을 가지며, 유형 필터의 날짜 점·목록·개수가 같은 결과를 표시한다. Event에 `dueAt`을 보내면 검증 오류가 난다.
+
+### TEST-016 상시 Agent
+
+오늘·캘린더·설정에서 같은 Agent 시트를 열 수 있고 현재 화면 문맥의 제안이 표시된다. Agent가 만든 일정 변경은 승인 전 Todo/Event 수를 바꾸지 않는다.
+
 ## 3. P1 추적표
 
 | 요구사항 | UX | 데이터 | API | 정책·기술 | 테스트 |
 |---|---|---|---|---|---|
-| PRD-101 관심 뉴스 | Today·관심사 | Briefing·Interest | /interests, /briefings | 뉴스 동의·출처 | TEST-101 |
+| PRD-101 브리핑 뉴스 | Today·브리핑 키워드 | DailyBriefing·BriefingKeyword | /briefing-keywords, /briefings | 뉴스 동의·출처 | TEST-101 |
 | PRD-102 Apple Calendar | 캘린더 연결 | local CalendarEntry | 로컬 EventKit | calendar.read | TEST-102 |
-| PRD-103 테마 | 나의 스타일 | UserPreferences token | /preferences | ADR-045 | TEST-103 |
+| PRD-103 외형 | 설정·위젯 | iOS semantic color + widgetStyle | /preferences | ADR-058 | TEST-103 |
 | PRD-104 여러 기기 | 로그인·동기화 | version·tombstone | /sync | ADR-038·043 | TEST-104 |
 | PRD-105 주간 기록 | 주간 기록 | 집계 projection | /insights/weekly | 평가 금지 | TEST-105 |
 | PRD-106 Google 연결 | 외부 연결 | DataConnection·mirror | /connections, /calendar | OAuth 최소 scope | TEST-106 |
@@ -102,9 +112,9 @@ planned·in_progress·partial만 포함되고 completed·skipped·rescheduled·c
 
 busy-only 선택에서는 제목·메모가 앱 도메인이나 서버로 전달되지 않는다.
 
-### TEST-103 테마 fallback
+### TEST-103 시스템 외형
 
-모르는 theme·color token을 받으면 `warmPaper`·`coral`로 표시하고 충분한 대비를 유지한다.
+Light/Dark 전환 시 semantic background·label·separator가 갱신되고 브랜드 포인트와 선택 상태가 두 외형에서 충분한 대비를 유지한다. 모르는 `widgetStyle`은 `nextTodo`로 표시한다.
 
 ### TEST-104 계정 전환과 충돌
 

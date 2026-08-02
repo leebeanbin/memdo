@@ -13,6 +13,7 @@ erDiagram
     USERS ||--o{ CONSENT_RECORDS : grants
     USERS ||--o{ INTERESTS : selects
     USERS ||--o{ DAILY_PLANS : creates
+    USERS ||--o{ CALENDARS : organizes
     USERS ||--o{ TODOS : owns
     USERS ||--o{ SCHEDULE_RULES : owns
     USERS ||--o{ DAILY_REVIEWS : completes
@@ -20,6 +21,7 @@ erDiagram
     USERS ||--o{ AGENT_RUNS : triggers
 
     DAILY_PLANS ||--o{ TODOS : contains
+    CALENDARS ||--o{ TODOS : groups
     SCHEDULE_RULES ||--o{ TODOS : generates
     DAILY_REVIEWS ||--o{ REVIEW_RESPONSES : contains
     TODOS ||--o{ REVIEW_RESPONSES : reviewed_as
@@ -35,8 +37,6 @@ erDiagram
 
     USER_PREFERENCES {
         uuid user_id PK
-        text theme
-        text accent_color
         text widget_style
         text default_mood
         boolean daily_review_enabled
@@ -63,19 +63,41 @@ erDiagram
         timestamp updated_at
     }
 
+    CALENDARS {
+        uuid id PK
+        uuid user_id FK
+        text name
+        text purpose
+        text color_token
+        boolean is_visible
+        integer sort_order
+        timestamp created_at
+        timestamp updated_at
+    }
+
     TODOS {
         uuid id PK
         uuid user_id FK
         uuid daily_plan_id FK
         uuid schedule_rule_id FK
+        uuid calendar_id FK
         uuid rescheduled_from_id FK
         date scheduled_date
         text title
         text note
         text emoji
         text color
+        text entry_kind
+        boolean is_all_day
         timestamp start_at
         timestamp end_at
+        timestamp due_at
+        text location_name
+        text location_address
+        decimal latitude
+        decimal longitude
+        text location_provider
+        text location_provider_id
         text time_bucket
         integer estimated_minutes
         integer reminder_offset_minutes
@@ -134,6 +156,7 @@ erDiagram
 | userId | UUID | 예 | 소유 사용자 |
 | dailyPlanId | UUID? | 아니오 | 오늘 계획 |
 | scheduleRuleId | UUID? | 아니오 | 반복 규칙 |
+| calendarId | UUID | 예 | 사용자 캘린더. 가입 시 `개인`, `업무` 기본 생성 |
 | scheduledDate | Date | 예 | 사용자 현지 날짜 |
 | title | String | 예 | 최대 120자 |
 | note | String? | 아니오 | 최대 2,000자 |
@@ -141,6 +164,12 @@ erDiagram
 | color | Enum? | 아니오 | 디자인 토큰 ID |
 | startAt | DateTime? | 아니오 | 절대 시각 |
 | endAt | DateTime? | 아니오 | 절대 시각 |
+| dueAt | DateTime? | 아니오 | Task 전용 마감; Event는 null |
+| locationName | String? | 아니오 | 장소 표시명 |
+| locationAddress | String? | 아니오 | 검색 결과 주소 |
+| latitude/longitude | Decimal? | 아니오 | 지도 열기와 근접 검색용 좌표 |
+| locationProvider | Enum? | 아니오 | apple_maps/google_places/manual |
+| locationProviderId | String? | 아니오 | 공급자 장소 식별자; 외부 API 재조회에 사용 |
 | timeBucket | Enum | 예 | morning/afternoon/evening/anytime |
 | estimatedMinutes | Int? | 아니오 | 1~1440 |
 | reminderOffsetMinutes | Int? | 아니오 | 시작 전 로컬 알림 분; 0~10080 |
@@ -202,6 +231,8 @@ unique (schedule_rule_id, scheduled_date)
 unique (user_id, review_date)
 check (progress between 0 and 100)
 check (end_at is null or start_at is null or end_at > start_at)
+check (entry_kind in ('event', 'task'))
+check (entry_kind = 'task' or due_at is null)
 check (estimated_minutes is null or estimated_minutes between 1 and 1440)
 check (reminder_offset_minutes is null or reminder_offset_minutes between 0 and 10080)
 ```
@@ -228,7 +259,7 @@ Google Calendar 같은 외부 일정은 Todo로 복사하지 않고 `calendar_so
 | schedule_rules | id | users | 비활성 후 계정 기간 | 본인 |
 | daily_reviews | id | users; `(user_id,review_date)` | 계정 기간 | 본인 |
 | review_responses | id | daily_reviews, todos; `(daily_review_id,todo_id)` | 계정 기간 | 부모 소유 |
-| interests | id | users; `(user_id,normalized_query)` | 삭제 시 즉시 | 본인 |
+| briefing_keywords | id | users; `(user_id,normalized_query)` | 삭제 시 즉시 | 본인 |
 | news_articles | id | `canonical_url_hash` | 30일 미참조 후 | 서버 전용 |
 | daily_briefings | id | users; `(user_id,briefing_date)` | 30일 | 본인 |
 | briefing_items | id | daily_briefings, news_articles; `(briefing_id,position)` | 부모와 함께 | 부모 소유 |
