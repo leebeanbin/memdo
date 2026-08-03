@@ -1,0 +1,441 @@
+import Foundation
+import Supabase
+
+struct DayViewResponseDTO: Decodable {
+    let date: String
+    let todos: [TodoResponseDTO]
+    let emptyState: String
+    let needsReviewCount: Int
+}
+
+struct CalendarResponseDTO: Decodable {
+    let id: String
+    let name: String
+    let purpose: String
+    let colorToken: String?
+    let isVisible: Bool
+    let sortOrder: Int
+
+    var scheduleCalendar: ScheduleCalendar {
+        ScheduleCalendar(id: id, title: name, purpose: purpose, provider: .memdo)
+    }
+}
+
+struct TodoListResponseDTO: Decodable {
+    let items: [TodoResponseDTO]
+    let nextCursor: String?
+    let hasMore: Bool
+}
+
+private struct DemoBootstrapRequestDTO: Encodable {
+    let localDate: String
+    let timezoneOffsetMinutes: Int
+}
+
+private struct DemoBootstrapResponseDTO: Decodable {
+    let seededCount: Int
+}
+
+struct LocationDTO: Codable {
+    let name: String
+    let address: String?
+    let latitude: Double?
+    let longitude: Double?
+    let provider: String?
+    let providerId: String?
+}
+
+struct TodoResponseDTO: Decodable {
+    let id: String
+    let scheduledDate: String
+    let calendarId: String
+    let title: String
+    let entryKind: String
+    let isAllDay: Bool
+    let note: String?
+    let startAt: String?
+    let endAt: String?
+    let dueAt: String?
+    let location: LocationDTO?
+    let timeBucket: String
+    let reminderOffsetMinutes: Int?
+    let sortOrder: Int
+    let status: String
+    let version: Int
+}
+
+struct TodoCreateRequestDTO: Encodable {
+    let scheduledDate: String
+    let calendarId: String
+    let title: String
+    let entryKind: String
+    let isAllDay: Bool
+    let note: String?
+    let startAt: String?
+    let endAt: String?
+    let dueAt: String?
+    let location: LocationDTO?
+    let timeBucket: String
+    let sortOrder: Int
+    let reminderOffsetMinutes: Int?
+    let version: Int?
+    let status: String?
+
+    init(schedule: ScheduleDetail, includeVersion: Bool = false) throws {
+        guard UUID(uuidString: schedule.calendar.id) != nil else {
+            throw ScheduleAPIError.invalidCalendar
+        }
+        guard schedule.isTimeRangeValid else {
+            throw ScheduleAPIError.invalidSchedule
+        }
+
+        scheduledDate = APIDate.day(schedule.scheduledDate)
+        calendarId = schedule.calendar.id
+        title = schedule.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        entryKind = schedule.kind.rawValue
+        isAllDay = schedule.isAllDay
+        note = schedule.memo.isEmpty ? nil : schedule.memo
+        startAt = schedule.startAt.map(APIDate.instant)
+        endAt = schedule.endAt.map(APIDate.instant)
+        dueAt = schedule.kind == .task ? schedule.dueAt.map(APIDate.instant) : nil
+        location = schedule.locationValue.map {
+            LocationDTO(
+                name: $0.name,
+                address: $0.address,
+                latitude: $0.latitude,
+                longitude: $0.longitude,
+                provider: $0.provider?.rawValue,
+                providerId: $0.providerID
+            )
+        }
+        timeBucket = schedule.timeBucket.rawValue
+        sortOrder = schedule.sortOrder
+        reminderOffsetMinutes = schedule.reminderOffsetMinutes
+        version = includeVersion ? schedule.version : nil
+        status = includeVersion ? schedule.status.rawValue : nil
+    }
+}
+
+private struct TodoDeleteRequestDTO: Encodable {
+    let version: Int
+}
+
+private struct TodoDeleteResponseDTO: Decodable {
+    let id: String
+}
+
+enum ScheduleAPIError: Error, LocalizedError {
+    case missingConfiguration
+    case notAuthenticated
+    case invalidCalendar
+    case invalidSchedule
+    case invalidResponse
+    case incompatibleValue(String)
+    case server(status: Int, code: String, message: String, requestID: String?)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingConfiguration: "Supabase URL과 publishable key를 설정해 주세요."
+        case .notAuthenticated: "로그인이 필요합니다."
+        case .invalidCalendar: "서버 캘린더를 먼저 선택해 주세요."
+        case .invalidSchedule: "일정 기간을 확인해 주세요."
+        case .invalidResponse: "서버 응답을 읽을 수 없습니다."
+        case .incompatibleValue(let value): "지원하지 않는 서버 값입니다: \(value)"
+        case .server(_, _, let message, _): message
+        }
+    }
+}
+
+actor MemdoAPIClient {
+    private let functionsURL: URL
+    private let publishableKey: String
+    private let session: URLSession
+    private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder()
+
+    init(projectURL: URL, publishableKey: String, session: URLSession = .shared) {
+        functionsURL = projectURL.appending(path: "functions/v1")
+        self.publishableKey = publishableKey
+        self.session = session
+    }
+
+    func calendars(accessToken: String) async throws -> [CalendarResponseDTO] {
+        try await send(path: "calendars", accessToken: accessToken)
+    }
+
+    func day(on date: Date, accessToken: String) async throws -> DayViewResponseDTO {
+        try await send(path: "days/\(APIDate.day(date))", accessToken: accessToken)
+    }
+
+    func todos(from: Date, to: Date, accessToken: String) async throws -> [TodoResponseDTO] {
+        var items: [TodoResponseDTO] = []
+        var cursor: String?
+        repeat {
+            let page: TodoListResponseDTO = try await send(
+                path: "todos",
+                queryItems: [
+                    URLQueryItem(name: "from", value: APIDate.day(from)),
+                    URLQueryItem(name: "to", value: APIDate.day(to)),
+                    URLQueryItem(name: "limit", value: "50"),
+                    URLQueryItem(name: "cursor", value: cursor)
+                ],
+                accessToken: accessToken
+            )
+            items.append(contentsOf: page.items)
+            cursor = page.hasMore ? page.nextCursor : nil
+        } while cursor != nil
+        return items
+    }
+
+    func bootstrapDemo(on date: Date, accessToken: String) async throws {
+        let input = DemoBootstrapRequestDTO(
+            localDate: APIDate.day(date),
+            timezoneOffsetMinutes: TimeZone.current.secondsFromGMT(for: date) / 60
+        )
+        let _: DemoBootstrapResponseDTO = try await send(
+            path: "demo-bootstrap",
+            method: "POST",
+            body: encoder.encode(input),
+            accessToken: accessToken
+        )
+    }
+
+    func create(
+        _ input: TodoCreateRequestDTO,
+        idempotencyKey: UUID,
+        accessToken: String
+    ) async throws -> TodoResponseDTO {
+        try await send(
+            path: "todos",
+            method: "POST",
+            body: encoder.encode(input),
+            idempotencyKey: idempotencyKey,
+            accessToken: accessToken
+        )
+    }
+
+    func update(_ schedule: ScheduleDetail, accessToken: String) async throws -> TodoResponseDTO {
+        try await send(
+            path: "todos/\(schedule.id.uuidString)",
+            method: "PATCH",
+            body: encoder.encode(TodoCreateRequestDTO(schedule: schedule, includeVersion: true)),
+            accessToken: accessToken
+        )
+    }
+
+    func delete(id: UUID, version: Int, accessToken: String) async throws {
+        let _: TodoDeleteResponseDTO = try await send(
+            path: "todos/\(id.uuidString)",
+            method: "DELETE",
+            body: encoder.encode(TodoDeleteRequestDTO(version: version)),
+            accessToken: accessToken
+        )
+    }
+
+    private func send<Response: Decodable>(
+        path: String,
+        method: String = "GET",
+        body: Data? = nil,
+        queryItems: [URLQueryItem] = [],
+        idempotencyKey: UUID? = nil,
+        accessToken: String
+    ) async throws -> Response {
+        var components = URLComponents(url: functionsURL.appending(path: path), resolvingAgainstBaseURL: false)
+        components?.queryItems = queryItems.filter { $0.value != nil }
+        guard let url = components?.url else { throw ScheduleAPIError.invalidResponse }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.httpBody = body
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Request-ID")
+        if let idempotencyKey {
+            request.setValue(idempotencyKey.uuidString, forHTTPHeaderField: "Idempotency-Key")
+        }
+
+        let (data, response) = try await session.data(for: request)
+        guard let response = response as? HTTPURLResponse else {
+            throw ScheduleAPIError.invalidResponse
+        }
+        guard (200..<300).contains(response.statusCode) else {
+            let error = try? decoder.decode(ErrorEnvelope.self, from: data).error
+            throw ScheduleAPIError.server(
+                status: response.statusCode,
+                code: error?.code ?? "UNKNOWN",
+                message: error?.message ?? "요청을 완료하지 못했습니다.",
+                requestID: error?.requestId ?? response.value(forHTTPHeaderField: "X-Request-ID")
+            )
+        }
+        return try decoder.decode(Response.self, from: data)
+    }
+}
+
+struct ScheduleSnapshot {
+    let schedules: [ScheduleDetail]
+    let calendars: [ScheduleCalendar]
+}
+
+actor ScheduleRepository {
+    private let auth: SupabaseClient
+    private let api: MemdoAPIClient
+
+    init(configuration: MemdoConfiguration, auth: SupabaseClient) {
+        self.auth = auth
+        api = MemdoAPIClient(
+            projectURL: configuration.projectURL,
+            publishableKey: configuration.publishableKey
+        )
+    }
+
+    func load(around date: Date) async throws -> ScheduleSnapshot {
+        let accessToken = try await accessToken()
+        #if DEBUG
+        do {
+            try await api.bootstrapDemo(on: date, accessToken: accessToken)
+        } catch ScheduleAPIError.server(let status, _, _, _) where status == 404 {
+            // The backend owns whether development seed data is enabled.
+        }
+        #endif
+        let calendarDTOs = try await api.calendars(accessToken: accessToken)
+        let calendars = calendarDTOs.map(\.scheduleCalendar)
+        let calendarsByID = Dictionary(uniqueKeysWithValues: calendars.map { ($0.id, $0) })
+        let calendar = Calendar.current
+        let from = calendar.date(byAdding: .day, value: -30, to: date) ?? date
+        let to = calendar.date(byAdding: .day, value: 60, to: date) ?? date
+        let todos = try await api.todos(from: from, to: to, accessToken: accessToken)
+        let schedules = try todos.map { dto in
+            guard let calendar = calendarsByID[dto.calendarId] else {
+                throw ScheduleAPIError.incompatibleValue(dto.calendarId)
+            }
+            return try ScheduleDetail(dto: dto, calendar: calendar)
+        }
+        return ScheduleSnapshot(schedules: schedules, calendars: calendars)
+    }
+
+    func create(_ schedule: ScheduleDetail) async throws -> ScheduleDetail {
+        let accessToken = try await accessToken()
+        let dto = try await api.create(
+            TodoCreateRequestDTO(schedule: schedule),
+            idempotencyKey: schedule.id,
+            accessToken: accessToken
+        )
+        return try ScheduleDetail(dto: dto, calendar: schedule.calendar)
+    }
+
+    func update(_ schedule: ScheduleDetail) async throws -> ScheduleDetail {
+        let accessToken = try await accessToken()
+        let dto = try await api.update(schedule, accessToken: accessToken)
+        return try ScheduleDetail(dto: dto, calendar: schedule.calendar)
+    }
+
+    func delete(_ schedule: ScheduleDetail) async throws {
+        let accessToken = try await accessToken()
+        try await api.delete(id: schedule.id, version: schedule.version, accessToken: accessToken)
+    }
+
+    private func accessToken() async throws -> String {
+        guard auth.auth.currentSession != nil else { throw ScheduleAPIError.notAuthenticated }
+        return try await auth.auth.session.accessToken
+    }
+}
+
+struct MemdoConfiguration {
+    let projectURL: URL
+    let publishableKey: String
+
+    static func current(
+        bundle: Bundle = .main,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) throws -> Self {
+        let rawURL = environment["SUPABASE_URL"] ?? bundle.object(forInfoDictionaryKey: "SUPABASE_URL") as? String
+        let key = environment["SUPABASE_PUBLISHABLE_KEY"]
+            ?? bundle.object(forInfoDictionaryKey: "SUPABASE_PUBLISHABLE_KEY") as? String
+        guard let rawURL, let projectURL = URL(string: rawURL),
+              let key, !key.isEmpty, !key.contains("$(") else {
+            throw ScheduleAPIError.missingConfiguration
+        }
+        return Self(projectURL: projectURL, publishableKey: key)
+    }
+}
+
+extension ScheduleDetail {
+    init(dto: TodoResponseDTO, calendar: ScheduleCalendar) throws {
+        guard let id = UUID(uuidString: dto.id),
+              let scheduledDate = APIDate.parseDay(dto.scheduledDate),
+              let kind = ScheduleKind(rawValue: dto.entryKind),
+              let status = ScheduleStatus(rawValue: dto.status),
+              let timeBucket = ScheduleTimeBucket(rawValue: dto.timeBucket) else {
+            throw ScheduleAPIError.incompatibleValue("todo")
+        }
+
+        self.id = id
+        self.scheduledDate = scheduledDate
+        startAt = try dto.startAt.map(APIDate.parseInstant)
+        endAt = try dto.endAt.map(APIDate.parseInstant)
+        dueAt = try dto.dueAt.map(APIDate.parseInstant)
+        title = dto.title
+        self.status = status
+        locationValue = try dto.location.map { location in
+            let provider = try location.provider.map {
+                guard let value = ScheduleLocation.Provider(rawValue: $0) else {
+                    throw ScheduleAPIError.incompatibleValue($0)
+                }
+                return value
+            }
+            return ScheduleLocation(
+                name: location.name,
+                address: location.address,
+                latitude: location.latitude,
+                longitude: location.longitude,
+                provider: provider,
+                providerID: location.providerId
+            )
+        }
+        memo = dto.note ?? ""
+        reminderOffsetMinutes = dto.reminderOffsetMinutes
+        repeatRule = .never
+        self.kind = kind
+        self.calendar = calendar
+        isAllDay = dto.isAllDay
+        self.timeBucket = timeBucket
+        sortOrder = dto.sortOrder
+        version = dto.version
+    }
+}
+
+private struct ErrorEnvelope: Decodable {
+    struct APIError: Decodable {
+        let code: String
+        let message: String
+        let requestId: String?
+    }
+
+    let error: APIError
+}
+
+private enum APIDate {
+    static func day(_ date: Date) -> String {
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
+    }
+
+    static func instant(_ date: Date) -> String {
+        ISO8601DateFormatter().string(from: date)
+    }
+
+    static func parseDay(_ value: String) -> Date? {
+        let numbers = value.split(separator: "-").compactMap { Int($0) }
+        guard numbers.count == 3 else { return nil }
+        return Calendar.current.date(from: DateComponents(year: numbers[0], month: numbers[1], day: numbers[2]))
+    }
+
+    static func parseInstant(_ value: String) throws -> Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions.insert(.withFractionalSeconds)
+        if let date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value) {
+            return date
+        }
+        throw ScheduleAPIError.incompatibleValue(value)
+    }
+}

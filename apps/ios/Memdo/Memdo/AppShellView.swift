@@ -26,7 +26,7 @@ enum AppTab: String, CaseIterable {
 }
 
 struct AppShellView: View {
-    @State private var scheduleStore = ScheduleStore()
+    let scheduleStore: ScheduleStore
     @State private var selectedTab = AppTab.today
     @State private var lastContentTab = AppTab.today
     @State private var showCalendarSearch = false
@@ -44,6 +44,34 @@ struct AppShellView: View {
                 )
             )
             .environment(scheduleStore)
+            .task { await scheduleStore.load() }
+            .overlay { backendStateOverlay }
+    }
+
+    @ViewBuilder
+    private var backendStateOverlay: some View {
+        switch scheduleStore.state {
+        case .idle, .loaded:
+            EmptyView()
+        case .loading:
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
+                ProgressView("일정을 불러오는 중")
+            }
+        case .failed(let message):
+            ZStack {
+                MemdoPageBackground().ignoresSafeArea()
+                ContentUnavailableView {
+                    Label("백엔드에 연결할 수 없어요", systemImage: "exclamationmark.icloud")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button("다시 시도") { Task { await scheduleStore.load() } }
+                        .buttonStyle(.borderedProminent)
+                }
+                .padding(MemdoMetrics.pagePadding)
+            }
+        }
     }
 
     private var appTabs: some View {
@@ -82,6 +110,7 @@ struct AppShellView: View {
     }
 
     private func openDeepLink(_ url: URL) {
+        guard url.host != "auth" else { return }
         switch url.host {
         case "calendar": select(.calendar)
         case "search":

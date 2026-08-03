@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(MemdoSession.self) private var session
     @State private var dailySummary = true
     @State private var notifications = true
     @State private var summaryTime = Calendar.current.date(from: DateComponents(hour: 21, minute: 30)) ?? .now
@@ -75,6 +76,29 @@ struct SettingsView: View {
                     )
                 }
                 .buttonStyle(.plain)
+            }
+
+            SettingsGroup(title: "계정") {
+                Button {
+                    Task { await session.signOut() }
+                } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(session.accountLabel)
+                                .font(.subheadline.weight(.semibold))
+                            Text("이 기기의 세션을 종료합니다")
+                                .font(.caption)
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                        }
+                        Spacer()
+                        Text("로그아웃")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                    }
+                    .memdoSettingsRow()
+                }
+                .buttonStyle(.plain)
+                .disabled(session.isBusy)
             }
 
         }

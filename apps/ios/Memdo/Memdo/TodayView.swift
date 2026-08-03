@@ -11,17 +11,23 @@ private struct TodayScrollOffsetKey: PreferenceKey {
 struct TodayView: View {
     @Environment(ScheduleStore.self) private var scheduleStore
     @State private var presentedSheet: TodaySheetDestination?
-    @State private var selectedDate = 31
+    @State private var selectedDate = Calendar.current.startOfDay(for: .now)
     @State private var showAllSchedules = false
     @State private var autoExpandArmed = true
 
     private var schedules: [ScheduleDetail] {
-        scheduleStore.items(for: date(for: selectedDate))
+        scheduleStore.items(for: selectedDate)
     }
 
-    private var scheduleCounts: [Int: Int] {
-        Dictionary(uniqueKeysWithValues: (27...33).map { day in
-            (day, scheduleStore.items(for: date(for: day)).filter { !$0.isDone }.count)
+    private var weekDates: [Date] {
+        let calendar = Calendar.current
+        let start = calendar.dateInterval(of: .weekOfYear, for: selectedDate)?.start ?? selectedDate
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
+    }
+
+    private var scheduleCounts: [Date: Int] {
+        Dictionary(uniqueKeysWithValues: weekDates.map { date in
+            (date, scheduleStore.items(for: date).filter { !$0.isDone }.count)
         })
     }
 
@@ -57,14 +63,15 @@ struct TodayView: View {
                         .frame(height: 0)
 
                         TodayHeader(
-                            eyebrow: selectedDate == 31 ? "좋은 오후예요" : selectedDate < 31 ? "지난 하루" : "다가오는 하루",
-                            title: selectedDate == 31 ? "오늘" : selectedDate > 31 ? "8월 \(displayDate(selectedDate))일" : "7월 \(selectedDate)일",
+                            eyebrow: isToday ? "좋은 하루예요" : selectedDate < .now ? "지난 하루" : "다가오는 하루",
+                            title: isToday ? "오늘" : selectedDate.formatted(.dateTime.month().day()),
                             subtitle: dateSubtitle,
                             completedCount: completedCount,
                             totalCount: taskCount,
                             onOpenSummary: openSummary
                         )
                         TodayWeekIndex(
+                            dates: weekDates,
                             selectedDate: selectedDate,
                             scheduleCounts: scheduleCounts,
                             onSelect: selectDate,
@@ -73,7 +80,7 @@ struct TodayView: View {
                             .highPriorityGesture(dateSwipeGesture)
 
                         if schedules.isEmpty {
-                            TodayIntentionPrompt(isToday: selectedDate == 31, onAdd: openAddSchedule)
+                            TodayIntentionPrompt(isToday: isToday, onAdd: openAddSchedule)
                         } else {
                             TodayScheduleSection(
                                 schedules: schedules,
@@ -85,7 +92,7 @@ struct TodayView: View {
                             )
                         }
 
-                        TodayBriefingSection(onOpen: openBriefing)
+                        TodayBriefingSection()
                     }
                     .padding(.horizontal, MemdoMetrics.pagePadding)
                     .padding(.bottom, MemdoMetrics.tabBarClearance)
@@ -111,8 +118,6 @@ struct TodayView: View {
                     DailySummaryView(date: date)
                 case .detail(let schedule):
                     ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
-                case .briefing(let item):
-                    BriefingDetailSheet(item: item)
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -125,24 +130,21 @@ struct TodayView: View {
     }
 
     private var dateSubtitle: String {
-        let weekdays = [27: "월요일", 28: "화요일", 29: "수요일", 30: "목요일", 31: "금요일", 32: "토요일", 33: "일요일"]
-        let month = selectedDate > 31 ? 8 : 7
-        return "\(month)월 \(displayDate(selectedDate))일 \(weekdays[selectedDate] ?? "")"
+        selectedDate.formatted(.dateTime.year().month().day().weekday(.wide))
     }
 
-    private func displayDate(_ date: Int) -> Int {
-        date > 31 ? date - 31 : date
+    private var isToday: Bool {
+        Calendar.current.isDateInToday(selectedDate)
     }
 
-    private func selectDate(_ date: Int) {
-        selectedDate = date
+    private func selectDate(_ date: Date) {
+        selectedDate = Calendar.current.startOfDay(for: date)
         showAllSchedules = false
         autoExpandArmed = true
     }
 
     private func moveDate(by offset: Int) {
-        let nextDate = min(max(selectedDate + offset, 27), 33)
-        guard nextDate != selectedDate else { return }
+        guard let nextDate = Calendar.current.date(byAdding: .day, value: offset, to: selectedDate) else { return }
         withAnimation(.snappy(duration: 0.25)) {
             selectDate(nextDate)
         }
@@ -152,13 +154,13 @@ struct TodayView: View {
         openAddSchedule(selectedDate)
     }
 
-    private func openAddSchedule(_ day: Int) {
-        selectDate(day)
-        presentedSheet = .addTask(date(for: day))
+    private func openAddSchedule(_ date: Date) {
+        selectDate(date)
+        presentedSheet = .addTask(date)
     }
 
     private func openSummary() {
-        presentedSheet = .dailySummary(date(for: selectedDate))
+        presentedSheet = .dailySummary(selectedDate)
     }
 
     private func openSchedule(_ schedule: ScheduleDetail) {
@@ -178,27 +180,18 @@ struct TodayView: View {
         }
     }
 
-    private func openBriefing(_ item: BriefingItem) {
-        presentedSheet = .briefing(item)
-    }
-
-    private func date(for day: Int) -> Date {
-        Calendar.current.date(from: DateComponents(year: 2026, month: 7, day: day)) ?? .now
-    }
 }
 
 enum TodaySheetDestination: Identifiable {
     case addTask(Date)
     case dailySummary(Date)
     case detail(ScheduleDetail)
-    case briefing(BriefingItem)
 
     var id: String {
         switch self {
         case .addTask(let date): "addTask-\(date.timeIntervalSinceReferenceDate)"
         case .dailySummary(let date): "dailySummary-\(date.timeIntervalSinceReferenceDate)"
         case .detail(let schedule): "detail-\(schedule.id)"
-        case .briefing(let item): "briefing-\(item.id)"
         }
     }
 }
@@ -206,6 +199,6 @@ enum TodaySheetDestination: Identifiable {
 struct TodayView_Previews: PreviewProvider {
     static var previews: some View {
         TodayView()
-            .environment(ScheduleStore())
+            .environment(ScheduleStore.preview())
     }
 }
