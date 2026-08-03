@@ -19,6 +19,9 @@ x-api-conventions:
   maximumPageSize: 50
   maximumSyncPageSize: 200
   maximumJsonBodyBytes: 262144
+  conditionalGetRoutes: ['/days/{date}', /preferences, /briefings/today]
+  compression: platform-managed-gzip-or-brotli
+  responseMetrics: [routeTemplate, statusClass, durationMs, responseBytes, returnedRows]
   standardErrorResponses: [400, 401, 403, 404, 409, 422, 429, 500, 503]
   rateLimits:
     generalPerUserPerMinute: 120
@@ -26,7 +29,7 @@ x-api-conventions:
     aiPerUserPerHour: 10
     mcpPerClientUserPerMinute: 60
 servers:
-  - url: https://api.myday.example/v1
+  - url: https://api.memdo.example/v1
 security:
   - bearerAuth: []
 paths:
@@ -133,10 +136,6 @@ paths:
     get:
       summary: List todos
       parameters:
-        - name: q
-          in: query
-          description: Optional title or note search text
-          schema: { type: string, maxLength: 100 }
         - name: from
           in: query
           schema: { type: string, format: date }
@@ -192,11 +191,11 @@ paths:
               schema: { $ref: '#/components/schemas/Todo' }
         '404': { $ref: '#/components/responses/NotFound' }
     patch:
-      summary: Update a todo
+      summary: Replace editable todo fields using optimistic locking
       parameters:
         - $ref: '#/components/parameters/TodoId'
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
+        required: true
         content:
           application/json:
             schema:
@@ -211,11 +210,71 @@ paths:
       summary: Soft-delete a todo
       parameters:
         - $ref: '#/components/parameters/TodoId'
-        - $ref: '#/components/parameters/BaseVersion'
-        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer, minimum: 1 }
       responses:
-        '204': { description: Deleted }
+        '200':
+          description: Soft-deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: { type: string, format: uuid }
         '409': { $ref: '#/components/responses/Conflict' }
+  /search/todos:
+    get:
+      summary: Search todos with the same pipeline used by the Agent
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: status
+          in: query
+          schema:
+            type: array
+            items: { type: string, enum: [planned, in_progress, partial, completed, skipped, rescheduled, cancelled] }
+        - name: entryKind
+          in: query
+          schema:
+            type: array
+            items: { type: string, enum: [event, task] }
+        - name: calendarId
+          in: query
+          schema:
+            type: array
+            items: { type: string, format: uuid }
+        - name: source
+          in: query
+          schema:
+            type: array
+            items: { type: string, enum: [manual, ai, recurring, imported] }
+        - name: cursor
+          in: query
+          schema: { type: [string, 'null'] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: Minimal ranked search results
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TodoSearchPage' }
   /todos/{todoId}/status:
     post:
       summary: Apply an explicit user status
@@ -660,7 +719,7 @@ paths:
             type: array
             items:
               type: string
-              enum: [myday, google_calendar, apple_eventkit]
+              enum: [memdo, google_calendar, apple_eventkit]
         - name: entryKind
           in: query
           schema:
@@ -1433,12 +1492,14 @@ components:
         checkedAt: { type: string, format: date-time }
     UserPreferences:
       type: object
-      required: [timezone, widgetStyle, hideWidgetContent, dailyReview, newsBriefing]
+      required: [timezone, widgetStyle, hideWidgetContent, notificationsEnabled, dailyReview, newsBriefing]
       properties:
         timezone: { type: string, examples: [Asia/Seoul] }
         widgetStyle: { type: string, enum: [nextTodo, dailyIntention] }
         defaultMood: { type: [string, 'null'], enum: [focus, relaxed, active, recovery, excited, null] }
         hideWidgetContent: { type: boolean }
+        notificationsEnabled: { type: boolean }
+        planningPromptTime: { type: [string, 'null'], format: time }
         quietHoursStart: { type: [string, 'null'], format: time }
         quietHoursEnd: { type: [string, 'null'], format: time }
         calendarFilter:
@@ -1446,6 +1507,7 @@ components:
           items: { type: string }
         dailyReview: { $ref: '#/components/schemas/DailyReviewSettings' }
         newsBriefing: { $ref: '#/components/schemas/NewsBriefingSettings' }
+        updatedAt: { type: string, format: date-time, readOnly: true }
     BriefingKeyword:
       type: object
       required: [id, name, query, enabled, createdAt]
@@ -1639,6 +1701,33 @@ components:
         nextCursor: { type: [string, 'null'] }
         hasMore: { type: boolean }
         appliedFilters: { type: object, additionalProperties: true }
+    TodoSearchResult:
+      type: object
+      required: [id, title, scheduledDate, entryKind, status, source, matchedFields]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        scheduledDate: { type: string, format: date }
+        entryKind: { type: string, enum: [event, task] }
+        startAt: { type: [string, 'null'], format: date-time }
+        dueAt: { type: [string, 'null'], format: date-time }
+        status: { type: string, enum: [planned, in_progress, partial, completed, skipped, rescheduled, cancelled] }
+        source: { type: string, enum: [manual, ai, recurring, imported] }
+        notePreview: { type: [string, 'null'], maxLength: 160 }
+        matchedFields:
+          type: array
+          uniqueItems: true
+          items: { type: string, enum: [title, note, location] }
+    TodoSearchPage:
+      type: object
+      required: [items, hasMore, appliedFilters]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TodoSearchResult' }
+        nextCursor: { type: [string, 'null'] }
+        hasMore: { type: boolean }
+        appliedFilters: { type: object, additionalProperties: true }
     TodoInput:
       type: object
       required: [scheduledDate, calendarId, title, entryKind, isAllDay, timeBucket]
@@ -1681,10 +1770,10 @@ components:
         - dueAt is accepted only when entryKind is task
     TodoPatch:
       type: object
-      required: [baseVersion]
-      minProperties: 2
+      required: [version, status, scheduledDate, calendarId, title, entryKind, isAllDay, timeBucket, sortOrder]
       properties:
-        baseVersion: { type: integer, minimum: 1 }
+        version: { type: integer, minimum: 1 }
+        status: { type: string, enum: [planned, in_progress, partial, completed, skipped, rescheduled, cancelled] }
         scheduledDate: { type: string, format: date }
         calendarId: { type: string, format: uuid }
         title: { type: string, minLength: 1, maxLength: 120 }
@@ -1709,15 +1798,17 @@ components:
         sortOrder: { type: integer }
         reminderOffsetMinutes: { type: [integer, 'null'], minimum: 0, maximum: 10080 }
       x-validation:
-        - validate startAt, endAt, and dueAt against the resulting entryKind after patch merge
+        - endAt must be later than startAt when both are present
+        - dueAt is accepted only when entryKind is task
     RescheduleTodoInput:
       type: object
-      required: [baseVersion, targetDate, timeBucket]
+      required: [baseVersion, targetDate, startAt, endAt, dueAt, timeBucket]
       properties:
         baseVersion: { type: integer, minimum: 1 }
         targetDate: { type: string, format: date }
         startAt: { type: [string, 'null'], format: date-time }
         endAt: { type: [string, 'null'], format: date-time }
+        dueAt: { type: [string, 'null'], format: date-time }
         timeBucket: { type: string, enum: [morning, afternoon, evening, anytime] }
     ScheduleRuleInput:
       type: object
@@ -2023,7 +2114,7 @@ components:
           enum: [event, task, external_event, proposal]
         sourceProvider:
           type: string
-          enum: [myday, google_calendar, apple_eventkit]
+          enum: [memdo, google_calendar, apple_eventkit]
         sourceLabel: { type: string }
         calendarId: { type: [string, 'null'], format: uuid }
         calendarLabel: { type: [string, 'null'] }
@@ -2047,7 +2138,7 @@ components:
         id: { type: string, format: uuid }
         origin:
           type: string
-          enum: [ios, myday_agent, mcp]
+          enum: [ios, memdo_agent, mcp]
         status:
           type: string
           enum: [pending_approval, executing, applied, rejected, expired, failed, conflict]

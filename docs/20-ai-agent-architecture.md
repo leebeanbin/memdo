@@ -7,9 +7,9 @@
 
 ## 1. 선택
 
-MVP는 `OpenAI Responses API + 서버 함수 도구 + 단일 Memdo Agent`를 사용한다.
+MVP는 `LLM Gateway + 서버 함수 도구 + 단일 Memdo Agent`를 사용한다. production 기본 adapter는 OpenAI Responses API이고 개발·명시적 self-host adapter는 llama.cpp다.
 
-초기에는 Agents SDK, 다중 Agent, handoff, MCP를 사용하지 않는다.
+초기에는 Agents SDK, 다중 Agent, handoff를 사용하지 않는다. iOS 내부 Agent는 MCP를 거치지 않으며 외부 client용 MCP는 같은 Memdo API를 호출한다.
 
 이유:
 
@@ -27,6 +27,9 @@ Agents SDK는 도구 호출 루프, 세션, guardrail, handoff, tracing 관리�
 flowchart TD
     U["사용자 메시지"] --> C["Consent Gate"]
     C --> A["Memdo Agent"]
+    A --> LLM["LLM Gateway"]
+    LLM --> OPENAI["OpenAI Responses"]
+    LLM --> LOCAL["llama.cpp local/self-host"]
     A --> RT["Read Tools"]
     RT --> SEARCH["search_todos"]
     RT --> DAY["get_day_context"]
@@ -47,7 +50,7 @@ Agent는 조회하고 제안한다. 실제 쓰기는 Agent 도구가 아니라 �
 제품 코드 이름:
 
 ```text
-MyDayAgent
+MemdoAgent
 ```
 
 사용자 표시 이름:
@@ -342,6 +345,24 @@ Agents SDK tracing을 도입할 경우 민감 데이터 포함을 비활성화�
 ```
 
 ## 15. 확장 조건
+
+### Model adapter
+
+두 adapter가 공유하는 것은 구조화 생성과 embedding 요청의 Memdo 입력·출력 계약뿐이다. OpenAI Responses API와 llama.cpp의 HTTP API가 완전히 같다고 가정하지 않는다.
+
+```text
+generateStructured(request, schema)
+embed(texts, modelVersion)
+```
+
+- provider error는 정규 오류로 변환한다.
+- model ID, prompt version, schema version을 AgentRun에 기록한다.
+- local laptop endpoint는 production Edge에서 접근할 수 없으므로 production provider로 자동 fallback하지 않는다.
+- Redis는 rate limit과 짧은 중복 실행 lock에만 사용하고 대화·Todo 원본을 저장하지 않는다.
+
+### 의미 검색
+
+직접 검색은 pg_trgm이 기본이다. 평가셋에서 의미 검색이 필요한 질의를 별도로 정의하고 pgvector가 recall을 개선할 때만 hybrid retrieval을 켠다. 동의하지 않은 note는 embedding하지 않으며 vector query에도 user filter를 먼저 적용한다.
 
 ### Agents SDK
 

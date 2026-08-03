@@ -32,7 +32,7 @@
 
 ## Phase 2 — 계정과 동기화
 
-- Sign in with Apple
+- Google·GitHub 로그인과 iOS 심사용 Sign in with Apple
 - PostgreSQL
 - RLS
 - 커서 동기화
@@ -76,7 +76,7 @@
 ## 만들지 않을 것
 
 - 다중 Agent
-- 벡터 DB
+- 외부 벡터 DB(pgvector 이외)
 - 자유 배치 UI 편집기
 - 조직 협업
 - 프로젝트 관리

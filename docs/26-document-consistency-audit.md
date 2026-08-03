@@ -57,8 +57,8 @@ P1 구현 전 보완: 9 → 0
 
 - Hono
 - Agents SDK와 다중 Agent
-- 자체 MCP
-- Redis·Kafka·검색 서버
+- iOS 내부 호출용 MCP
+- 일반 Todo 조회 Redis cache·Kafka·외부 검색 서버
 - 파티셔닝과 읽기 복제본
 - OpenAPI client code generation과 operationId
 

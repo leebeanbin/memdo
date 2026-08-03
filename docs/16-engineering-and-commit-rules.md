@@ -89,6 +89,22 @@ schedule-rules
 - 응답 DTO에서 DB 내부 필드를 직접 노출하지 않는다.
 - 공급자 SDK 오류를 정규 오류 코드로 변환한다.
 
+### DTO와 application 경계
+
+- Request DTO는 HTTP 입력 모양이며 zod 검증 직후 domain command 입력으로 변환한다.
+- Response DTO는 공개 필드만 포함하고 DB row, embedding, provider payload를 그대로 반환하지 않는다.
+- DB row mapper는 `snake_case ↔ camelCase` 변환만 하며 상태 전이를 판단하지 않는다.
+- command/query 함수는 인증된 actor, 검증된 입력, repository/client를 받아 한 사용자 작업을 수행한다.
+- SQL migration이 schema의 원본이다. ORM schema generator와 migration을 동시에 운영하지 않는다.
+- DTO class 상속, 범용 `BaseDTO`, `BaseRepository`, `Utils` 파일을 만들지 않는다.
+- 같은 mapping이나 validation이 두 handler에서 반복될 때 `_shared`로 이동한다.
+
+예상 서버 흐름:
+
+```text
+handler → zod request DTO → command/query → Supabase/SQL RPC → response DTO
+```
+
 ## 5. SQL 규칙
 
 - 식별자는 소문자 snake_case
@@ -386,3 +402,37 @@ FIXME(issue-456): 현재 위험과 수정 범위
 - OpenAPI, migration, 관련 문서가 함께 변경되었는가
 
 중대한 계약·보안·데이터 손실 문제는 승인 차단 사유다. 이름이나 스타일 선호는 formatter 또는 후속 제안으로 처리하며 PR을 불필요하게 막지 않는다.
+
+## 17. 글로벌화 규칙
+
+- Swift 사용자 문구는 `Localizable.xcstrings`에서 관리하고 enum raw value에 한국어를 저장하지 않는다.
+- API·DB enum, metric, log event는 안정적인 영문 code를 사용한다.
+- 화면 날짜·시간·숫자는 `FormatStyle`과 사용자 locale/calendar/timezone으로 표시한다.
+- 서버는 절대 시각을 offset 포함 ISO 8601, 현지 날짜를 `YYYY-MM-DD`, timezone을 IANA ID로 받는다.
+- 검색 입력은 Unicode NFC와 공백을 정규화하되 사용자가 입력한 원문은 변경하지 않는다.
+- Agent에는 응답 locale과 timezone을 명시하고 JSON field·enum은 번역하지 않는다.
+- 날짜·반복·알림 PR은 `ko-KR/Asia-Seoul`과 `en-US/America-Los_Angeles`를 최소 검증한다.
+
+## 18. 성능과 관찰 완료 조건
+
+조회·동기화·외부 호출을 추가하는 PR에는 다음 중 해당 증거가 있어야 한다.
+
+```text
+대표 SQL의 EXPLAIN (ANALYZE, BUFFERS)
+route p95와 response bytes
+cursor/limit 상한
+metric·log event·request ID
+실패와 재시도 경로
+```
+
+인덱스는 실제 query shape와 함께 추가한다. payload 최적화는 projection DTO, delta cursor, ETag, 압축, batch로 해결하며 인덱스로 해결했다고 기록하지 않는다.
+
+코드 경로 규칙:
+
+- 목록에서 행마다 추가 query나 외부 호출을 만드는 N+1을 금지한다.
+- DB는 `select *` 대신 공개 DTO에 필요한 열만 조회한다. 단, 단일 상세 command의 반환처럼 모든 공개 필드가 필요한 경우는 허용한다.
+- 서로 독립적인 외부 조회는 공급자 rate limit 안에서 병렬화하고, 같은 리소스 쓰기는 순서를 유지한다.
+- 날짜 formatter, JSON decoder, 정규식처럼 반복 생성 비용이 확인되는 값은 안전한 범위에서 재사용한다.
+- iOS main actor에서 JSON 변환, 대량 sync merge, embedding 처리를 하지 않는다.
+- 캐시나 메모이제이션은 측정된 병목과 무효화 규칙이 모두 있을 때만 추가한다.
+- 성능 개선 PR은 전후 수치가 없으면 `perf`가 아니라 일반 refactor로 분류한다.

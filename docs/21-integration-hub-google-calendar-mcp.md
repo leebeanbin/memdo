@@ -209,7 +209,7 @@ entryKind:
   proposal
 
 sourceProvider:
-  myday
+  memdo
   google_calendar
   apple_eventkit
   mcp
@@ -218,7 +218,7 @@ sourceProvider:
 `mcp`는 일정의 실제 원본이 아니라 제안 유입 경로다. MCP 제안을 승인해 Memdo Todo가 생성되면:
 
 ```text
-sourceProvider = myday
+sourceProvider = memdo
 origin = mcp
 ```
 
@@ -275,7 +275,7 @@ AI 제안
 
 ```text
 scope:
-  myday
+  memdo
   external_calendars
   all
 ```
@@ -358,8 +358,8 @@ delete_calendar_event   // 제공하지 않음
   "proposalId": "uuid",
   "status": "pending_approval",
   "summary": "내일 14:00–15:30 집중 시간을 추가합니다.",
-  "approvalUrl": "https://myday.example/proposals/uuid",
-  "resourceUrl": "https://myday.example/todos/uuid",
+  "approvalUrl": "https://memdo.example/proposals/uuid",
+  "resourceUrl": "https://memdo.example/todos/uuid",
   "expiresAt": "2026-08-01T12:00:00Z"
 }
 ```
@@ -368,7 +368,7 @@ text:
 
 ```text
 일정 변경 제안을 만들었습니다.
-검토하고 승인하기: https://myday.example/proposals/...
+검토하고 승인하기: https://memdo.example/proposals/...
 ```
 
 `approvalUrl`은 Universal Link다.

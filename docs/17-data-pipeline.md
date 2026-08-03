@@ -6,8 +6,9 @@
 
 ## 1. 원칙
 
-- 50명 규모에는 PostgreSQL 작업 테이블과 Cron이면 충분하다.
-- Redis, Kafka, 별도 워커 클러스터를 도입하지 않는다.
+- 50명 규모에는 Supabase Queues(`pgmq`)와 Cron이면 충분하다.
+- Kafka·RabbitMQ·별도 워커 클러스터를 도입하지 않는다.
+- Redis는 queue나 원본 데이터 저장소가 아니라 AI·MCP의 만료 상태에만 사용한다.
 - 사용자 요청의 핵심 쓰기는 동기 처리한다.
 - 느리거나 재시도 가능한 외부 호출은 작업으로 분리한다.
 - 작업은 멱등해야 하며 최소 한 번 실행돼도 결과가 중복되지 않아야 한다.
@@ -20,7 +21,7 @@ flowchart TD
     LOCAL --> SYNC["서버 동기화"]
     SYNC --> DB[("PostgreSQL")]
     DB --> SNAPSHOT["Widget Snapshot 갱신"]
-    DB --> JOB["integration_jobs"]
+    DB --> JOB["Supabase Queues · pgmq"]
     JOB --> WORKER["Cron / Edge Worker"]
     WORKER --> OPENAI["OpenAI"]
     WORKER --> NEWS["News Source"]
@@ -28,91 +29,38 @@ flowchart TD
     WORKER --> RESULT["정규 결과 저장"]
 ```
 
-## 3. integration_jobs
+## 3. Queue와 사용자 표시 operation
 
-```mermaid
-erDiagram
-    USERS ||--o{ INTEGRATION_JOBS : owns
-    INTEGRATION_JOBS ||--o{ DELIVERY_ATTEMPTS : attempts
-    INTEGRATION_JOBS ||--o| AGENT_RUNS : may_create
-    DATA_CONNECTIONS ||--o{ INTEGRATION_JOBS : supplies
-
-    INTEGRATION_JOBS {
-        uuid id PK
-        uuid user_id FK
-        uuid data_connection_id FK
-        text job_type
-        text deduplication_key UK
-        text status
-        integer priority
-        jsonb payload
-        timestamp available_at
-        integer attempt_count
-        integer max_attempts
-        timestamp locked_at
-        text locked_by
-        text last_error_code
-        timestamp created_at
-        timestamp started_at
-        timestamp completed_at
-    }
-
-    DELIVERY_ATTEMPTS {
-        uuid id PK
-        uuid integration_job_id FK
-        integer attempt_number
-        text provider
-        text provider_request_id
-        text result
-        text error_code
-        integer latency_ms
-        timestamp attempted_at
-    }
-```
+pgmq가 전달, visibility timeout, 재전달, archive를 담당한다. 모든 내부 job을 별도 업무 테이블에 복제하지 않는다.
 
 ```text
-id
-user_id
-job_type
-deduplication_key
-status
-priority
-payload
-available_at
-attempt_count
-max_attempts
-locked_at
-locked_by
-last_error_code
-created_at
-started_at
-completed_at
+queue name
+message id
+job type
+deduplication key
+actor user id 또는 system
+target id
+attempt
+trace context
+최소 payload
 ```
 
-상태:
+사용자에게 진행 상태를 보여줘야 하는 export, account deletion, calendar sync, briefing generation만 `async_operations` 행을 만든다. `GET /operations/{id}`는 이 행을 조회하며 pgmq 내부 metadata를 노출하지 않는다.
 
 ```text
-pending
-processing
-succeeded
-retry_wait
-failed
-cancelled
+async_operations
+- id
+- user_id
+- operation_type
+- status: pending|processing|succeeded|failed|cancelled
+- result_resource_url?
+- error_code?
+- created_at
+- started_at?
+- completed_at?
 ```
 
-인덱스:
-
-```sql
-create unique index integration_jobs_dedupe_uidx
-on public.integration_jobs (deduplication_key);
-
-create index integration_jobs_claim_idx
-on public.integration_jobs (priority desc, available_at, id)
-where status in ('pending', 'retry_wait');
-
-create index integration_jobs_user_created_idx
-on public.integration_jobs (user_id, created_at desc, id);
-```
+도메인 결과와 operation 상태가 함께 바뀌어야 하면 같은 짧은 DB transaction으로 저장한다. queue 전달은 at-least-once로 보고 도메인 unique constraint와 deduplication key로 중복 실행을 안전하게 만든다.
 
 ## 4. 작업 네이밍
 
@@ -130,19 +78,19 @@ sync_external_calendar
 
 ## 5. 작업 획득
 
-여러 워커가 생겨도 충돌하지 않도록 `FOR UPDATE SKIP LOCKED`로 한 작업을 획득한다.
+worker는 pgmq read의 visibility timeout으로 한 message를 획득한다.
 
 ```text
-claim
-→ 짧은 트랜잭션에서 processing 전환
-→ 트랜잭션 종료
+read + visibility timeout
+→ 필요한 operation만 processing 전환
 → 외부 API 호출
 → 짧은 트랜잭션에서 결과 저장
+→ 성공 message archive/delete
 ```
 
 외부 호출 동안 DB lock을 잡지 않는다.
 
-초기에는 Cron이 한 번에 최대 20개 작업을 처리한다.
+초기에는 Cron이 한 번에 최대 20개 message를 처리한다. 실패하면 attempt와 error code를 기록하고 지수 backoff 후 다시 보낸다. 외부 호출 동안 DB transaction을 유지하지 않는다.
 
 ## 6. 일정 동기화 파이프라인
 
@@ -286,8 +234,9 @@ jitter를 추가한다.
 메트릭:
 
 ```text
-job_pending_count
-job_oldest_pending_age
+queue_depth
+queue_oldest_message_age
+job_retry_total
 job_failure_rate
 external_api_latency
 external_api_error_rate
@@ -301,11 +250,24 @@ briefing_articles_summarized
 
 ## 13. 확장 조건
 
-다음 중 하나가 실제로 발생할 때 별도 큐를 검토한다.
+다음 중 하나가 실제로 발생할 때 외부 broker를 검토한다.
 
 - pending 작업 10,000개 초과
 - 가장 오래된 작업 대기 5분 초과가 반복
-- DB 작업 큐가 사용자 조회 p95에 영향
+- pgmq workload가 사용자 조회 p95에 영향
 - 외부 작업량이 초당 수십 건 이상 지속
 
-그 전에는 PostgreSQL 작업 테이블을 유지한다.
+그 전에는 pgmq를 유지한다.
+
+## 14. 데이터 송신 예산
+
+| 경로 | 상한·최적화 | 지표 |
+|---|---|---|
+| Todo 목록 | 50개 cursor page, 화면 필드 projection | response bytes/item |
+| Sync pull | 200개 delta + 최소 tombstone | bytes/mutation, lag |
+| Sync push | 100개 mutation batch, body 256KB | rejected batch, bytes |
+| Day view | ETag, 변경 없으면 304 | 304 ratio |
+| Briefing | ETag, 기사 원문 미포함 | response bytes |
+| MCP tool | 최대 20개 결과, note preview만 | tool bytes, duration |
+
+provider 원본 응답, embedding vector, prompt 원문, audit detail은 client payload에 포함하지 않는다.

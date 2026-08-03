@@ -35,8 +35,12 @@
 - Row Level Security
 - Edge Functions
 - Supabase Cron
+- Supabase Queues (pgmq)
+- pgvector
+- Upstash Redis REST for expiring AI/MCP state only
 - APNs
 - OpenAI Responses API
+- llama.cpp local development adapter
 
 ## 2. 시스템 구조
 
@@ -48,10 +52,30 @@ flowchart LR
     APP --> API["Edge Functions"]
     API --> AUTH["Auth"]
     API --> DB[("PostgreSQL")]
-    API --> OPENAI["OpenAI"]
+    DB --> QUEUE["pgmq"]
+    DB --> VECTOR["pgvector"]
+    API --> REDIS["Redis · rate limit/short lock"]
+    QUEUE --> WORKER["Edge/Cron Worker"]
+    API --> LLM["LLM Gateway"]
+    WORKER --> LLM
+    LLM --> OPENAI["OpenAI"]
+    LLM --> LOCAL["llama.cpp · local/self-host"]
+    MCP["Memdo MCP"] --> API
     CRON["Server Cron"] --> API
     API --> APNS["APNs"]
     APP --> LOCALNOTI["Local Notifications"]
+```
+
+MCP, iOS, scheduled worker는 별도 비즈니스 규칙을 만들지 않고 같은 application query/command를 사용한다. MCP와 LLM에는 DB 권한을 주지 않는다.
+
+서버 요청 흐름:
+
+```text
+HTTP/MCP adapter
+→ Request DTO validation
+→ Application Query/Command
+→ Supabase client 또는 SQL RPC
+→ Response DTO
 ```
 
 ## 3. 일정 및 알림 책임
@@ -94,7 +118,8 @@ flowchart LR
 
 ## 5. 반복 일정
 
-- MVP는 RRULE의 `FREQ=DAILY|WEEKLY`, `INTERVAL`, `BYDAY`만 허용한다.
+- UI preset은 daily, weekdays, weekly, biweekly, monthly, yearly를 지원한다. 서버는 이를 검증된 RRULE subset으로 정규화한다.
+- custom RRULE은 `FREQ=DAILY|WEEKLY|MONTHLY|YEARLY`, `INTERVAL`, `BYDAY`와 preset에 필요한 최소 속성만 허용한다.
 - 서버는 향후 30일 인스턴스를 유지한다.
 - 같은 `schedule_rule_id + occurrence_date`는 하나만 생성한다.
 - 규칙 변경 시 사용자 현지 오늘 이후의 수정되지 않은 인스턴스만 재생성한다.
@@ -152,11 +177,11 @@ App Group에 전체 DB를 공유하지 않고 표시용 JSON만 저장한다.
 Universal Link를 기본으로 사용한다.
 
 ```text
-https://myday.example/today
-https://myday.example/plan/new
-https://myday.example/todos/{id}
-https://myday.example/review/{date}
-https://myday.example/briefings/{date}
+https://memdo.example/today
+https://memdo.example/plan/new
+https://memdo.example/todos/{id}
+https://memdo.example/review/{date}
+https://memdo.example/briefings/{date}
 ```
 
 앱의 단일 `AppRouter`가 URL을 파싱한다.

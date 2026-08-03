@@ -45,6 +45,13 @@ flowchart TD
     COMPLETE --> TEST
     OBS --> TEST
     DEPLOY --> TEST
+    DEPLOY --> BACKEND["어떤 순서로 서버를 구현하는가?<br/>30 백엔드 실행 계획"]
+    API --> BACKEND
+    TX --> BACKEND
+    PAGEUI --> ALIGN["UI와 서버가 실제로 일치하는가?<br/>31 계약 감사"]
+    API --> ALIGN
+    DATA --> ALIGN
+    ALIGN --> BACKEND
     TRACE["요구사항이 빠지지 않았는가?<br/>12 추적표"] --> UX
     TRACE --> DATA
     TRACE --> API
@@ -88,6 +95,8 @@ flowchart TD
 28. [환경·CI/CD·백업](./24-environments-ci-cd-backup.md)
 29. [API 계약 완성도](./25-api-contract-completeness.md)
 30. [전체 문서 정합성 감사](./26-document-consistency-audit.md)
+31. [백엔드 구현 실행 계획](./30-backend-implementation-plan.md)
+32. [UI ↔ 백엔드 계약 감사](./31-ui-backend-contract-audit.md)
 
 구현자는 첫 migration 또는 API client 생성 전에 `26`의 P0 항목이 해소됐는지 확인한다.
 
@@ -108,7 +117,7 @@ flowchart TD
 ### 백엔드 개발
 
 ```text
-00 → 11 → 01 → 06 → 04 → 14 → 18 → 19 → 05 → 15 → 17 → 20 → 03 → 16 → 08
+00 → 11 → 01 → 06 → 04 → 14 → 18 → 19 → 05 → 15 → 17 → 20 → 03 → 16 → 08 → 31 → 30
 ```
 
 ### 디자인
@@ -203,7 +212,7 @@ flowchart TD
 | 위젯 표시 | 개인정보 숨김, 스냅샷, 딥링크, 실제 기기 테스트 |
 | 조회 경로 | ERD, 인덱스, OpenAPI pagination, EXPLAIN, 성능 목표 |
 | 외부 공급자 | 동의, 포트·어댑터, 오류 코드, 파이프라인, 운영 메트릭 |
-| 작업 큐 | integration_jobs, 멱등성, 재시도, 모니터링, 실패 UX |
+| 작업 큐 | pgmq, async operation, 멱등성, 재시도, 모니터링, 실패 UX |
 | 검색 | 검색 필드, 개인정보, 인덱스, 랭킹, Agent 도구, 검색 평가 |
 | 트랜잭션 | 함께 성공할 행, 외부 부작용, 멱등성, 충돌, 동시성 테스트 |
 | Agent 도구 | 동의 범위, 입력·출력 스키마, 승인 UI, 감사, eval |
@@ -213,6 +222,7 @@ flowchart TD
 | 배포 | 환경, migration, CI, backup, restore, rollback |
 | API 공통 | 오류, rate limit, cursor, idempotency, version, request ID |
 | 문서 감사 결과 | ADR, UX, 데이터, OpenAPI, 추적표, 구현 시작 조건 |
+| UI·백엔드 불일치 | 화면 모델, DTO, OpenAPI, migration, 단계, 통합 테스트 |
 
 ## 7. 기능을 추가하는 사고 순서
 

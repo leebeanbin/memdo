@@ -6,7 +6,7 @@
 
 ## 1. 결론
 
-초기 50명 규모에는 별도 조회 테이블, 검색 서버, 벡터 DB가 필요 없다. `todos` 원본 테이블에 사용자·날짜·상태 필터와 PostgreSQL `pg_trgm` 검색을 적용한다.
+초기 50명 규모에는 별도 조회 테이블, 검색 서버, 외부 vector DB가 필요 없다. 직접 검색은 `todos` 원본 테이블의 사용자·날짜·상태 필터와 PostgreSQL `pg_trgm`을 사용한다. 의미 검색은 평가로 필요성이 확인된 Agent 질의에만 같은 DB의 `pgvector`를 추가한다.
 
 검색 경로는 두 개지만 같은 `SearchTodos` 도메인 기능을 사용한다.
 
@@ -24,6 +24,8 @@ Agent 전용 검색 데이터 복제본을 만들지 않는다.
 
 - `title`
 - `note`
+- `location_name`
+- `location_address`
 - `scheduled_date`
 - `time_bucket`
 - `status`
@@ -70,10 +72,10 @@ Agent는 사용자의 표현에서 날짜가 명확할 때만 범위를 좁힌�
 
 ## 4. 검색 API
 
-기존 Todo 목록 API를 확장한다.
+Todo 목록과 payload·정렬 목적이 다르므로 전용 검색 query를 사용하되 UI와 Agent는 같은 `SearchTodos` application query를 호출한다.
 
 ```http
-GET /v1/todos?q=운동&from=2026-01-01&to=2026-12-31&status=completed&cursor=...
+GET /v1/search/todos?q=운동&from=2026-01-01&to=2026-12-31&status=completed&cursor=...
 ```
 
 파라미터:
@@ -100,7 +102,7 @@ hasMore
 appliedFilters
 ```
 
-`matchedFields`는 `title`, `note`만 반환하며 note 전체를 노출하지 않는다.
+`matchedFields`는 `title`, `note`, `location`만 반환하며 note 전체와 전체 주소를 노출하지 않는다.
 
 ## 5. 한국어 검색
 
@@ -115,13 +117,13 @@ using gin (lower(title) gin_trgm_ops)
 where deleted_at is null;
 ```
 
-메모 검색은 초기에는 사용자 날짜 범위로 먼저 좁힌 뒤 `ILIKE`를 사용한다. 실제 메모 검색 p95가 목표를 넘을 때만 아래 결합 인덱스를 추가한다.
+메모·장소 검색은 초기에는 사용자 날짜 범위로 먼저 좁힌 뒤 `ILIKE`를 사용한다. 실제 검색 p95가 목표를 넘을 때만 아래 결합 인덱스를 추가한다.
 
 ```sql
 create index todos_search_text_trgm_active_idx
 on public.todos
 using gin (
-  lower(title || ' ' || coalesce(note, '')) gin_trgm_ops
+  lower(title || ' ' || coalesce(note, '') || ' ' || coalesce(location_name, '') || ' ' || coalesce(location_address, '')) gin_trgm_ops
 )
 where deleted_at is null;
 ```
@@ -245,9 +247,8 @@ MVP에서는 검색어 기록 테이블을 만들지 않는다.
 | 조건 | 다음 단계 |
 |---|---|
 | 메모 검색 p95 200ms 초과 | 결합 trigram 인덱스 |
-| 의미가 비슷한 일정 검색 요구가 반복 | 임베딩 실험 |
+| 의미가 비슷한 일정 검색 요구가 반복 | pgvector hybrid 검색 실험 |
 | 사용자당 Todo 100만 건 수준 | 검색 전용 저장소 검토 |
 | 여러 도메인 문서 통합 검색 | 별도 검색 인덱스 검토 |
 
 임베딩을 도입하더라도 권한 필터는 검색 후가 아니라 검색 전 또는 저장소 namespace 수준에서 적용한다.
-

@@ -7,7 +7,7 @@
 
 ## 1. 결론
 
-현재 규모에는 단일 PostgreSQL과 명시적인 복합·부분 인덱스로 충분하다. 파티셔닝, 읽기 복제본, Redis, 별도 메시지 브로커는 사용하지 않는다.
+현재 규모에는 단일 PostgreSQL, 명시적인 복합·부분 인덱스, 같은 DB의 pgmq·pgvector 확장으로 충분하다. 파티셔닝, 읽기 복제본, Kafka·RabbitMQ, 외부 vector DB는 사용하지 않는다. Upstash Redis는 AI·MCP의 만료 상태에만 사용하며 일정 조회 cache가 아니다.
 
 현재 ERD의 관계 방향은 적절하지만 다음이 보완되어야 한다.
 
@@ -17,7 +17,7 @@
 - 활성 데이터만 포함하는 부분 인덱스
 - 반복 인스턴스 중복 방지 제약
 - 하루 요약 응답 중복 방지 제약
-- 외부 작업 큐와 멱등성 기록
+- pgmq 작업 전달과 멱등성 기록
 - 소프트 삭제 데이터 정리 정책
 
 ## 2. 용량 가정
@@ -159,7 +159,7 @@ briefing_items.article_id
 agent_runs.user_id
 agent_actions.agent_run_id
 consent_records.user_id
-integration_jobs.user_id
+async_operations.user_id
 ```
 
 이미 복합 인덱스의 선두 컬럼인 외래 키에는 중복 단일 인덱스를 만들지 않는다.
@@ -304,12 +304,55 @@ select ...;
 - 순차 스캔이 발생한 대형 테이블
 - 사용되지 않는 중복 인덱스
 - dead tuple과 autovacuum 상태
-- integration_jobs 재시도와 실패 건수
+- pgmq queue depth·oldest message·재시도와 실패 건수
 
-50명 규모에서 캐시는 추가하지 않는다. DB p95 목표를 실제로 넘는 경로가 확인될 때만 쿼리·인덱스를 먼저 고친다.
+50명 규모에서 Todo 조회 cache는 추가하지 않는다. DB p95 목표를 실제로 넘는 경로가 확인될 때만 쿼리·인덱스를 먼저 고친다. Redis는 AI·MCP rate limit과 짧은 lock에만 사용한다.
 
 ## 14. 검색 인덱스
 
 사용자 직접 검색과 Agent 검색은 별도 조회 테이블 없이 같은 Todo 검색 경로를 사용한다. 한국어 제목 부분 검색을 위한 `pg_trgm` GIN 인덱스와 확장 기준은 [일정 검색 파이프라인](./18-todo-search-pipeline.md)에 정의한다.
 
 GIN 인덱스는 쓰기 비용이 있으므로 제목 검색 하나로 시작하고 메모 결합 인덱스는 측정 후 추가한다.
+
+## 15. Query–Index registry
+
+인덱스는 API endpoint가 아니라 실제 SQL shape에 연결한다.
+
+| Query ID | 소비 화면·작업 | 조건·정렬 | 초기 인덱스 | 검증 |
+|---|---|---|---|---|
+| Q-DAY-001 | 오늘·날짜 agenda | user + scheduled date + active; time/order | `todos_user_day_active_idx` | p95 < 50ms |
+| Q-REVIEW-001 | 하루 요약 | user + date + pending status | `todos_user_day_pending_review_idx` | p95 < 50ms |
+| Q-SYNC-001 | delta sync | user + `(updated_at,id)` | `todos_user_sync_cursor_idx` | 200행 < 150ms |
+| Q-SEARCH-001 | 직접·Agent 검색 | user + date + title trigram | `todos_title_trgm_active_idx` | p95 < 200ms |
+| Q-RULE-001 | 반복 occurrence | rule + date + active | unique occurrence index | 중복 0 |
+
+새 index PR은 다음을 포함한다.
+
+```text
+Query ID
+실제 SQL과 예상 cardinality
+추가 전/후 EXPLAIN (ANALYZE, BUFFERS)
+쓰기·저장 공간 영향
+제거 또는 전환 조건
+```
+
+## 16. pgvector 규칙
+
+- embedding은 동의한 사용자 콘텐츠와 검색 가능한 정규 text에만 생성한다.
+- vector row는 `user_id`, entity type/id, embedding model/version, content hash를 가진다.
+- RLS 또는 검색 함수에서 user filter를 similarity 계산 전에 적용한다.
+- embedding model이 바뀌면 기존 vector를 덮지 않고 version별 재생성 상태를 관리한다.
+- 50명 단계에는 external vector DB와 무조건적 Todo 전체 embedding을 만들지 않는다.
+- 의미 검색이 trigram 대비 평가셋의 recall을 실제로 개선할 때만 production 경로로 승격한다.
+
+## 17. 전송량은 API에서 최적화한다
+
+DB index는 payload를 줄이지 않는다. 다음은 API·sync 계약의 책임이다.
+
+- 화면별 projection DTO
+- cursor pagination과 delta sync
+- tombstone 최소 표현
+- ETag/If-None-Match
+- HTTP 압축
+- 최대 batch와 body 크기
+- `response_bytes`, `rows_returned`, `compression_ratio` 관찰

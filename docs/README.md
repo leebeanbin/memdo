@@ -59,6 +59,8 @@
 | 27 | [페이지별 UI/UX 계약](./27-page-ui-ux-contract.md) | 페이지 목적·위계·행동·상태·완료 조건 |
 | 28 | [디자인 시스템·밀도·Agent UI 계약](./28-design-system-density-and-agent-ui.md) | 사용자 취향·카드 예산·Agent·모달 전수 규칙 |
 | 29 | [UI 그리드·모달 감사](./29-ui-grid-and-modal-audit.md) | iPhone 15 실기 정렬·시트 높이·진입점 검사 결과 |
+| 30 | [백엔드 구현 실행 계획](./30-backend-implementation-plan.md) | 인증부터 일정 저장·동기화·Agent·외부 연결까지 실제 구현 순서 |
+| 31 | [UI ↔ 백엔드 계약 감사](./31-ui-backend-contract-audit.md) | 실제 SwiftUI·DTO·OpenAPI·스키마·구현 단계의 일치 여부 |
 | UI | [최종 UI/UX 기준선](../apps/ios/Memdo/DESIGN.md) | 확정 색상·화면·내비게이션·위젯·모션 |
 
 ## MVP 성공 조건
