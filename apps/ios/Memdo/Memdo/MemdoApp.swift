@@ -178,19 +178,13 @@ private struct MemdoSignInView: View {
     }
 
     private var brandHero: some View {
-        VStack(spacing: 18) {
-            MemdoBrandMark(size: 44)
-                .frame(width: 76, height: 76)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(MemdoTheme.outline.opacity(0.55))
-                }
+        VStack(spacing: 16) {
+            MemdoBrandMark(size: 60)
 
             VStack(spacing: 10) {
                 Text("Memdo")
-                    .font(.caption.weight(.bold))
-                    .tracking(0.8)
+                    .font(.system(.title3, design: .rounded, weight: .bold))
+                    .tracking(-0.2)
                 Text("내 하루를,\n내 방식대로.")
                     .font(.system(.title, design: .rounded, weight: .bold))
                     .tracking(-0.4)
@@ -228,10 +222,16 @@ private struct MemdoSignInView: View {
                         .accessibilityLabel("로그인 오류: \(errorMessage)")
                 }
 
-                Text("계정 정보는 로그인과 일정 동기화에만 사용됩니다. 캘린더 권한은 연결할 때 별도로 요청합니다.")
-                    .font(.caption)
-                    .foregroundStyle(MemdoTheme.secondaryInk)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "lock.shield")
+                        .font(.caption.weight(.medium))
+                        .frame(width: 14)
+                    Text("로그인 정보는 일정 동기화에만 사용해요. 캘린더 권한은 연결할 때 별도로 요청합니다.")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .font(.caption)
+                .foregroundStyle(MemdoTheme.secondaryInk)
+                .accessibilityElement(children: .combine)
             }
         }
         .padding(10)
