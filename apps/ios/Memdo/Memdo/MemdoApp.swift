@@ -161,10 +161,14 @@ private struct MemdoLaunchView: View {
     var body: some View {
         ZStack {
             MemdoPageBackground().ignoresSafeArea()
-            MemdoBrandMark(size: 72)
+            VStack(spacing: 16) {
+                MemdoBrandMark(size: 72)
+                Text("Memdo")
+                    .font(.system(.title2, design: .rounded, weight: .bold))
+                    .tracking(-0.3)
+            }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Memdo")
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -200,13 +204,9 @@ private struct MemdoSignInView: View {
         VStack(spacing: 0) {
             Spacer(minLength: 48)
 
-            VStack(spacing: 16) {
-                MemdoBrandMark(size: 64)
-                Text("Memdo")
-                    .font(.system(.title2, design: .rounded, weight: .bold))
-                    .tracking(-0.3)
-            }
-            .accessibilityElement(children: .combine)
+            MemdoBrandMark(size: 72)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Memdo")
 
             Spacer(minLength: 64)
 
