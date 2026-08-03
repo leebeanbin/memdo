@@ -431,10 +431,30 @@ final class ScheduleStore {
     }
 
     private func updateWidgetSnapshot() {
-        let items = items(for: .now).filter { !$0.isDone }.map {
-            WidgetScheduleItem(time: $0.startTimeText, title: $0.title)
+        let calendar = Calendar.current
+        let now = Date.now
+        let start = calendar.dateInterval(of: .month, for: now)?.start ?? calendar.startOfDay(for: now)
+        let end = calendar.date(byAdding: .month, value: 2, to: start) ?? now
+        let visibleSchedules = schedules.filter { $0.scheduledDate >= start && $0.scheduledDate < end }
+        let grouped = Dictionary(grouping: visibleSchedules) { calendar.startOfDay(for: $0.scheduledDate) }
+        let days = grouped.keys.sorted().map { date in
+            let schedules = (grouped[date] ?? []).sorted { $0.timeSortKey < $1.timeSortKey }
+            let active = schedules.filter(\.isWidgetActive)
+            return WidgetScheduleDay(
+                date: date,
+                completedCount: schedules.filter(\.isDone).count,
+                items: active.map {
+                    WidgetScheduleItem(
+                        id: $0.id,
+                        time: $0.startTimeText,
+                        title: $0.title,
+                        kind: $0.kind.rawValue
+                    )
+                }
+            )
         }
-        let snapshot = WidgetScheduleSnapshot(updatedAt: .now, items: items)
+        let snapshot = WidgetScheduleSnapshot(updatedAt: now, days: days)
+        assert(days == days.sorted { $0.date < $1.date })
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         UserDefaults(suiteName: "group.com.memdo.ios")?.set(data, forKey: "today-schedule-snapshot")
         WidgetCenter.shared.reloadAllTimelines()
@@ -444,12 +464,26 @@ final class ScheduleStore {
 
 private struct WidgetScheduleSnapshot: Codable {
     let updatedAt: Date
+    let days: [WidgetScheduleDay]
+}
+
+private struct WidgetScheduleDay: Codable, Equatable {
+    let date: Date
+    let completedCount: Int
     let items: [WidgetScheduleItem]
 }
 
-private struct WidgetScheduleItem: Codable {
+private struct WidgetScheduleItem: Codable, Equatable {
+    let id: UUID
     let time: String
     let title: String
+    let kind: String
+}
+
+private extension ScheduleDetail {
+    var isWidgetActive: Bool {
+        !isDone && status != .cancelled && status != .skipped && status != .rescheduled
+    }
 }
 
 private extension Date {

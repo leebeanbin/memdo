@@ -30,6 +30,7 @@ struct AppShellView: View {
     @State private var selectedTab = AppTab.today
     @State private var lastContentTab = AppTab.today
     @State private var showCalendarSearch = false
+    @State private var calendarTargetDate: Date?
     @State private var presentedSheet: AppSheetDestination?
     @State private var agentComposer = ""
     @State private var agentResponse = ""
@@ -79,7 +80,10 @@ struct AppShellView: View {
             TodayView()
                 .tabItem { Label(AppTab.today.title, systemImage: AppTab.today.icon) }
                 .tag(AppTab.today)
-            CalendarView(isSearchPresented: $showCalendarSearch)
+            CalendarView(
+                isSearchPresented: $showCalendarSearch,
+                targetDate: $calendarTargetDate
+            )
                 .tabItem { Label(AppTab.calendar.title, systemImage: AppTab.calendar.icon) }
                 .tag(AppTab.calendar)
             SettingsView()
@@ -112,7 +116,9 @@ struct AppShellView: View {
     private func openDeepLink(_ url: URL) {
         guard url.host != "auth" else { return }
         switch url.host {
-        case "calendar": select(.calendar)
+        case "calendar":
+            calendarTargetDate = url.memdoDateQuery
+            select(.calendar)
         case "search":
             select(.calendar)
             showCalendarSearch = true
@@ -130,6 +136,19 @@ struct AppShellView: View {
     private func select(_ tab: AppTab) {
         selectedTab = tab
         lastContentTab = tab
+    }
+}
+
+private extension URL {
+    var memdoDateQuery: Date? {
+        guard let value = URLComponents(url: self, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == "date" })?
+            .value
+        else { return nil }
+        let parts = value.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 }
 
