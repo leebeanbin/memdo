@@ -11,7 +11,7 @@ struct DailySummaryView: View {
 
     let date: Date
 
-    init(date: Date = Calendar.current.date(from: DateComponents(year: 2026, month: 7, day: 31)) ?? .now) {
+    init(date: Date = .now) {
         self.date = date
     }
 
@@ -20,8 +20,8 @@ struct DailySummaryView: View {
         return scheduleStore.schedules
             .filter {
                 $0.kind == .task &&
-                $0.startAt >= interval.start &&
-                $0.startAt < interval.end
+                $0.scheduledDate >= interval.start &&
+                $0.scheduledDate < interval.end
             }
             .sorted { scope == .today ? $0.timeSortKey < $1.timeSortKey : $0.timeSortKey > $1.timeSortKey }
     }
@@ -97,7 +97,7 @@ struct DailySummaryView: View {
             }
             Button("취소", role: .cancel) {}
         } message: {
-            Text("이 작업은 되돌릴 수 없어요.")
+            Text("일정이 목록에서 삭제됩니다.")
         }
     }
 
@@ -521,7 +521,10 @@ private struct MoveScheduleSheet: View {
     init(schedule: ScheduleDetail, onMove: @escaping (Date) -> Void) {
         self.schedule = schedule
         self.onMove = onMove
-        _selectedDate = State(initialValue: Calendar.current.date(byAdding: .day, value: 1, to: schedule.startAt) ?? schedule.startAt)
+        _selectedDate = State(
+            initialValue: Calendar.current.date(byAdding: .day, value: 1, to: schedule.scheduledDate)
+                ?? schedule.scheduledDate
+        )
     }
 
     var body: some View {

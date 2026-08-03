@@ -61,6 +61,8 @@ Runtime Compatibility: Deno
 Database: Managed PostgreSQL
 Auth: Supabase Auth
 Scheduler: Supabase Cron
+Async Queue: Supabase Queues (pgmq)
+Vector Search: pgvector in the same PostgreSQL
 Region: Seoul ap-northeast-2
 ```
 
@@ -71,6 +73,14 @@ Region: Seoul ap-northeast-2
 - `zod`
 
 라우팅 프레임워크는 처음부터 추가하지 않는다. Edge Function은 기능별 진입점과 공통 모듈로 시작한다. 경로 수와 middleware 중복이 실제로 커질 때 Hono 같은 경량 router를 검토한다.
+
+데이터 접근 기준:
+
+- 사용자 JWT와 RLS가 적용되는 API는 Supabase client와 생성된 Database type을 사용한다.
+- schema의 원본은 SQL migration이다.
+- Drizzle ORM은 trusted worker의 복잡한 SQL이 실제로 생길 때만 추가하며 Drizzle migration은 사용하지 않는다.
+- 트랜잭션, RLS, pgmq, pgvector, PostgreSQL 함수는 SQL/RPC로 구현한다.
+- Prisma는 Edge runtime·생성 client·PostgreSQL 확장 중복 비용 때문에 사용하지 않는다.
 
 ## 4. 승인 웹
 
@@ -96,7 +106,7 @@ support
 
 ## 5. MCP 서버
 
-Phase C에서만 배포한다.
+외부 AI 공개 단계에서 배포하되 tool schema는 해당 Application Command/Query와 함께 계약 테스트한다.
 
 ```text
 Language: TypeScript
@@ -115,23 +125,28 @@ Primary DB: Supabase PostgreSQL
 App local data: SwiftData
 Widget snapshot: App Group JSON
 Backup object storage: Cloudflare R2 Standard
+Async delivery: Supabase Queues (pgmq)
+Semantic index: pgvector
+Ephemeral state: Upstash Redis REST
 ```
 
 초기 미사용:
 
-- Redis
-- Kafka
+- Kafka·RabbitMQ
 - Elasticsearch
-- 별도 vector DB
+- 별도 vector DB(Pinecone·Qdrant)
 - 읽기 복제본
 - materialized view
 - 테이블 파티셔닝
+
+Redis는 원본 데이터나 일반 일정 조회 cache로 사용하지 않는다. AI·MCP rate limit, 짧은 분산 lock, 만료 가능한 실행 상태가 실제로 필요한 route에만 붙인다. Redis 장애 시 일정 CRUD는 계속 동작해야 한다.
 
 ## 7. 외부 서비스
 
 | 목적 | 선택 |
 |---|---|
-| AI 계획·뉴스 검색·요약 | OpenAI Responses API, `gpt-5.6-luna` |
+| AI 계획·뉴스 검색·요약 | OpenAI Responses API, 평가로 고른 환경별 model snapshot |
+| 로컬 AI 개발 | llama.cpp `llama-server` |
 | Google 일정 | Google Calendar API |
 | Apple 일정 | EventKit |
 | Push | APNs |
@@ -204,11 +219,13 @@ OpenAI에는 월 예산 한도와 사용자별 호출 한도를 설정한다.
 기본 서버 설정:
 
 ```text
-MYDAY_OPENAI_MODEL=gpt-5.6-luna
-MYDAY_NEWS_PROVIDER=openai_web_search
+MEMDO_LLM_PROVIDER=openai
+MEMDO_OPENAI_MODEL=<evaluated-model-id>
+MEMDO_LOCAL_MODEL_BASE_URL=http://127.0.0.1:8080/v1
+MEMDO_NEWS_PROVIDER=openai_web_search
 ```
 
-모델명은 코드에 직접 쓰지 않는다. 출시 전 고정 평가셋에서 정확도와 구조화 출력 성공률을 확인하고, 기준 미달이면 같은 환경 변수만 더 강한 모델로 바꾼다.
+모델명은 코드에 직접 쓰지 않는다. 출시 전 고정 평가셋에서 정확도, 구조화 출력 성공률, 지연, 비용을 확인하고 환경 변수로 고정한다. 로컬 모델은 개발과 명시적 self-host 환경에만 사용하며 laptop localhost를 production Edge Function이 호출할 수 있다고 가정하지 않는다.
 
 ## 10. 환경
 

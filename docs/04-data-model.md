@@ -19,6 +19,8 @@ erDiagram
     USERS ||--o{ DAILY_REVIEWS : completes
     USERS ||--o{ DAILY_BRIEFINGS : receives
     USERS ||--o{ AGENT_RUNS : triggers
+    USERS ||--o{ ASYNC_OPERATIONS : observes
+    USERS ||--o{ CONTENT_EMBEDDINGS : searches
 
     DAILY_PLANS ||--o{ TODOS : contains
     CALENDARS ||--o{ TODOS : groups
@@ -146,6 +148,30 @@ erDiagram
         uuid created_todo_id
         timestamp responded_at
     }
+
+    ASYNC_OPERATIONS {
+        uuid id PK
+        uuid user_id FK
+        text operation_type
+        text status
+        text result_resource_url
+        text error_code
+        timestamp created_at
+        timestamp started_at
+        timestamp completed_at
+    }
+
+    CONTENT_EMBEDDINGS {
+        uuid id PK
+        uuid user_id FK
+        text entity_type
+        uuid entity_id
+        text model
+        integer dimensions
+        text content_hash
+        vector embedding
+        timestamp updated_at
+    }
 ```
 
 ## 2. Todo 필드 사전
@@ -241,7 +267,7 @@ check (reminder_offset_minutes is null or reminder_offset_minutes between 0 and 
 
 이 ERD의 관계만으로는 성능이 보장되지 않는다. 실제 조회 경로, 복합·부분 인덱스, 외래 키 인덱스, 동기화 커서, 작업 큐는 [데이터베이스 성능·운영 설계](./14-database-performance-and-operations.md)를 정답으로 사용한다.
 
-외부 작업을 위한 `integration_jobs`와 공급자 실행 기록은 [데이터 파이프라인](./17-data-pipeline.md)에 정의한다. 핵심 도메인 ERD와 운영 파이프라인 테이블을 분리해 읽되 하나의 PostgreSQL 안에서 운영한다.
+비동기 전달은 pgmq를 사용하고 사용자에게 상태를 보여줘야 하는 작업만 `async_operations`에 기록한다. 세부 규칙은 [데이터 파이프라인](./17-data-pipeline.md)에 정의한다.
 
 Google Calendar 같은 외부 일정은 Todo로 복사하지 않고 `calendar_sources`와 `external_calendar_events`에 미러링한다. 통합 ERD와 UI 출처 인덱스는 [Integration Hub](./21-integration-hub-google-calendar-mcp.md)를 따른다.
 
@@ -266,7 +292,8 @@ Google Calendar 같은 외부 일정은 Todo로 복사하지 않고 `calendar_so
 | plan_drafts | id | users | 24시간 | 본인 |
 | agent_runs | id | users | 30일 | 본인 |
 | agent_actions | id | agent_runs | 30일 | 부모 소유 |
-| integration_jobs | id | users nullable | 완료 7일 | 서버 전용 |
+| async_operations | id | users; 사용자 표시가 필요한 비동기 작업 | 완료 30일 | 본인 metadata |
+| content_embeddings | id | users; `(user_id,entity_type,entity_id,model)` | 원본·동의 철회 시 삭제 | 본인/서버 함수 |
 | data_connections | id | users; `(user_id,provider)` | 연결 해제 시 token 폐기 | 본인 metadata |
 | calendar_sources | id | data_connections | 연결 기간 | 본인 |
 | external_calendar_events | id | calendar_sources; provider resource unique | 연결 해제 선택 | 본인 |
@@ -280,7 +307,7 @@ Google Calendar 같은 외부 일정은 Todo로 복사하지 않고 `calendar_so
 ## 8. 계정 전환과 동기화 식별자
 
 - 로컬 Todo·DailyPlan·ScheduleRule은 앱에서 UUID를 생성한다.
-- Sign in with Apple 후 같은 UUID로 서버에 업서트한다.
+- Google·GitHub·Apple 중 하나로 로그인한 뒤 같은 UUID로 서버에 업서트한다.
 - 동일 UUID와 동일 사용자만 같은 엔터티로 본다.
 - 제목·날짜가 같다는 이유로 자동 병합하지 않는다.
 - 서버와 로컬의 UUID가 다르면 둘 다 보존하고 사용자에게 중복 정리를 맡긴다.

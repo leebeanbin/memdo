@@ -12,9 +12,9 @@
 | Push | APNs | 서버 |
 | Apple Calendar | EventKit | iOS |
 | 뉴스 | OpenAI Responses API `web_search` | 서버 |
-| 인증 | Sign in with Apple + Supabase Auth | iOS·서버 |
+| 인증 | Google·GitHub·Apple + Supabase Auth | iOS·서버 |
 
-MCP는 초기 내부 앱 통합에 사용하지 않는다. 다른 AI 클라이언트에 Memdo 기능을 공개할 필요가 생길 때 추가한다.
+MCP는 iOS 내부 호출 계층으로 사용하지 않는다. 외부 AI 클라이언트에는 Memdo API의 얇은 어댑터로 제공하고 DB에 직접 연결하지 않는다.
 
 ## 2. 경계 구조
 
@@ -113,15 +113,19 @@ provider_request_id
 대문자 `제품_공급자_목적` 형식:
 
 ```text
-MYDAY_OPENAI_API_KEY
-MYDAY_OPENAI_MODEL
-MYDAY_APNS_KEY_ID
-MYDAY_APNS_TEAM_ID
-MYDAY_APNS_BUNDLE_ID
-MYDAY_APNS_PRIVATE_KEY
-MYDAY_NEWS_PROVIDER
-MYDAY_SUPABASE_URL
-MYDAY_SUPABASE_SERVICE_ROLE_KEY
+MEMDO_OPENAI_API_KEY
+MEMDO_OPENAI_MODEL
+MEMDO_APNS_KEY_ID
+MEMDO_APNS_TEAM_ID
+MEMDO_APNS_BUNDLE_ID
+MEMDO_APNS_PRIVATE_KEY
+MEMDO_NEWS_PROVIDER
+MEMDO_SUPABASE_URL
+MEMDO_SUPABASE_SERVICE_ROLE_KEY
+MEMDO_LLM_PROVIDER
+MEMDO_LOCAL_MODEL_BASE_URL
+MEMDO_UPSTASH_REDIS_REST_URL
+MEMDO_UPSTASH_REDIS_REST_TOKEN
 ```
 
 클라이언트에 포함할 수 있는 공개 설정과 서버 비밀을 분리한다. `SERVICE_ROLE_KEY`, OpenAI 키, APNs 개인 키는 iOS 빌드 설정에 넣지 않는다.
@@ -158,7 +162,7 @@ MYDAY_SUPABASE_SERVICE_ROLE_KEY
 코드 여러 곳에 모델 문자열을 쓰지 않는다.
 
 ```text
-MYDAY_OPENAI_MODEL
+MEMDO_OPENAI_MODEL
 ```
 
 단 하나의 서버 설정에서 읽고 Agent 실행 기록에는 실제 사용 모델을 남긴다.
@@ -166,7 +170,7 @@ MYDAY_OPENAI_MODEL
 MVP 값:
 
 ```text
-MYDAY_OPENAI_MODEL=gpt-5.6-luna
+MEMDO_OPENAI_MODEL=<evaluated-model-id>
 ```
 
 ## 6. 뉴스 통합
@@ -174,7 +178,7 @@ MYDAY_OPENAI_MODEL=gpt-5.6-luna
 MVP 공급자는 OpenAI Responses API의 `web_search`다.
 
 ```text
-MYDAY_NEWS_PROVIDER=openai_web_search
+MEMDO_NEWS_PROVIDER=openai_web_search
 ```
 
 별도 뉴스 API 키는 사용하지 않는다. `OpenAIWebSearchNewsSource`가 아래 `NewsSource` 계약으로 결과를 정규화한다.
@@ -251,7 +255,7 @@ provider_last_modified_at
 
 ```text
 NotificationRequest
-→ integration_jobs
+→ pgmq message
 → APNsPushSender
 → delivery_attempts
 ```

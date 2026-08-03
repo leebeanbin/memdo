@@ -182,11 +182,11 @@ NewsArticle upsert
 
 ## 9. 작업 큐
 
-작업 claim 트랜잭션:
+pgmq 작업 획득:
 
 ```text
-pending/retry_wait 한 행 SELECT FOR UPDATE SKIP LOCKED
-→ processing, lockedAt, lockedBy 업데이트
+message read + visibility timeout
+→ 사용자 표시 작업이면 async operation을 processing으로 전환
 → commit
 ```
 

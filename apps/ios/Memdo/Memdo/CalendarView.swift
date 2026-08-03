@@ -3,8 +3,8 @@ import SwiftUI
 struct CalendarView: View {
     @Environment(ScheduleStore.self) private var scheduleStore
     @Binding var isSearchPresented: Bool
-    @State private var selectedDate = CalendarFixture.today
-    @State private var displayedMonth = CalendarFixture.july
+    @State private var selectedDate = Date.now
+    @State private var displayedMonth = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
     @State private var showAll = false
     @State private var presentedSheet: CalendarSheetDestination?
     @State private var searchQuery = ""
@@ -17,13 +17,13 @@ struct CalendarView: View {
 
     private var selectedAgenda: [ScheduleDetail] {
         filteredSchedules
-            .filter { Calendar.current.isDate($0.startAt, inSameDayAs: selectedDate) }
+            .filter { Calendar.current.isDate($0.scheduledDate, inSameDayAs: selectedDate) }
             .sorted { $0.timeSortKey < $1.timeSortKey }
     }
 
     private var scheduleCounts: [Int: Int] {
         Dictionary(grouping: filteredSchedules.filter {
-            !$0.isDone && Calendar.current.isDate($0.startAt, equalTo: displayedMonth, toGranularity: .month)
+            !$0.isDone && Calendar.current.isDate($0.scheduledDate, equalTo: displayedMonth, toGranularity: .month)
         }, by: \.day).mapValues(\.count)
     }
 
@@ -102,8 +102,8 @@ struct CalendarView: View {
 
     private func goToday() {
         withAnimation(.snappy(duration: 0.25)) {
-            displayedMonth = CalendarFixture.july
-            selectedDate = CalendarFixture.today
+            selectedDate = .now
+            displayedMonth = Calendar.current.dateInterval(of: .month, for: selectedDate)?.start ?? selectedDate
             showAll = false
         }
     }
@@ -331,8 +331,8 @@ private enum CalendarDisplayFilter: String, CaseIterable, Identifiable {
         case .all: true
         case .events: schedule.kind == .event
         case .tasks: schedule.kind == .task
-        case .personal: schedule.calendar.id == ScheduleCalendar.personal.id
-        case .work: schedule.calendar.id == ScheduleCalendar.work.id
+        case .personal: schedule.calendar.purpose == "personal"
+        case .work: schedule.calendar.purpose == "work"
         case .mine: !schedule.isExternal
         case .google: schedule.isExternal
         }
@@ -424,7 +424,7 @@ private struct DayAgendaSheet: View {
             List {
                 Section {
                     LabeledContent(
-                        Calendar.current.isDate(date, inSameDayAs: CalendarFixture.today) ? "오늘" : date < CalendarFixture.today ? "지난 일정" : "예정",
+                        Calendar.current.isDateInToday(date) ? "오늘" : date < .now ? "지난 일정" : "예정",
                         value: "\(daySchedules.count)개"
                     )
                 }
@@ -489,11 +489,6 @@ private enum DayAgendaDestination: Identifiable {
         case .detail(let schedule): "detail-\(schedule.id)"
         }
     }
-}
-
-private enum CalendarFixture {
-    static let july = Calendar.current.date(from: DateComponents(year: 2026, month: 7, day: 1)) ?? .now
-    static let today = Calendar.current.date(from: DateComponents(year: 2026, month: 7, day: 31, hour: 12)) ?? .now
 }
 
 private extension Date {

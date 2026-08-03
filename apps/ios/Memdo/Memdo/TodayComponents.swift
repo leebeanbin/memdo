@@ -72,20 +72,19 @@ struct TodayHeader: View {
 
 struct TodayWeekIndex: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    let selectedDate: Int
-    let scheduleCounts: [Int: Int]
-    let onSelect: (Int) -> Void
-    let onAdd: (Int) -> Void
-
-    private let dates = Array(zip(["월", "화", "수", "목", "금", "토", "일"], 27...33))
+    let dates: [Date]
+    let selectedDate: Date
+    let scheduleCounts: [Date: Int]
+    let onSelect: (Date) -> Void
+    let onAdd: (Date) -> Void
 
     var body: some View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
                 ScrollView(.horizontal) {
                     HStack(spacing: 8) {
-                        ForEach(dates, id: \.0) { day, date in
-                            dateButton(day: day, date: date)
+                        ForEach(dates, id: \.self) { date in
+                            dateButton(date)
                                 .frame(width: 64)
                         }
                     }
@@ -93,8 +92,8 @@ struct TodayWeekIndex: View {
                 .scrollIndicators(.hidden)
             } else {
                 HStack(spacing: 4) {
-                    ForEach(dates, id: \.0) { day, date in
-                        dateButton(day: day, date: date)
+                    ForEach(dates, id: \.self) { date in
+                        dateButton(date)
                     }
                 }
             }
@@ -103,34 +102,35 @@ struct TodayWeekIndex: View {
         .overlay(alignment: .bottom) { Divider() }
     }
 
-    private func dateButton(day: String, date: Int) -> some View {
+    private func dateButton(_ date: Date) -> some View {
         let count = scheduleCounts[date, default: 0]
+        let isSelected = Calendar.current.isDate(date, inSameDayAs: selectedDate)
 
         return Button { onSelect(date) } label: {
                     VStack(spacing: 4) {
-                        Text(day)
+                        Text(date.formatted(.dateTime.weekday(.narrow)))
                             .font(.caption2.weight(.semibold))
-                        Text("\(date > 31 ? date - 31 : date)")
+                        Text("\(Calendar.current.component(.day, from: date))")
                             .font(.subheadline.weight(.semibold))
                         MemdoScheduleCountDots(
                             count: count,
-                            isEmphasized: date == selectedDate
+                            isEmphasized: isSelected
                         )
                     }
-                    .foregroundStyle(date == selectedDate ? MemdoTheme.onAccent : MemdoTheme.secondaryInk)
+                    .foregroundStyle(isSelected ? MemdoTheme.onAccent : MemdoTheme.secondaryInk)
                     .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(date == selectedDate ? MemdoTheme.accent : Color.clear)
+                    .background(isSelected ? MemdoTheme.accent : Color.clear)
                     .clipShape(Capsule())
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(day)요일 \(date > 31 ? date - 31 : date)일")
+                    .accessibilityLabel(date.formatted(.dateTime.month().day().weekday(.wide)))
         }
         .buttonStyle(.plain)
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.5)
                 .onEnded { _ in onAdd(date) }
         )
-        .accessibilityAddTraits(date == selectedDate ? .isSelected : [])
-        .accessibilityValue("\(count)개\(date == selectedDate ? ", 선택됨" : "")")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityValue("\(count)개\(isSelected ? ", 선택됨" : "")")
         .accessibilityHint("길게 누르면 이 날짜에 일정을 추가합니다")
         .accessibilityAction(named: "새 일정 추가") { onAdd(date) }
     }
@@ -228,22 +228,23 @@ struct TodayScheduleSection: View {
 }
 
 struct TodayBriefingSection: View {
-    let onOpen: (BriefingItem) -> Void
-
     var body: some View {
-        MemdoSection(title: "오늘의 브리핑", trailing: "뉴스 2 · 일정 영향 1") {
-            VStack(spacing: 0) {
-                ForEach(Array(BriefingItem.samples.enumerated()), id: \.element.id) { index, item in
-                    Button { onOpen(item) } label: {
-                        BriefingRow(index: index + 1, item: item)
-                    }
-                    .buttonStyle(.plain)
-
-                    if index < BriefingItem.samples.count - 1 {
-                        Divider().padding(.leading, MemdoMetrics.rowContentLeading)
-                    }
+        MemdoSection(title: "오늘의 브리핑", trailing: "연결 준비 중") {
+            HStack(spacing: MemdoMetrics.rowSpacing) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(MemdoTheme.brand)
+                    .frame(width: MemdoMetrics.rowLeadingWidth)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("관심사 브리핑을 준비하고 있어요")
+                        .font(.subheadline.weight(.semibold))
+                    Text("뉴스 파이프라인이 연결되면 이곳에 요약이 표시됩니다.")
+                        .font(.caption)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
                 }
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, MemdoMetrics.rowInset)
+            .frame(minHeight: 64)
             .memdoRowGroup()
         }
     }
@@ -290,41 +291,6 @@ struct BriefingItem: Identifiable {
         }
     }
 
-    static let samples = [
-        BriefingItem(
-            id: "on-device-ai",
-            icon: "cpu",
-            channel: .interestNews,
-            category: "기술",
-            sourceName: "기술 피드",
-            publishedAt: "08:20",
-            title: "온디바이스 AI가 일상 도구로",
-            summary: "개인정보를 기기 안에서 처리하는 흐름이 커지고 있어요.",
-            selectionReason: "키워드: AI"
-        ),
-        BriefingItem(
-            id: "calendar-design",
-            icon: "rectangle.3.group",
-            channel: .interestNews,
-            category: "디자인",
-            sourceName: "디자인 피드",
-            publishedAt: "07:40",
-            title: "일정 도구는 더 조용해지고 있어요",
-            summary: "기능을 숨기고 필요한 순간에만 드러내는 캘린더 흐름이 늘고 있어요.",
-            selectionReason: "키워드: 제품 디자인"
-        ),
-        BriefingItem(
-            id: "evening-weather",
-            icon: "cloud.rain",
-            channel: .scheduleImpact,
-            category: "날씨",
-            sourceName: "날씨",
-            publishedAt: "방금",
-            title: "19시 산책은 30분 뒤로",
-            summary: "퇴근 무렵 짧은 소나기가 예상돼요.",
-            selectionReason: "일정 영향: 19:00 산책"
-        )
-    ]
 }
 
 private struct BriefingRow: View {

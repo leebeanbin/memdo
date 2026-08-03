@@ -34,11 +34,11 @@ flowchart LR
 ## 3. 서비스 이름
 
 ```text
-myday-api
-myday-jobs
-myday-mcp
-myday-approval-web
-myday-ios
+memdo-api
+memdo-jobs
+memdo-mcp
+memdo-approval-web
+memdo-ios
 ```
 
 공통 resource attributes:
@@ -77,28 +77,34 @@ status_class
 ## 5. 도메인 metrics
 
 ```text
-myday_sync_mutations_total
-myday_sync_conflicts_total
-myday_job_pending_count
-myday_job_oldest_pending_seconds
-myday_job_failures_total
-myday_google_sync_failures_total
-myday_google_sync_token_resets_total
-myday_agent_runs_total
-myday_agent_failures_total
-myday_agent_duration_ms
-myday_proposals_created_total
-myday_proposals_approved_total
-myday_notification_failures_total
-myday_backup_age_seconds
+memdo_sync_mutations_total
+memdo_sync_conflicts_total
+memdo_sync_payload_bytes
+memdo_http_response_bytes
+memdo_queue_depth
+memdo_queue_oldest_message_seconds
+memdo_job_retries_total
+memdo_job_failures_total
+memdo_google_sync_failures_total
+memdo_google_sync_token_resets_total
+memdo_agent_runs_total
+memdo_agent_failures_total
+memdo_agent_duration_ms
+memdo_vector_search_duration_ms
+memdo_redis_errors_total
+memdo_proposals_created_total
+memdo_proposals_approved_total
+memdo_notification_failures_total
+memdo_backup_age_seconds
 ```
 
 AI 비용:
 
 ```text
-myday_openai_input_tokens_total
-myday_openai_output_tokens_total
-myday_openai_requests_total
+memdo_llm_input_tokens_total
+memdo_llm_output_tokens_total
+memdo_llm_requests_total
+memdo_llm_cost_usd
 ```
 
 사용자 ID별 metric은 만들지 않는다.
@@ -258,7 +264,37 @@ GET /health/ready
 
 telemetry는 제품 데이터의 백업이 아니다.
 
-## 13. iOS Simulator 개발 로그 판별
+## 13. 공급자 교체와 계측 계약
+
+도메인 코드가 Grafana, Sentry, Supabase SDK를 직접 호출하지 않는다. 서버의 `_shared/telemetry.ts`와 iOS의 `TelemetryClient`만 공급자 SDK를 안다. 단, 구현이 하나인 동안 factory나 DI container는 만들지 않고 함수/initializer로 주입한다.
+
+안정 계약:
+
+```text
+recordCounter(name, value, attributes)
+recordDuration(name, milliseconds, attributes)
+recordEvent(name, result, requestOrOperationId, attributes)
+```
+
+- 이름과 낮은 cardinality attribute는 Memdo가 소유한다.
+- OTLP endpoint, sampling, environment, release는 환경 설정으로 바꾼다.
+- dashboard는 route template, operation type, provider, result code만 사용한다.
+- Grafana를 바꾸더라도 domain event 이름과 alert 의미는 유지한다.
+- telemetry 전송 실패는 제품 요청을 실패시키지 않는다.
+
+배포 단계별 최소 관찰:
+
+| 단계 | 필수 관찰 |
+|---|---|
+| B2 일정 | rate/error/duration/response bytes/rows |
+| B4 sync | mutation 수, payload bytes, lag, conflicts |
+| B5 queue | depth, oldest age, retry, permanent failure |
+| B7 search | p95, 0-result ratio, rows scanned/returned |
+| B8 integrations | provider latency/error/token reset |
+| B10 Agent | model, token, latency, tool, approval, vector/Redis error |
+| B12 MCP | client class, tool, duration, rate limit, proposal result |
+
+## 14. iOS Simulator 개발 로그 판별
 
 다음 로그는 Memdo가 WebKit을 중복 링크한 오류가 아니라 iOS 26.5 Simulator 런타임의 접근성 번들 충돌로 분류한다.
 
@@ -282,7 +318,7 @@ WebKit.axbundle/WebKit and WebCore.axbundle/WebCore
 
 근거: 동일 경고의 [Apple Developer Forums 사례](https://developer.apple.com/forums/thread/799951), [Xcode 26.6 Release Notes](https://developer.apple.com/documentation/xcode-release-notes/xcode-26_6-release-notes?language=objc).
 
-## 13. 장애 대응
+## 15. 장애 대응
 
 ```text
 alert

@@ -14,6 +14,7 @@
 		4CE9071DE9A5E1E5F3D45F0A /* AppShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4D119A0D929FA9AE7D47773 /* AppShellView.swift */; };
 		55306D301F120767611231F5 /* MemdoWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AE1B6FFACC369DADAFC99ADB /* MemdoWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5AFEEBA9CD4F0FEBBA50F09B /* ScheduleModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B46ABED061C6BD316DB8F3 /* ScheduleModel.swift */; };
+		C8F4B9A01D2E4F60718293A4 /* ScheduleAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A5C0B12E3F4051728394A5 /* ScheduleAPI.swift */; };
 		5C8DB08635A4922DF0808F7B /* TodayComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E81203EAFA09124BA54F8AE7 /* TodayComponents.swift */; };
 		6D52CEFC8B695B018FB30EAD /* MemdoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B25474359568B8C6264B6E8 /* MemdoApp.swift */; };
 		78F5DD11294A40F25A5A9524 /* DailySummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6561C352731005322618C740 /* DailySummaryView.swift */; };
@@ -24,6 +25,7 @@
 		E117E6A55D78273E89DFAAC0 /* ScheduleSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9B39D6188C70A056DA658E /* ScheduleSearchView.swift */; };
 		E49AD453117D9B5AB53EA8CE /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257B3BF059A0E5D9A80D8E50 /* TodayView.swift */; };
 		F63E8DD2470DCBE30FA93063 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02910E4D9DB4CBEE1D8C7C10 /* SettingsView.swift */; };
+		FE2A74E992A6431DAB112001 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = FE2A74E992A6431DAB112004 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -53,6 +55,7 @@
 /* Begin PBXFileReference section */
 		02910E4D9DB4CBEE1D8C7C10 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		07B46ABED061C6BD316DB8F3 /* ScheduleModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleModel.swift; sourceTree = "<group>"; };
+		D9A5C0B12E3F4051728394A5 /* ScheduleAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleAPI.swift; sourceTree = "<group>"; };
 		19BD21007334C06C0B2028F9 /* ScheduleRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleRow.swift; sourceTree = "<group>"; };
 		1F8C4864695656352FE70BA3 /* ScheduleSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleSheets.swift; sourceTree = "<group>"; };
 		257B3BF059A0E5D9A80D8E50 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
@@ -72,6 +75,17 @@
 		F29F2315ADA3175E0D4A894C /* MemdoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoTheme.swift; sourceTree = "<group>"; };
 		FC9B39D6188C70A056DA658E /* ScheduleSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleSearchView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		FE2A74E992A6431DAB112002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FE2A74E992A6431DAB112001 /* Supabase in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		1C97FF6EDE54AD00BE4A0A37 /* MemdoWidget */ = {
@@ -104,6 +118,7 @@
 				9B25474359568B8C6264B6E8 /* MemdoApp.swift */,
 				42994A317F898780763B33D4 /* MemdoComponents.swift */,
 				F29F2315ADA3175E0D4A894C /* MemdoTheme.swift */,
+				D9A5C0B12E3F4051728394A5 /* ScheduleAPI.swift */,
 				07B46ABED061C6BD316DB8F3 /* ScheduleModel.swift */,
 				19BD21007334C06C0B2028F9 /* ScheduleRow.swift */,
 				FC9B39D6188C70A056DA658E /* ScheduleSearchView.swift */,
@@ -149,6 +164,7 @@
 			buildConfigurationList = A98668BF3B00C961DCAB3EDF /* Build configuration list for PBXNativeTarget "Memdo" */;
 			buildPhases = (
 				B6EAAEBBCBA9992C43C1B8A5 /* Sources */,
+				FE2A74E992A6431DAB112002 /* Frameworks */,
 				5468C02C0083065B4D28CB4B /* Resources */,
 				7250461EED3A93CB14C80824 /* Embed Foundation Extensions */,
 			);
@@ -159,6 +175,7 @@
 			);
 			name = Memdo;
 			packageProductDependencies = (
+				FE2A74E992A6431DAB112004 /* Supabase */,
 			);
 			productName = Memdo;
 			productReference = 7687EBCFF670FFE2F6CA37D2 /* Memdo.app */;
@@ -186,6 +203,9 @@
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2529AEF2A11C53E361FF1210 /* Products */;
+			packageReferences = (
+				FE2A74E992A6431DAB112003 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -226,6 +246,7 @@
 				6D52CEFC8B695B018FB30EAD /* MemdoApp.swift in Sources */,
 				2A29175D38335F059C4AE766 /* MemdoComponents.swift in Sources */,
 				00D267B5D29A0D25FE6E98FA /* MemdoTheme.swift in Sources */,
+				C8F4B9A01D2E4F60718293A4 /* ScheduleAPI.swift in Sources */,
 				5AFEEBA9CD4F0FEBBA50F09B /* ScheduleModel.swift in Sources */,
 				98172737F1AC51B31154A93D /* ScheduleRow.swift in Sources */,
 				E117E6A55D78273E89DFAAC0 /* ScheduleSearchView.swift in Sources */,
@@ -250,6 +271,7 @@
 		07DC1EAB0F49E2863D99B923 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MemdoWidget/MemdoWidget.entitlements;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MemdoWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -268,6 +290,7 @@
 		07FE6F754E82B6F83673E62B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MemdoWidget/MemdoWidget.entitlements;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MemdoWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -287,6 +310,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = Memdo/Memdo.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Memdo/Info.plist;
@@ -297,6 +321,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.memdo.ios;
 				PRODUCT_NAME = Memdo;
 				SDKROOT = iphoneos;
+				SUPABASE_PUBLISHABLE_KEY = sb_publishable_sebvLtMsA1K5DtMmelpGOA_CxT_3F7W;
+				SUPABASE_URL = "https://snfvykovzybfpwomnxhj.supabase.co";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -372,6 +398,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = Memdo/Memdo.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Memdo/Info.plist;
@@ -382,6 +409,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.memdo.ios;
 				PRODUCT_NAME = Memdo;
 				SDKROOT = iphoneos;
+				SUPABASE_PUBLISHABLE_KEY = sb_publishable_sebvLtMsA1K5DtMmelpGOA_CxT_3F7W;
+				SUPABASE_URL = "https://snfvykovzybfpwomnxhj.supabase.co";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -477,6 +506,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		FE2A74E992A6431DAB112003 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.46.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		FE2A74E992A6431DAB112004 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FE2A74E992A6431DAB112003 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 3B84853CA27BE767B097094F /* Project object */;
 }

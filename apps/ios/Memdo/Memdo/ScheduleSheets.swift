@@ -52,7 +52,7 @@ struct ScheduleDetailSheet: View {
                             LabeledContent("장소", value: "없음")
                         }
                         LabeledContent("알림", value: draft.reminder)
-                        LabeledContent("반복", value: draft.repeatRule.rawValue)
+                        LabeledContent("반복", value: draft.repeatRule.label)
                         LabeledContent("메모", value: draft.memo.nilFallback)
                     }
                 }
@@ -129,8 +129,6 @@ private struct ScheduleDetailHeader: View {
 struct ScheduleEditorFields: View {
     @Environment(ScheduleStore.self) private var scheduleStore
     @Binding var schedule: ScheduleDetail
-    @State private var isAddingCalendar = false
-    @State private var newCalendarName = ""
 
     var body: some View {
         Group {
@@ -141,9 +139,9 @@ struct ScheduleEditorFields: View {
                         ForEach(ScheduleKind.allCases) { kind in
                             Button { select(kind) } label: {
                                 if schedule.kind == kind {
-                                    Label(kind.rawValue, systemImage: "checkmark")
+                                    Label(kind.label, systemImage: "checkmark")
                                 } else {
-                                    Text(kind.rawValue)
+                                    Text(kind.label)
                                 }
                             }
                         }
@@ -158,26 +156,32 @@ struct ScheduleEditorFields: View {
                             }
                         }
                     }
-                    Divider()
-                    Button("새 캘린더 추가", systemImage: "plus") {
-                        isAddingCalendar = true
-                    }
                 } label: {
-                    LabeledContent("분류", value: "\(schedule.kind.rawValue) · \(schedule.calendar.title)")
+                    LabeledContent("분류", value: "\(schedule.kind.label) · \(schedule.calendar.title)")
                 }
             }
 
             Section("언제") {
-                DatePicker("시작", selection: startBinding, displayedComponents: datePickerComponents)
+                if schedule.hasScheduledTime {
+                    DatePicker("시작", selection: startBinding, displayedComponents: datePickerComponents)
+                        .datePickerStyle(.compact)
+                    DatePicker(
+                        "종료",
+                        selection: endBinding,
+                        in: startBinding.wrappedValue...,
+                        displayedComponents: datePickerComponents
+                    )
                     .datePickerStyle(.compact)
-                DatePicker(
-                    "종료",
-                    selection: $schedule.endAt,
-                    in: schedule.startAt...,
-                    displayedComponents: datePickerComponents
-                )
-                .datePickerStyle(.compact)
-                Toggle("종일", isOn: $schedule.isAllDay)
+                    Toggle("종일", isOn: $schedule.isAllDay)
+
+                    if schedule.kind == .task {
+                        Button("시간 제거", systemImage: "clock.badge.xmark", action: removeScheduledTime)
+                    }
+                } else {
+                    DatePicker("날짜", selection: scheduledDateBinding, displayedComponents: .date)
+                        .datePickerStyle(.compact)
+                    Button("시간 추가", systemImage: "clock", action: addScheduledTime)
+                }
 
                 if !schedule.isTimeRangeValid {
                     Label("종료는 시작보다 뒤여야 해요", systemImage: "exclamationmark.circle")
@@ -200,19 +204,21 @@ struct ScheduleEditorFields: View {
 
             Section("선택 정보") {
                 NavigationLink {
-                    LocationPickerView(currentLocation: schedule.location) {
-                        schedule.location = $0
+                    LocationPickerView(currentLocation: schedule.locationValue) {
+                        schedule.locationValue = $0
                     }
                 } label: {
                     LabeledContent("장소", value: schedule.location.nilFallback)
                 }
-                LabeledContent("알림") {
-                    TextField("예: 30분 전", text: $schedule.reminder)
-                        .multilineTextAlignment(.trailing)
+                Picker("알림", selection: $schedule.reminderOffsetMinutes) {
+                    ForEach(ScheduleReminderOption.options) { option in
+                        Text(option.label).tag(option.offsetMinutes)
+                    }
                 }
+                .pickerStyle(.menu)
                 Picker("반복", selection: $schedule.repeatRule) {
                     ForEach(ScheduleRepeatRule.allCases) { rule in
-                        Text(rule.rawValue).tag(rule)
+                        Text(rule.label).tag(rule)
                     }
                 }
                 .pickerStyle(.menu)
@@ -239,13 +245,10 @@ struct ScheduleEditorFields: View {
                 Text("Agent는 저장 전에 변경 내용을 항상 보여줘요.")
             }
         }
-        .alert("새 캘린더", isPresented: $isAddingCalendar) {
-            TextField("예: 사이드 프로젝트", text: $newCalendarName)
-            Button("취소", role: .cancel) { newCalendarName = "" }
-            Button("추가", action: addCalendar)
-                .disabled(newCalendarName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        } message: {
-            Text("일정을 묶어 볼 이름을 입력하세요.")
+        .onAppear {
+            if schedule.calendar.id.isEmpty, let calendar = scheduleStore.calendars.first {
+                schedule.calendar = calendar
+            }
         }
     }
 
@@ -255,21 +258,45 @@ struct ScheduleEditorFields: View {
 
     private var startBinding: Binding<Date> {
         Binding(
-            get: { schedule.startAt },
+            get: { schedule.startAt ?? defaultStart },
             set: { newStart in
-                let duration = max(schedule.endAt.timeIntervalSince(schedule.startAt), 60)
+                let duration = max(
+                    schedule.endAt?.timeIntervalSince(schedule.startAt ?? newStart) ?? 3_600,
+                    60
+                )
                 schedule.startAt = newStart
                 schedule.endAt = newStart.addingTimeInterval(duration)
+                schedule.scheduledDate = Calendar.current.startOfDay(for: newStart)
+                schedule.timeBucket = .inferred(from: newStart)
             }
         )
     }
 
+    private var endBinding: Binding<Date> {
+        Binding(
+            get: { schedule.endAt ?? defaultStart.addingTimeInterval(3_600) },
+            set: { schedule.endAt = $0 }
+        )
+    }
+
+    private var scheduledDateBinding: Binding<Date> {
+        Binding(
+            get: { schedule.scheduledDate },
+            set: { schedule.scheduledDate = Calendar.current.startOfDay(for: $0) }
+        )
+    }
+
+    private var defaultStart: Date {
+        Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: schedule.scheduledDate)
+            ?? schedule.scheduledDate
+    }
+
     private var dueBinding: Binding<Date> {
-        Binding(get: { schedule.dueAt ?? schedule.endAt }, set: { schedule.dueAt = $0 })
+        Binding(get: { schedule.dueAt ?? schedule.endAt ?? defaultStart }, set: { schedule.dueAt = $0 })
     }
 
     private func addDueDate() {
-        schedule.dueAt = schedule.endAt
+        schedule.dueAt = schedule.endAt ?? defaultStart
     }
 
     private func removeDueDate() {
@@ -279,16 +306,23 @@ struct ScheduleEditorFields: View {
     private func select(_ kind: ScheduleKind) {
         schedule.kind = kind
         if kind == .event {
+            if !schedule.hasScheduledTime { addScheduledTime() }
             schedule.dueAt = nil
             schedule.isDone = false
         }
     }
 
-    private func addCalendar() {
-        if let calendar = scheduleStore.addCalendar(named: newCalendarName) {
-            schedule.calendar = calendar
-        }
-        newCalendarName = ""
+    private func addScheduledTime() {
+        schedule.startAt = defaultStart
+        schedule.endAt = defaultStart.addingTimeInterval(3_600)
+        schedule.timeBucket = .inferred(from: defaultStart)
+    }
+
+    private func removeScheduledTime() {
+        schedule.startAt = nil
+        schedule.endAt = nil
+        schedule.isAllDay = false
+        schedule.timeBucket = .anytime
     }
 
     private func tidyNote() {
@@ -314,13 +348,9 @@ struct AddScheduleSheet: View {
     let onSave: (ScheduleDetail) -> Void
 
     private var canSave: Bool {
-        !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && draft.isTimeRangeValid
-    }
-
-    init(day: Int, onSave: @escaping (ScheduleDetail) -> Void) {
-        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 7, day: day)) ?? .now
-        _draft = State(initialValue: Self.makeDraft(for: date))
-        self.onSave = onSave
+        !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && UUID(uuidString: draft.calendar.id) != nil
+            && draft.isTimeRangeValid
     }
 
     init(date: Date, onSave: @escaping (ScheduleDetail) -> Void) {
@@ -359,10 +389,13 @@ struct AddScheduleSheet: View {
     private static func makeDraft(for date: Date) -> ScheduleDetail {
         let calendar = Calendar.current
         let startAt = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
-        var draft = ScheduleDetail(day: calendar.component(.day, from: date), time: "09:00", title: "")
-        draft.startAt = startAt
-        draft.endAt = calendar.date(byAdding: .hour, value: 1, to: startAt) ?? startAt
-        return draft
+        return ScheduleDetail(
+            scheduledDate: date,
+            startAt: startAt,
+            endAt: calendar.date(byAdding: .hour, value: 1, to: startAt) ?? startAt,
+            title: "",
+            calendar: .unassigned
+        )
     }
 }
 
@@ -376,14 +409,14 @@ private struct LocationPickerView: View {
     @State private var results: [MKMapItem] = []
     @State private var isSearching = false
 
-    let currentLocation: String
-    let onSelect: (String) -> Void
+    let currentLocation: ScheduleLocation?
+    let onSelect: (ScheduleLocation?) -> Void
 
     var body: some View {
         List {
-            if !currentLocation.isEmpty {
+            if let currentLocation {
                 Section("현재 장소") {
-                    Button(currentLocation) {
+                    Button(currentLocation.displayText) {
                         onSelect(currentLocation)
                         dismiss()
                     }
@@ -416,10 +449,10 @@ private struct LocationPickerView: View {
                 }
             }
 
-            if !currentLocation.isEmpty {
+            if currentLocation != nil {
                 Section {
                     Button("장소 지우기", role: .destructive) {
-                        onSelect("")
+                        onSelect(nil)
                         dismiss()
                     }
                 }
@@ -446,17 +479,24 @@ private struct LocationPickerView: View {
     }
 
     private func select(_ item: MKMapItem) {
-        let name = item.name ?? "장소"
-        let address = item.placemark.title ?? ""
-        onSelect(address.isEmpty || address == name ? name : "\(name) · \(address)")
+        onSelect(ScheduleLocation(
+            name: item.name ?? "장소",
+            address: item.placemark.title,
+            latitude: item.placemark.coordinate.latitude,
+            longitude: item.placemark.coordinate.longitude,
+            provider: .appleMaps
+        ))
         dismiss()
     }
 }
 
 private extension ScheduleDetail {
     var googleMapsURL: URL? {
-        guard !location.isEmpty,
-              let query = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
+        guard let locationValue else { return nil }
+        if let latitude = locationValue.latitude, let longitude = locationValue.longitude {
+            return URL(string: "https://www.google.com/maps/search/?api=1&query=\(latitude),\(longitude)")
+        }
+        guard let query = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
         return URL(string: "https://www.google.com/maps/search/?api=1&query=\(query)")
     }
 }

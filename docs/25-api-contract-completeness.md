@@ -24,9 +24,9 @@
 ## 2. 공통 URL
 
 ```text
-Base: https://api.myday.example/v1
-MCP:  https://mcp.myday.example/mcp
-Web:  https://myday.example
+Base: https://api.memdo.example/v1
+MCP:  https://mcp.memdo.example/mcp
+Web:  https://memdo.example
 ```
 
 ## 3. 인증
@@ -160,7 +160,7 @@ MCP tool schema test
 
 ## 14. 인증 서비스 경계
 
-회원 가입, Sign in with Apple token exchange, access-token refresh, logout은 Supabase Auth의 공개 계약을 그대로 사용하며 Memdo OpenAPI에 재정의하지 않는다.
+Google·GitHub·Apple 로그인, provider callback, access-token refresh, logout은 Supabase Auth의 공개 계약을 그대로 사용하며 Memdo OpenAPI에 재정의하지 않는다.
 
 Memdo API가 직접 소유하는 것은 다음이다.
 
