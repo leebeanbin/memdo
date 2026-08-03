@@ -147,75 +147,119 @@ private struct MemdoRootView: View {
 }
 
 private struct MemdoSignInView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let session: MemdoSession
 
     var body: some View {
-        ZStack {
-            MemdoPageBackground().ignoresSafeArea()
+        GeometryReader { proxy in
+            ZStack {
+                MemdoPageBackground().ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 28) {
-                Spacer()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 32) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Memdo")
+                                .font(.system(size: 30, weight: .bold, design: .rounded))
+                            Text("일정과 설정을 어느 기기에서든 이어서 관리하세요.")
+                                .font(.body)
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
 
-                Image(systemName: "sparkles")
-                    .font(.title2.weight(.semibold))
-                    .frame(width: 48, height: 48)
-                    .memdoFloatingSurface(radius: 16)
-                    .accessibilityHidden(true)
+                        VStack(spacing: 12) {
+                            providerButton("Google로 계속", image: "GoogleSignIn", provider: .google)
+                            providerButton("GitHub로 계속", image: "GitHubSignIn", provider: .github)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Memdo")
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
-                    Text("내 일정은 선명하게, Agent는 조용하게.")
-                        .font(.subheadline)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
-                }
+                            HStack(spacing: 12) {
+                                Rectangle()
+                                    .fill(MemdoTheme.outline)
+                                    .frame(height: 0.5)
+                                Text("또는")
+                                    .font(.caption)
+                                    .foregroundStyle(MemdoTheme.secondaryInk)
+                                Rectangle()
+                                    .fill(MemdoTheme.outline)
+                                    .frame(height: 0.5)
+                            }
+                            .padding(.vertical, 2)
 
-                VStack(spacing: 10) {
-                    providerButton("Google로 계속", systemImage: "g.circle", provider: .google)
-                    providerButton("GitHub로 계속", systemImage: "chevron.left.forwardslash.chevron.right", provider: .github)
+                            Button {
+                                Task { await session.continueAsGuest() }
+                            } label: {
+                                Text("계정 없이 계속")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity, minHeight: 50)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(MemdoTheme.ink)
+                            .accessibilityHint("나중에 설정에서 계정을 연결할 수 있습니다")
+                        }
 
-                    Button("계정 없이 시작") {
-                        Task { await session.continueAsGuest() }
+                        VStack(alignment: .leading, spacing: 10) {
+                            if session.isBusy {
+                                ProgressView("로그인 준비 중")
+                                    .font(.caption)
+                            }
+
+                            if let errorMessage = session.errorMessage {
+                                Label(errorMessage, systemImage: "exclamationmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                                    .accessibilityLabel("로그인 오류: \(errorMessage)")
+                            }
+
+                            Text("로그인은 일정 동기화에만 사용합니다. 캘린더 접근 권한은 연결할 때 별도로 요청합니다.")
+                                .font(.caption)
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(MemdoTheme.secondaryInk)
-                    .frame(minHeight: MemdoMetrics.touchTarget)
+                    .frame(maxWidth: .infinity, minHeight: proxy.size.height - 64, alignment: .center)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 32)
                 }
-
-                if let errorMessage = session.errorMessage {
-                    Text(errorMessage)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .accessibilityLabel("로그인 오류: \(errorMessage)")
-                }
+                .scrollIndicators(.hidden)
             }
-            .padding(MemdoMetrics.pagePadding)
-            .padding(.bottom, 24)
         }
         .disabled(session.isBusy)
-        .overlay {
-            if session.isBusy {
-                ProgressView()
-                    .padding(18)
-                    .memdoFloatingSurface(radius: 20)
-            }
-        }
     }
 
-    private func providerButton(_ title: String, systemImage: String, provider: Provider) -> some View {
+    private func providerButton(_ title: String, image: String, provider: Provider) -> some View {
         Button {
             Task { await session.signIn(with: provider) }
         } label: {
-            Label(title, systemImage: systemImage)
-                .font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 50)
-                .background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            HStack(spacing: 12) {
+                Image(image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+                Text(title)
+                    .font(.system(size: 14, weight: .medium))
+                    .lineLimit(1)
+                Spacer()
+            }
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(providerBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(MemdoTheme.controlOutline)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(providerOutline)
                 }
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .foregroundStyle(MemdoTheme.ink)
+    }
+
+    private var providerBackground: Color {
+        colorScheme == .dark ? Color(red: 19 / 255, green: 19 / 255, blue: 20 / 255) : .white
+    }
+
+    private var providerOutline: Color {
+        colorScheme == .dark
+            ? Color(red: 142 / 255, green: 145 / 255, blue: 143 / 255)
+            : Color(red: 116 / 255, green: 119 / 255, blue: 117 / 255)
     }
 }
