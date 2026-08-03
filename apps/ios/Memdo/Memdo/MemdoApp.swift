@@ -165,17 +165,32 @@ private struct MemdoSignInView: View {
     }
 
     private var signInContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                MemdoBrandMark(size: 26)
+        VStack(spacing: 0) {
+            Spacer(minLength: 24)
+
+            brandHero
+
+            Spacer(minLength: 36)
+
+            signInPanel
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var brandHero: some View {
+        VStack(spacing: 18) {
+            MemdoBrandMark(size: 44)
+                .frame(width: 76, height: 76)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(MemdoTheme.outline.opacity(0.55))
+                }
+
+            VStack(spacing: 10) {
                 Text("Memdo")
-                    .font(.system(.title3, design: .rounded, weight: .bold))
-            }
-            .accessibilityElement(children: .combine)
-
-            Spacer(minLength: 48)
-
-            VStack(alignment: .leading, spacing: 12) {
+                    .font(.caption.weight(.bold))
+                    .tracking(0.8)
                 Text("내 하루를,\n내 방식대로.")
                     .font(.system(.title, design: .rounded, weight: .bold))
                     .tracking(-0.4)
@@ -184,12 +199,9 @@ private struct MemdoSignInView: View {
                     .font(.subheadline)
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
-
-            Spacer(minLength: 36)
-
-            signInPanel
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
     }
 
     private var signInPanel: some View {
