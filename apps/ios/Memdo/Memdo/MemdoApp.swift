@@ -108,18 +108,39 @@ final class MemdoSession {
 }
 
 private struct MemdoRootView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showsLaunchBrand = true
+
     let session: MemdoSession
 
     var body: some View {
+        ZStack {
+            if showsLaunchBrand {
+                MemdoLaunchView()
+                    .transition(.opacity)
+            } else {
+                sessionContent
+                    .transition(.opacity)
+            }
+        }
+        .task {
+            guard showsLaunchBrand else { return }
+            do {
+                try await Task.sleep(for: .milliseconds(700))
+            } catch {
+                return
+            }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) {
+                showsLaunchBrand = false
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sessionContent: some View {
         switch session.phase {
         case .loading:
-            ZStack {
-                MemdoPageBackground().ignoresSafeArea()
-                VStack(spacing: 16) {
-                    MemdoBrandMark(size: 44)
-                    ProgressView("세션을 확인하는 중")
-                }
-            }
+            MemdoLaunchView()
         case .signedOut:
             MemdoSignInView(session: session)
         case .signedIn:
@@ -133,6 +154,17 @@ private struct MemdoRootView: View {
                 description: Text(message)
             )
         }
+    }
+}
+
+private struct MemdoLaunchView: View {
+    var body: some View {
+        ZStack {
+            MemdoPageBackground().ignoresSafeArea()
+            MemdoBrandMark(size: 72)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Memdo")
     }
 }
 
@@ -166,79 +198,42 @@ private struct MemdoSignInView: View {
 
     private var signInContent: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 24)
+            Spacer(minLength: 48)
 
-            brandHero
-
-            Spacer(minLength: 36)
-
-            signInPanel
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var brandHero: some View {
-        VStack(spacing: 16) {
-            MemdoBrandMark(size: 60)
-
-            VStack(spacing: 10) {
+            VStack(spacing: 16) {
+                MemdoBrandMark(size: 64)
                 Text("Memdo")
-                    .font(.system(.title3, design: .rounded, weight: .bold))
-                    .tracking(-0.2)
-                Text("내 하루를,\n내 방식대로.")
-                    .font(.system(.title, design: .rounded, weight: .bold))
-                    .tracking(-0.4)
-                    .accessibilityAddTraits(.isHeader)
-                Text("일정은 선명하게, Agent는 조용하게.")
-                    .font(.subheadline)
-                    .foregroundStyle(MemdoTheme.secondaryInk)
+                    .font(.system(.title2, design: .rounded, weight: .bold))
+                    .tracking(-0.3)
             }
-        }
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
-    }
+            .accessibilityElement(children: .combine)
 
-    private var signInPanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("계정으로 계속")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(MemdoTheme.secondaryInk)
+            Spacer(minLength: 64)
 
             VStack(spacing: 10) {
                 providerButton("Google로 계속", image: "GoogleSignIn", provider: .google)
                 providerButton("GitHub로 계속", image: "GitHubSignIn", provider: .github)
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                if session.isBusy {
-                    ProgressView("로그인 화면을 여는 중")
-                        .font(.caption)
-                }
-
-                if let errorMessage = session.errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .accessibilityLabel("로그인 오류: \(errorMessage)")
-                }
-
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "lock.shield")
-                        .font(.caption.weight(.medium))
-                        .frame(width: 14)
-                    Text("로그인 정보는 일정 동기화에만 사용해요. 캘린더 권한은 연결할 때 별도로 요청합니다.")
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .font(.caption)
-                .foregroundStyle(MemdoTheme.secondaryInk)
-                .accessibilityElement(children: .combine)
-            }
+            signInFeedback
         }
-        .padding(10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .stroke(MemdoTheme.outline.opacity(0.55))
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var signInFeedback: some View {
+        if session.isBusy {
+            ProgressView("로그인 화면을 여는 중")
+                .font(.caption)
+                .padding(.top, 12)
+        }
+
+        if let errorMessage = session.errorMessage {
+            Label(errorMessage, systemImage: "exclamationmark.circle.fill")
+                .font(.caption)
+                .foregroundStyle(.red)
+                .padding(.top, 12)
+                .accessibilityLabel("로그인 오류: \(errorMessage)")
         }
     }
 
