@@ -173,7 +173,7 @@ private struct MemdoSignInView: View {
             }
             .accessibilityElement(children: .combine)
 
-            Spacer(minLength: 56)
+            Spacer(minLength: 48)
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("내 하루를,\n내 방식대로.")
@@ -185,9 +185,20 @@ private struct MemdoSignInView: View {
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
 
-            Spacer(minLength: 64)
+            Spacer(minLength: 36)
 
-            VStack(spacing: 12) {
+            signInPanel
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var signInPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("계정으로 계속")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(MemdoTheme.secondaryInk)
+
+            VStack(spacing: 10) {
                 providerButton("Google로 계속", image: "GoogleSignIn", provider: .google)
                 providerButton("GitHub로 계속", image: "GitHubSignIn", provider: .github)
             }
@@ -210,9 +221,13 @@ private struct MemdoSignInView: View {
                     .foregroundStyle(MemdoTheme.secondaryInk)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 20)
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(MemdoTheme.outline.opacity(0.55))
+        }
     }
 
     private func providerButton(_ title: String, image: String, provider: Provider) -> some View {
@@ -231,9 +246,9 @@ private struct MemdoSignInView: View {
             }
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity, minHeight: 52)
-                .background(providerBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(providerBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(providerOutline)
                 }
                 .contentShape(Rectangle())
