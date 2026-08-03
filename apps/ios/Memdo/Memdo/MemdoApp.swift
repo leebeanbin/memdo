@@ -143,58 +143,69 @@ private struct MemdoSignInView: View {
             ZStack {
                 MemdoPageBackground().ignoresSafeArea()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Memdo")
-                            .font(.system(.title3, design: .rounded, weight: .bold))
+                ViewThatFits(in: .vertical) {
+                    signInContent
+                        .frame(minHeight: proxy.size.height - 48)
 
-                        Spacer(minLength: 56)
-
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("내 하루를,\n내 방식대로.")
-                                .font(.system(.title, design: .rounded, weight: .bold))
-                                .tracking(-0.4)
-                                .accessibilityAddTraits(.isHeader)
-                            Text("일정은 선명하게, Agent는 조용하게.")
-                                .font(.subheadline)
-                                .foregroundStyle(MemdoTheme.secondaryInk)
-                        }
-
-                        Spacer(minLength: 64)
-
-                        VStack(spacing: 12) {
-                            providerButton("Google로 계속", image: "GoogleSignIn", provider: .google)
-                            providerButton("GitHub로 계속", image: "GitHubSignIn", provider: .github)
-                        }
-
-                        VStack(alignment: .leading, spacing: 12) {
-                            if session.isBusy {
-                                ProgressView("로그인 화면을 여는 중")
-                                    .font(.caption)
-                            }
-
-                            if let errorMessage = session.errorMessage {
-                                Label(errorMessage, systemImage: "exclamationmark.circle.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.red)
-                                    .accessibilityLabel("로그인 오류: \(errorMessage)")
-                            }
-
-                            Text("계정 정보는 로그인과 일정 동기화에만 사용됩니다. 캘린더 권한은 연결할 때 별도로 요청합니다.")
-                                .font(.caption)
-                                .foregroundStyle(MemdoTheme.secondaryInk)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(.top, 20)
+                    ScrollView {
+                        signInContent
+                            .frame(minHeight: proxy.size.height - 48)
                     }
-                    .frame(maxWidth: .infinity, minHeight: proxy.size.height - 48, alignment: .top)
-                    .padding(.horizontal, MemdoMetrics.pagePadding)
-                    .padding(.vertical, 24)
+                    .scrollIndicators(.hidden)
+                    .scrollBounceBehavior(.basedOnSize)
                 }
-                .scrollIndicators(.hidden)
+                .padding(.horizontal, MemdoMetrics.pagePadding)
+                .padding(.vertical, 24)
             }
         }
         .disabled(session.isBusy)
+    }
+
+    private var signInContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Memdo")
+                .font(.system(.title3, design: .rounded, weight: .bold))
+
+            Spacer(minLength: 56)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("내 하루를,\n내 방식대로.")
+                    .font(.system(.title, design: .rounded, weight: .bold))
+                    .tracking(-0.4)
+                    .accessibilityAddTraits(.isHeader)
+                Text("일정은 선명하게, Agent는 조용하게.")
+                    .font(.subheadline)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+
+            Spacer(minLength: 64)
+
+            VStack(spacing: 12) {
+                providerButton("Google로 계속", image: "GoogleSignIn", provider: .google)
+                providerButton("GitHub로 계속", image: "GitHubSignIn", provider: .github)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                if session.isBusy {
+                    ProgressView("로그인 화면을 여는 중")
+                        .font(.caption)
+                }
+
+                if let errorMessage = session.errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .accessibilityLabel("로그인 오류: \(errorMessage)")
+                }
+
+                Text("계정 정보는 로그인과 일정 동기화에만 사용됩니다. 캘린더 권한은 연결할 때 별도로 요청합니다.")
+                    .font(.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, 20)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private func providerButton(_ title: String, image: String, provider: Provider) -> some View {
