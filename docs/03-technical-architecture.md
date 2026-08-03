@@ -157,20 +157,25 @@ App Group에 전체 DB를 공유하지 않고 표시용 JSON만 저장한다.
 
 ```json
 {
-  "date": "2026-07-30",
-  "state": "planned",
-  "nextTodo": {
-    "id": "uuid",
-    "title": "운동하기",
-    "emoji": "🏃",
-    "startAt": "2026-07-30T20:00:00+09:00"
-  },
-  "remainingCount": 2,
-  "needsReviewCount": 0,
-  "hidePrivateContent": false,
-  "updatedAt": "2026-07-30T09:00:00+09:00"
+  "updatedAt": "2026-08-03T15:00:00+09:00",
+  "days": [
+    {
+      "date": "2026-08-03T00:00:00+09:00",
+      "completedCount": 2,
+      "items": [
+        {
+          "id": "uuid",
+          "time": "10:00",
+          "title": "기획 문서 다듬기",
+          "kind": "event"
+        }
+      ]
+    }
+  ]
 }
 ```
+
+앱은 현재 월 시작부터 다음 달 말까지의 표시용 일정만 날짜별로 기록한다. 위젯은 이 스냅샷으로 오늘·주간·월간 밀도와 자정 전환을 계산하며 네트워크에 직접 접근하지 않는다. 제목 숨김 설정은 같은 App Group의 `hide-widget-content` 키로 공유한다.
 
 ## 8. 딥링크
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 struct SettingsView: View {
     @Environment(MemdoSession.self) private var session
@@ -9,6 +10,10 @@ struct SettingsView: View {
     @State private var briefingKeywords: Set<String> = ["AI", "제품 디자인"]
     @State private var customKeywords: [String] = []
     @State private var presentedSheet: SettingsSheet?
+    @AppStorage(
+        "hide-widget-content",
+        store: UserDefaults(suiteName: "group.com.memdo.ios")
+    ) private var hideWidgetContent = false
 
     var body: some View {
         MemdoPage(title: "설정", subtitle: "Memdo를 나에게 맞게 조정하세요", eyebrow: "나만의 Memdo") {
@@ -29,6 +34,14 @@ struct SettingsView: View {
                     SettingsDisclosureRow(title: "브리핑 키워드", value: "\(briefingKeywords.count)개 선택")
                 }
                 .buttonStyle(.plain)
+            }
+
+            SettingsGroup(
+                title: "위젯",
+                subtitle: "시간과 개수만 남기고 모든 위젯에서 일정 제목을 숨길 수 있어요."
+            ) {
+                Toggle("위젯 일정 제목 숨기기", isOn: $hideWidgetContent)
+                    .memdoSettingsRow()
             }
 
             SettingsGroup(
@@ -120,6 +133,9 @@ struct SettingsView: View {
             }
         }
         .sensoryFeedback(.selection, trigger: briefingKeywords)
+        .onChange(of: hideWidgetContent) { _, _ in
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 }
 
