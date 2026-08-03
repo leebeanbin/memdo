@@ -27,10 +27,10 @@ Kafka·RabbitMQ, 외부 vector DB, materialized view, 라우팅 프레임워크�
 
 ## 2. 인증 결정
 
-사용자가 요청한 Google·GitHub 로그인을 제공하고 iOS 심사 대응을 위해 Sign in with Apple도 동등한 선택지로 제공한다. MVP의 `계정 없이 시작`은 Supabase anonymous session을 사용하고, B4에서 로컬 outbox를 더한다.
+사용자가 요청한 Google·GitHub 로그인을 제공하고 iOS 심사 대응을 위해 배포 전 동등한 개인정보 보호 로그인 수단을 추가한다. 계정 없는 신규 진입은 제공하지 않는다.
 
 ```text
-Supabase anonymous session 또는 Google / GitHub / Apple 로그인
+Google / GitHub 로그인
 → Supabase Auth user 생성
 → public.users와 user_preferences 1:1 생성
 → 같은 user-scoped RLS 경로로 sync
@@ -40,7 +40,6 @@ Supabase anonymous session 또는 Google / GitHub / Apple 로그인
 - 서버 소유자는 request body의 `userId`가 아니라 검증된 JWT의 `sub`로 결정한다.
 - 같은 이메일이라는 이유만으로 계정을 자동 병합하지 않는다. 명시적 identity linking만 허용한다.
 - Google Calendar 연결 OAuth는 Google 로그인과 별도 동의·토큰 수명주기를 갖는다.
-- anonymous session은 내부 개발에서 같은 owner RLS를 검증하는 경로이며 공개 파일럿 전 CAPTCHA를 켠다.
 
 ## 3. 구현 원칙
 

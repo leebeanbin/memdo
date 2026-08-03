@@ -88,19 +88,6 @@ final class MemdoSession {
         }
     }
 
-    func continueAsGuest() async {
-        guard let client else { return }
-        isBusy = true
-        errorMessage = nil
-        defer { isBusy = false }
-
-        do {
-            try await client.auth.signInAnonymously()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
     func signOut() async {
         guard let client else { return }
         isBusy = true
@@ -157,49 +144,32 @@ private struct MemdoSignInView: View {
                 MemdoPageBackground().ignoresSafeArea()
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 32) {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Memdo")
-                                .font(.system(size: 30, weight: .bold, design: .rounded))
-                            Text("일정과 설정을 어느 기기에서든 이어서 관리하세요.")
-                                .font(.body)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Memdo")
+                            .font(.system(.title3, design: .rounded, weight: .bold))
+
+                        Spacer(minLength: 56)
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("내 하루를,\n내 방식대로.")
+                                .font(.system(.title, design: .rounded, weight: .bold))
+                                .tracking(-0.4)
+                                .accessibilityAddTraits(.isHeader)
+                            Text("일정은 선명하게, Agent는 조용하게.")
+                                .font(.subheadline)
                                 .foregroundStyle(MemdoTheme.secondaryInk)
-                                .fixedSize(horizontal: false, vertical: true)
                         }
+
+                        Spacer(minLength: 64)
 
                         VStack(spacing: 12) {
                             providerButton("Google로 계속", image: "GoogleSignIn", provider: .google)
                             providerButton("GitHub로 계속", image: "GitHubSignIn", provider: .github)
-
-                            HStack(spacing: 12) {
-                                Rectangle()
-                                    .fill(MemdoTheme.outline)
-                                    .frame(height: 0.5)
-                                Text("또는")
-                                    .font(.caption)
-                                    .foregroundStyle(MemdoTheme.secondaryInk)
-                                Rectangle()
-                                    .fill(MemdoTheme.outline)
-                                    .frame(height: 0.5)
-                            }
-                            .padding(.vertical, 2)
-
-                            Button {
-                                Task { await session.continueAsGuest() }
-                            } label: {
-                                Text("계정 없이 계속")
-                                    .font(.subheadline.weight(.semibold))
-                                    .frame(maxWidth: .infinity, minHeight: 50)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(MemdoTheme.ink)
-                            .accessibilityHint("나중에 설정에서 계정을 연결할 수 있습니다")
                         }
 
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 12) {
                             if session.isBusy {
-                                ProgressView("로그인 준비 중")
+                                ProgressView("로그인 화면을 여는 중")
                                     .font(.caption)
                             }
 
@@ -210,15 +180,16 @@ private struct MemdoSignInView: View {
                                     .accessibilityLabel("로그인 오류: \(errorMessage)")
                             }
 
-                            Text("로그인은 일정 동기화에만 사용합니다. 캘린더 접근 권한은 연결할 때 별도로 요청합니다.")
+                            Text("계정 정보는 로그인과 일정 동기화에만 사용됩니다. 캘린더 권한은 연결할 때 별도로 요청합니다.")
                                 .font(.caption)
                                 .foregroundStyle(MemdoTheme.secondaryInk)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        .padding(.top, 20)
                     }
-                    .frame(maxWidth: .infinity, minHeight: proxy.size.height - 64, alignment: .center)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 32)
+                    .frame(maxWidth: .infinity, minHeight: proxy.size.height - 48, alignment: .top)
+                    .padding(.horizontal, MemdoMetrics.pagePadding)
+                    .padding(.vertical, 24)
                 }
                 .scrollIndicators(.hidden)
             }
@@ -236,7 +207,7 @@ private struct MemdoSignInView: View {
                     .scaledToFit()
                     .frame(width: 20, height: 20)
                 Text(title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .lineLimit(1)
                 Spacer()
             }
