@@ -59,7 +59,7 @@ struct SettingsView: View {
                 Divider()
                 Button { presentedSheet = .aiConsent } label: {
                     AgentConnectionRow(
-                        icon: .system("sparkles"),
+                        icon: .memdo,
                         title: "Memdo Agent",
                         capability: "일정 제목 · 시간만 사용",
                         status: "범위 설정"
@@ -125,6 +125,7 @@ struct SettingsView: View {
 
 private enum ConnectionIcon {
     case asset(String)
+    case memdo
     case system(String)
 }
 
@@ -138,6 +139,10 @@ private struct ConnectionMark: View {
                 Image(name)
                     .resizable()
                     .scaledToFit()
+            case .memdo:
+                MemdoBrandMark(size: 18)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(MemdoTheme.surface)
             case .system(let name):
                 Image(systemName: name)
                     .font(.subheadline.weight(.semibold))

@@ -115,7 +115,10 @@ private struct MemdoRootView: View {
         case .loading:
             ZStack {
                 MemdoPageBackground().ignoresSafeArea()
-                ProgressView("세션을 확인하는 중")
+                VStack(spacing: 16) {
+                    MemdoBrandMark(size: 44)
+                    ProgressView("세션을 확인하는 중")
+                }
             }
         case .signedOut:
             MemdoSignInView(session: session)
@@ -163,8 +166,12 @@ private struct MemdoSignInView: View {
 
     private var signInContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Memdo")
-                .font(.system(.title3, design: .rounded, weight: .bold))
+            HStack(spacing: 10) {
+                MemdoBrandMark(size: 26)
+                Text("Memdo")
+                    .font(.system(.title3, design: .rounded, weight: .bold))
+            }
+            .accessibilityElement(children: .combine)
 
             Spacer(minLength: 56)
 
