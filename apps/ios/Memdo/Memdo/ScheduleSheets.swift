@@ -129,6 +129,7 @@ private struct ScheduleDetailHeader: View {
 struct ScheduleEditorFields: View {
     @Environment(ScheduleStore.self) private var scheduleStore
     @Binding var schedule: ScheduleDetail
+    var allowsRecurrence = false
 
     var body: some View {
         Group {
@@ -216,12 +217,18 @@ struct ScheduleEditorFields: View {
                     }
                 }
                 .pickerStyle(.menu)
-                Picker("반복", selection: $schedule.repeatRule) {
-                    ForEach(ScheduleRepeatRule.allCases) { rule in
-                        Text(rule.label).tag(rule)
+                // 반복은 생성 시에만 규칙(schedule_rules)으로 만든다. 기존 일정의
+                // 반복 편집은 아직 미지원이라 값만 표시한다.
+                if allowsRecurrence {
+                    Picker("반복", selection: $schedule.repeatRule) {
+                        ForEach(ScheduleRepeatRule.allCases) { rule in
+                            Text(rule.label).tag(rule)
+                        }
                     }
+                    .pickerStyle(.menu)
+                } else {
+                    LabeledContent("반복", value: schedule.repeatRule.label)
                 }
-                .pickerStyle(.menu)
             }
 
             Section {
@@ -343,6 +350,7 @@ struct ScheduleEditorFields: View {
 
 struct AddScheduleSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(ScheduleStore.self) private var scheduleStore
     @State private var draft: ScheduleDetail
 
     let onSave: (ScheduleDetail) -> Void
@@ -361,7 +369,7 @@ struct AddScheduleSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                ScheduleEditorFields(schedule: $draft)
+                ScheduleEditorFields(schedule: $draft, allowsRecurrence: true)
             }
             .memdoSystemList()
             .navigationTitle("새 일정")
@@ -382,7 +390,12 @@ struct AddScheduleSheet: View {
     }
 
     private func save() {
-        onSave(draft)
+        if draft.repeatRule != .never {
+            let recurring = draft
+            Task { await scheduleStore.createRecurring(recurring) }
+        } else {
+            onSave(draft)
+        }
         dismiss()
     }
 
@@ -394,7 +407,8 @@ struct AddScheduleSheet: View {
             startAt: startAt,
             endAt: calendar.date(byAdding: .hour, value: 1, to: startAt) ?? startAt,
             title: "",
-            calendar: .unassigned
+            calendar: .unassigned,
+            timeBucket: .inferred(from: startAt)
         )
     }
 }
