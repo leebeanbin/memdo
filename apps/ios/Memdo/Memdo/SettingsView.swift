@@ -11,8 +11,8 @@ struct SettingsView: View {
     @State private var customKeywords: [String] = []
     @State private var presentedSheet: SettingsSheet?
     @AppStorage(
-        "hide-widget-content",
-        store: UserDefaults(suiteName: "group.com.memdo.ios")
+        MemdoWidgetStorage.hideContentKey,
+        store: UserDefaults(suiteName: MemdoWidgetStorage.suiteName)
     ) private var hideWidgetContent = false
 
     var body: some View {
@@ -133,9 +133,50 @@ struct SettingsView: View {
             }
         }
         .sensoryFeedback(.selection, trigger: briefingKeywords)
-        .onChange(of: hideWidgetContent) { _, _ in
+        .task { await loadPreferences() }
+        .onChange(of: hideWidgetContent) { _, value in
             WidgetCenter.shared.reloadAllTimelines()
+            guard session.preferencesStore?.preferences?.hideWidgetContent != value else { return }
+            push { $0.hideWidgetContent = value }
         }
+        .onChange(of: dailySummary) { _, value in
+            guard session.preferencesStore?.preferences?.dailyReviewEnabled != value else { return }
+            push {
+                $0.dailyReviewEnabled = value
+                if value {
+                    $0.dailyReviewTime = ClockString.from(summaryTime)
+                    if $0.dailyReviewDays.isEmpty { $0.dailyReviewDays = UserPreferences.allWeekdays }
+                }
+            }
+        }
+        .onChange(of: summaryTime) { _, value in
+            guard session.preferencesStore?.preferences?.dailyReviewTime != ClockString.from(value) else { return }
+            push { $0.dailyReviewTime = ClockString.from(value) }
+        }
+        .onChange(of: promptTime) { _, value in
+            guard session.preferencesStore?.preferences?.planningPromptTime != ClockString.from(value) else { return }
+            push { $0.planningPromptTime = ClockString.from(value) }
+        }
+        .onChange(of: notifications) { _, value in
+            guard session.preferencesStore?.preferences?.notificationsEnabled != value else { return }
+            push { $0.notificationsEnabled = value }
+        }
+    }
+
+    private func loadPreferences() async {
+        guard let store = session.preferencesStore else { return }
+        await store.load()
+        guard let preferences = store.preferences else { return }
+        dailySummary = preferences.dailyReviewEnabled
+        notifications = preferences.notificationsEnabled
+        hideWidgetContent = preferences.hideWidgetContent
+        if let time = ClockString.date(preferences.dailyReviewTime) { summaryTime = time }
+        if let time = ClockString.date(preferences.planningPromptTime) { promptTime = time }
+    }
+
+    private func push(_ transform: @escaping (inout UserPreferences) -> Void) {
+        guard session.preferencesStore != nil else { return }
+        Task { await session.preferencesStore?.update(transform) }
     }
 }
 
