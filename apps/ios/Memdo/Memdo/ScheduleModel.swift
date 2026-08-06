@@ -297,6 +297,8 @@ final class ScheduleStore {
 
     #if DEBUG
     static func preview() -> ScheduleStore {
+        // Previews never call load(), so the repository is inert (no network is
+        // performed). Sample data is seeded directly so previews render content.
         let configuration = MemdoConfiguration(
             projectURL: URL(string: "http://127.0.0.1:54321")!,
             publishableKey: "sb_publishable_preview"
@@ -305,9 +307,31 @@ final class ScheduleStore {
             supabaseURL: configuration.projectURL,
             supabaseKey: configuration.publishableKey
         )
-        return ScheduleStore(
+        let store = ScheduleStore(
             repository: ScheduleRepository(configuration: configuration, auth: client)
         )
+        let calendar = ScheduleCalendar(
+            id: "00000000-0000-4000-8000-000000000001",
+            title: "개인",
+            purpose: "personal",
+            provider: .memdo
+        )
+        let today = Calendar.current.startOfDay(for: .now)
+        let start = Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: today) ?? today
+        store.calendars = [calendar]
+        store.schedules = [
+            ScheduleDetail(
+                scheduledDate: today,
+                startAt: start,
+                endAt: start.addingTimeInterval(3_600),
+                title: "기획 문서 다듬기",
+                kind: .event,
+                calendar: calendar
+            ),
+            ScheduleDetail(scheduledDate: today, title: "30분 산책", kind: .task, calendar: calendar)
+        ]
+        store.state = .loaded
+        return store
     }
     #endif
 
@@ -510,14 +534,18 @@ final class ScheduleStore {
         guard let index = schedules.firstIndex(where: { $0.id == id }) else { return }
         let schedule = schedules.remove(at: index)
         updateWidgetSnapshot()
-        Task { await delete(schedule, originalIndex: index) }
+        Task { await delete(schedule) }
     }
 
-    private func delete(_ schedule: ScheduleDetail, originalIndex: Int) async {
+    private func delete(_ schedule: ScheduleDetail) async {
         do {
             try await repository.delete(schedule)
         } catch {
-            schedules.insert(schedule, at: min(originalIndex, schedules.count))
+            // Restore by identity, not a stale index — other optimistic edits may
+            // have shifted positions. Lists re-sort by timeSortKey on read.
+            if !schedules.contains(where: { $0.id == schedule.id }) {
+                schedules.append(schedule)
+            }
             updateWidgetSnapshot()
             state = .failed(error.localizedDescription)
         }
