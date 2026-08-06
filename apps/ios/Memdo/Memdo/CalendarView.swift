@@ -3,6 +3,7 @@ import SwiftUI
 struct CalendarView: View {
     @Environment(ScheduleStore.self) private var scheduleStore
     @Binding var isSearchPresented: Bool
+    @Binding var targetDate: Date?
     @State private var selectedDate = Date.now
     @State private var displayedMonth = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
     @State private var showAll = false
@@ -12,7 +13,7 @@ struct CalendarView: View {
     @State private var calendarFilter = CalendarDisplayFilter.all
 
     private var filteredSchedules: [ScheduleDetail] {
-        scheduleStore.schedules.filter(calendarFilter.includes)
+        scheduleStore.schedules.filter { $0.isActive && calendarFilter.includes($0) }
     }
 
     private var selectedAgenda: [ScheduleDetail] {
@@ -78,6 +79,13 @@ struct CalendarView: View {
             case .detail(let schedule):
                 ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
             }
+        }
+        .onChange(of: targetDate) { _, date in
+            guard let date else { return }
+            selectedDate = date
+            displayedMonth = Calendar.current.dateInterval(of: .month, for: date)?.start ?? date
+            showAll = false
+            targetDate = nil
         }
     }
 

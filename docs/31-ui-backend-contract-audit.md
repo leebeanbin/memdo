@@ -47,7 +47,7 @@ SwiftUI 입력·표시
 | AI 동의·데이터 관리 | ConsentRecord/export/delete | 설명 시트만 있음 | 단계 대기 | B10·B13 |
 | Google·Slack 연결 버튼 | DataConnection/OAuth | 버튼 action이 비어 있음 | 시연 UI | B8·B11 |
 | 위젯과 딥링크 | App Group WidgetSnapshot | 앱 조회 결과 snapshot 연결, delta sync 미구현 | 부분 일치 | B4 |
-| Google·GitHub·Apple 로그인 | Supabase Auth | anonymous session·화면·callback 완료, Google/GitHub credential과 Apple 대기 | 부분 일치 | B1·B13 |
+| Google·GitHub 로그인 | Supabase Auth | 화면·callback 완료, provider credential 대기 | 부분 일치 | B1 |
 
 ## 3. 즉시 고쳐야 하는 모델 불일치
 

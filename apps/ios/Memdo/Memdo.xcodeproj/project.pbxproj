@@ -14,7 +14,6 @@
 		4CE9071DE9A5E1E5F3D45F0A /* AppShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4D119A0D929FA9AE7D47773 /* AppShellView.swift */; };
 		55306D301F120767611231F5 /* MemdoWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AE1B6FFACC369DADAFC99ADB /* MemdoWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5AFEEBA9CD4F0FEBBA50F09B /* ScheduleModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B46ABED061C6BD316DB8F3 /* ScheduleModel.swift */; };
-		C8F4B9A01D2E4F60718293A4 /* ScheduleAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A5C0B12E3F4051728394A5 /* ScheduleAPI.swift */; };
 		5C8DB08635A4922DF0808F7B /* TodayComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E81203EAFA09124BA54F8AE7 /* TodayComponents.swift */; };
 		6D52CEFC8B695B018FB30EAD /* MemdoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B25474359568B8C6264B6E8 /* MemdoApp.swift */; };
 		78F5DD11294A40F25A5A9524 /* DailySummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6561C352731005322618C740 /* DailySummaryView.swift */; };
@@ -22,6 +21,10 @@
 		8440D2E9F99B1C9848CF21ED /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD6B2D482673663626353C2 /* CalendarView.swift */; };
 		98172737F1AC51B31154A93D /* ScheduleRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19BD21007334C06C0B2028F9 /* ScheduleRow.swift */; };
 		A09C21CAE62B67DF6753F375 /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C57EC467343059432D7D60D /* AssistantView.swift */; };
+		B941DEFC3022131300E1891A /* MemdoWidgetSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = B941DEFB3022131300E1891A /* MemdoWidgetSchedule.swift */; };
+		B941DEFD30221B9700E1891A /* MemdoWidgetSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = B941DEFB3022131300E1891A /* MemdoWidgetSchedule.swift */; };
+		B941DEFF3022D90000E1891A /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = B941DEFE3022D90000E1891A /* Preferences.swift */; };
+		C8F4B9A01D2E4F60718293A4 /* ScheduleAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A5C0B12E3F4051728394A5 /* ScheduleAPI.swift */; };
 		E117E6A55D78273E89DFAAC0 /* ScheduleSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9B39D6188C70A056DA658E /* ScheduleSearchView.swift */; };
 		E49AD453117D9B5AB53EA8CE /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257B3BF059A0E5D9A80D8E50 /* TodayView.swift */; };
 		F63E8DD2470DCBE30FA93063 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02910E4D9DB4CBEE1D8C7C10 /* SettingsView.swift */; };
@@ -55,7 +58,6 @@
 /* Begin PBXFileReference section */
 		02910E4D9DB4CBEE1D8C7C10 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		07B46ABED061C6BD316DB8F3 /* ScheduleModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleModel.swift; sourceTree = "<group>"; };
-		D9A5C0B12E3F4051728394A5 /* ScheduleAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleAPI.swift; sourceTree = "<group>"; };
 		19BD21007334C06C0B2028F9 /* ScheduleRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleRow.swift; sourceTree = "<group>"; };
 		1F8C4864695656352FE70BA3 /* ScheduleSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleSheets.swift; sourceTree = "<group>"; };
 		257B3BF059A0E5D9A80D8E50 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
@@ -70,7 +72,10 @@
 		A5FCF0E385E87960B56A11F4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AE1B6FFACC369DADAFC99ADB /* MemdoWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MemdoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B4D119A0D929FA9AE7D47773 /* AppShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellView.swift; sourceTree = "<group>"; };
+		B941DEFB3022131300E1891A /* MemdoWidgetSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoWidgetSchedule.swift; sourceTree = "<group>"; };
+		B941DEFE3022D90000E1891A /* Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preferences.swift; sourceTree = "<group>"; };
 		C4EA7A02C55094DEBD06AF37 /* MemdoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoWidget.swift; sourceTree = "<group>"; };
+		D9A5C0B12E3F4051728394A5 /* ScheduleAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleAPI.swift; sourceTree = "<group>"; };
 		E81203EAFA09124BA54F8AE7 /* TodayComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayComponents.swift; sourceTree = "<group>"; };
 		F29F2315ADA3175E0D4A894C /* MemdoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoTheme.swift; sourceTree = "<group>"; };
 		FC9B39D6188C70A056DA658E /* ScheduleSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleSearchView.swift; sourceTree = "<group>"; };
@@ -126,6 +131,8 @@
 				02910E4D9DB4CBEE1D8C7C10 /* SettingsView.swift */,
 				E81203EAFA09124BA54F8AE7 /* TodayComponents.swift */,
 				257B3BF059A0E5D9A80D8E50 /* TodayView.swift */,
+				B941DEFB3022131300E1891A /* MemdoWidgetSchedule.swift */,
+				B941DEFE3022D90000E1891A /* Preferences.swift */,
 			);
 			path = Memdo;
 			sourceTree = "<group>";
@@ -189,8 +196,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = 19005277C9F7D659B325E203 /* Build configuration list for PBXProject "Memdo" */;
 			developmentRegion = en;
@@ -201,11 +206,11 @@
 			);
 			mainGroup = C936733213A2E83BBDD6CEEA;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
-			productRefGroup = 2529AEF2A11C53E361FF1210 /* Products */;
 			packageReferences = (
 				FE2A74E992A6431DAB112003 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 2529AEF2A11C53E361FF1210 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -232,6 +237,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1ACFAEEBEB53F95656F314FC /* MemdoWidget.swift in Sources */,
+				B941DEFD30221B9700E1891A /* MemdoWidgetSchedule.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -245,7 +251,9 @@
 				78F5DD11294A40F25A5A9524 /* DailySummaryView.swift in Sources */,
 				6D52CEFC8B695B018FB30EAD /* MemdoApp.swift in Sources */,
 				2A29175D38335F059C4AE766 /* MemdoComponents.swift in Sources */,
+				B941DEFF3022D90000E1891A /* Preferences.swift in Sources */,
 				00D267B5D29A0D25FE6E98FA /* MemdoTheme.swift in Sources */,
+				B941DEFC3022131300E1891A /* MemdoWidgetSchedule.swift in Sources */,
 				C8F4B9A01D2E4F60718293A4 /* ScheduleAPI.swift in Sources */,
 				5AFEEBA9CD4F0FEBBA50F09B /* ScheduleModel.swift in Sources */,
 				98172737F1AC51B31154A93D /* ScheduleRow.swift in Sources */,
@@ -309,7 +317,7 @@
 		41EAE821237ABD4E305ABC97 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Memdo/Memdo.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -397,7 +405,7 @@
 		6B7BD2B29544DDBE5903B871 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Memdo/Memdo.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = NO;

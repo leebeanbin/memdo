@@ -5,189 +5,296 @@ import WidgetKit
 private enum MemdoWidgetTheme {
     static let background = Color(uiColor: .systemBackground)
     static let accent = Color(uiColor: .label)
+    static let secondary = Color(uiColor: .secondaryLabel)
     static let onAccent = Color(uiColor: .systemBackground)
+    static let brand = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0.72, green: 0.67, blue: 1, alpha: 1)
+                : UIColor(red: 0.36, green: 0.30, blue: 0.72, alpha: 1)
+        }
+    )
 }
 
-struct MemdoWidgetEntry: TimelineEntry {
+private struct MemdoWidgetEntry: TimelineEntry {
     let date: Date
-    let items: [MemdoWidgetItem]
+    let snapshot: MemdoWidgetSnapshot
+    let hidesPrivateContent: Bool
+
+    var today: MemdoWidgetDay { snapshot.day(for: date) }
+    var nextDay: MemdoWidgetDay? { snapshot.nextDay(after: date) }
 }
 
-private struct MemdoWidgetSnapshot: Codable {
-    let updatedAt: Date
-    let items: [MemdoWidgetItem]
+private func loadWidgetEntry(at date: Date = .now) -> MemdoWidgetEntry {
+    let defaults = UserDefaults(suiteName: MemdoWidgetStorage.suiteName)
+    let snapshot = defaults
+        .flatMap { $0.data(forKey: MemdoWidgetStorage.snapshotKey) }
+        .flatMap { try? JSONDecoder().decode(MemdoWidgetSnapshot.self, from: $0) }
+        ?? .empty(at: date)
+    return MemdoWidgetEntry(
+        date: date,
+        snapshot: snapshot,
+        hidesPrivateContent: defaults?.bool(forKey: MemdoWidgetStorage.hideContentKey) ?? false
+    )
 }
 
-struct MemdoWidgetItem: Codable, Hashable {
-    let time: String
-    let title: String
+private func sampleWidgetEntry(at date: Date = .now) -> MemdoWidgetEntry {
+    MemdoWidgetEntry(date: date, snapshot: .sample(at: date), hidesPrivateContent: false)
 }
 
-private func loadScheduleItems() -> [MemdoWidgetItem] {
-    guard let data = UserDefaults(suiteName: "group.com.memdo.ios")?
-        .data(forKey: "today-schedule-snapshot") else { return [] }
-    return (try? JSONDecoder().decode(MemdoWidgetSnapshot.self, from: data).items) ?? []
-}
-
-struct MemdoWidgetProvider: TimelineProvider {
+private struct MemdoWidgetProvider: TimelineProvider {
     func placeholder(in context: Context) -> MemdoWidgetEntry {
-        MemdoWidgetEntry(date: .now, items: loadScheduleItems())
+        sampleWidgetEntry()
     }
 
     func getSnapshot(in context: Context, completion: @escaping (MemdoWidgetEntry) -> Void) {
-        completion(MemdoWidgetEntry(date: .now, items: loadScheduleItems()))
+        completion(context.isPreview ? sampleWidgetEntry() : loadWidgetEntry())
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<MemdoWidgetEntry>) -> Void) {
-        completion(Timeline(
-            entries: [MemdoWidgetEntry(date: .now, items: loadScheduleItems())],
-            policy: .after(.now.addingTimeInterval(900))
-        ))
+        let entry = loadWidgetEntry()
+        let nextRefresh = Calendar.current.date(byAdding: .minute, value: 15, to: .now) ?? .now
+        completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
     }
 }
 
-struct MemdoWidgetView: View {
+private struct MemdoTodayWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: MemdoWidgetEntry
 
     var body: some View {
         switch family {
         case .accessoryInline:
-            Label(inlineText, systemImage: "calendar")
+            Label(inlineText, systemImage: entry.today.items.first?.systemImage ?? "calendar")
         case .accessoryCircular:
-            VStack(spacing: -2) {
-                Text(entry.date.formatted(.dateTime.month(.abbreviated)))
-                    .font(.caption2)
-                Text(entry.date.formatted(.dateTime.day()))
-                    .font(.title2.bold())
-            }
+            circular
         case .accessoryRectangular:
-            VStack(alignment: .leading, spacing: 2) {
-                Label("\(entry.date.formatted(.dateTime.month().day())) · \(entry.items.count)개", systemImage: "calendar")
-                    .font(.caption.bold())
-                    .widgetAccentable()
-                compactItems(limit: 2)
-            }
-            .font(.caption)
+            rectangular
         case .systemMedium:
-            HStack(spacing: 16) {
-                WidgetWeek(date: entry.date)
-                    .frame(width: 130)
-                Divider()
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("오늘 일정").font(.headline)
-                    scheduleItems(limit: 3)
-                }
-            }
+            medium
         default:
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(entry.date.formatted(.dateTime.month(.wide))).font(.caption2)
-                        Text(entry.date.formatted(.dateTime.day()))
-                            .font(.title.bold())
-                            .foregroundStyle(MemdoWidgetTheme.accent)
-                    }
-                    Spacer()
-                    Label("\(entry.items.count)개", systemImage: "calendar")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                scheduleItems(limit: 2)
-                Spacer(minLength: 0)
-            }
-            .padding(4)
+            small
         }
     }
 
     private var inlineText: String {
-        guard let first = entry.items.first else { return "오늘 일정 없음" }
-        let remaining = entry.items.count - 1
-        return "\(first.time) \(first.title)\(remaining > 0 ? " · +\(remaining)" : "")"
+        guard let first = entry.today.items.first else {
+            return entry.today.completedCount > 0 ? "오늘 일정 완료" : "오늘 일정 없음"
+        }
+        let title = entry.hidesPrivateContent ? "일정" : first.title
+        let remaining = entry.today.remainingCount - 1
+        return "\(first.time) \(title)\(remaining > 0 ? " · +\(remaining)" : "")"
     }
 
-    @ViewBuilder
-    private func compactItems(limit: Int) -> some View {
-        if entry.items.isEmpty {
-            Text("앱을 열어 일정을 동기화하세요").foregroundStyle(.secondary)
-        } else {
-            ForEach(Array(entry.items.prefix(limit)), id: \.self) { item in
-                Text("\(item.time)  \(item.title)").lineLimit(1)
+    private var circular: some View {
+        VStack(spacing: -2) {
+            Text(entry.date.memdoMonth)
+                .font(.caption2)
+            Text(entry.date.memdoDay)
+                .font(.title2.bold())
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(entry.date.memdoMonth) \(entry.date.memdoDay)일")
+    }
+
+    private var rectangular: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label("\(entry.date.memdoMonthDay) · \(entry.today.remainingCount)개", systemImage: "calendar")
+                .font(.caption.bold())
+                .widgetAccentable()
+            WidgetCompactAgenda(day: entry.today, limit: 2, hidesPrivateContent: entry.hidesPrivateContent)
+        }
+        .font(.caption)
+    }
+
+    private var small: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(entry.date.memdoMonth)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(MemdoWidgetTheme.secondary)
+                    Text(entry.date.memdoDay)
+                        .font(.system(.title, design: .rounded, weight: .bold))
+                }
+                Spacer()
+                WidgetCountBadge(count: entry.today.remainingCount)
             }
-            if entry.items.count > limit {
-                Text("+\(entry.items.count - limit)개 더").foregroundStyle(.secondary)
+            WidgetAgenda(
+                day: entry.today,
+                nextDay: entry.nextDay,
+                limit: 2,
+                hidesPrivateContent: entry.hidesPrivateContent,
+                compact: true
+            )
+            Spacer(minLength: 0)
+        }
+        .padding(2)
+    }
+
+    private var medium: some View {
+        HStack(spacing: 14) {
+            WidgetWeekIndex(entry: entry)
+                .frame(width: 145)
+            Divider()
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("오늘 일정")
+                        .font(.headline)
+                    Spacer()
+                    WidgetCountBadge(count: entry.today.remainingCount)
+                }
+                WidgetAgenda(
+                    day: entry.today,
+                    nextDay: entry.nextDay,
+                    limit: 3,
+                    hidesPrivateContent: entry.hidesPrivateContent
+                )
             }
         }
+        .padding(2)
     }
+}
 
-    @ViewBuilder
-    private func scheduleItems(limit: Int) -> some View {
-        if entry.items.isEmpty {
-            Text("일정 없음").font(.caption).foregroundStyle(.secondary)
+private struct WidgetCountBadge: View {
+    let count: Int
+
+    var body: some View {
+        Label("\(count)개", systemImage: "calendar")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(MemdoWidgetTheme.secondary)
+            .fixedSize()
+    }
+}
+
+private struct WidgetTaskRow: View {
+    let item: MemdoWidgetItem
+    let hidesPrivateContent: Bool
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Image(systemName: item.systemImage)
+                .font(.caption2)
+                .foregroundStyle(item.kind == "task" ? MemdoWidgetTheme.brand : MemdoWidgetTheme.secondary)
+                .frame(width: 12)
+            Text(item.time)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(MemdoWidgetTheme.secondary)
+                .frame(minWidth: 30, alignment: .leading)
+            Text(hidesPrivateContent ? "비공개 일정" : item.title)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct WidgetCompactAgenda: View {
+    let day: MemdoWidgetDay
+    let limit: Int
+    let hidesPrivateContent: Bool
+
+    var body: some View {
+        if day.items.isEmpty {
+            Text(day.completedCount > 0 ? "오늘 일정 완료" : "일정 없음")
+                .foregroundStyle(.secondary)
         } else {
-            ForEach(Array(entry.items.prefix(limit)), id: \.self) { item in
-                WidgetTask(icon: "calendar", time: item.time, title: item.title)
+            ForEach(day.items.prefix(limit), id: \.id) { item in
+                Text("\(item.time)  \(hidesPrivateContent ? "비공개 일정" : item.title)")
+                    .lineLimit(1)
             }
-            if entry.items.count > limit {
-                Text("+\(entry.items.count - limit)개 더")
-                    .font(.caption2.bold())
+            if day.remainingCount > limit {
+                Text("+\(day.remainingCount - limit)개 더")
                     .foregroundStyle(.secondary)
             }
         }
     }
 }
 
-private struct WidgetTask: View {
-    let icon: String
-    let time: String
-    let title: String
+private struct WidgetAgenda: View {
+    let day: MemdoWidgetDay
+    let nextDay: MemdoWidgetDay?
+    let limit: Int
+    let hidesPrivateContent: Bool
+    var compact = false
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: icon)
-                .font(.caption2)
-                .frame(width: 12)
-            Text(time)
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
+        if day.items.isEmpty {
+            emptyState
+        } else {
+            VStack(alignment: .leading, spacing: compact ? 6 : 7) {
+                ForEach(day.items.prefix(limit), id: \.id) { item in
+                    WidgetTaskRow(item: item, hidesPrivateContent: hidesPrivateContent)
+                }
+                if day.remainingCount > limit {
+                    Text("+\(day.remainingCount - limit)개 더")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(MemdoWidgetTheme.secondary)
+                }
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Label(
+                day.completedCount > 0 ? "오늘 일정 완료" : "오늘은 어떤 하루를 보낼까요?",
+                systemImage: day.completedCount > 0 ? "checkmark.circle.fill" : "sparkles"
+            )
+            .font(.caption.weight(.semibold))
+            if let nextDay, let next = nextDay.items.first {
+                Text("다음 · \(nextDay.date.memdoMonthDay) \(next.time)")
+                    .font(.caption2)
+                    .foregroundStyle(MemdoWidgetTheme.secondary)
+                    .lineLimit(1)
+            }
         }
     }
 }
 
-private struct WidgetWeek: View {
-    let date: Date
+private struct WidgetWeekIndex: View {
+    let entry: MemdoWidgetEntry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(date.formatted(.dateTime.month(.wide))).font(.headline)
-            HStack(spacing: 4) {
-                ForEach(weekDates, id: \.self) { date in
-                    let isToday = Calendar.current.isDateInToday(date)
-                    VStack(spacing: 4) {
-                        Text(date.formatted(.dateTime.weekday(.narrow))).font(.caption2)
-                        Text(date.formatted(.dateTime.day())).font(.caption.bold())
-                    }
-                    .foregroundStyle(isToday ? MemdoWidgetTheme.onAccent : .primary)
-                    .frame(width: 22, height: 42)
-                    .background(
-                        isToday ? MemdoWidgetTheme.accent : Color.clear,
-                        in: Capsule()
+        VStack(alignment: .leading, spacing: 10) {
+            Text(entry.date.memdoMonth)
+                .font(.headline)
+            HStack(spacing: 2) {
+                ForEach(entry.date.memdoWeekDates, id: \.self) { date in
+                    WidgetWeekDay(
+                        date: date,
+                        count: entry.snapshot.day(for: date).remainingCount,
+                        isToday: Calendar.current.isDateInToday(date)
                     )
                 }
             }
-            Text("오늘")
+            Text(entry.today.remainingCount > 0 ? "남은 일정 \(entry.today.remainingCount)개" : "오늘 일정 정리됨")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MemdoWidgetTheme.secondary)
         }
     }
+}
 
-    private var weekDates: [Date] {
-        let calendar = Calendar.current
-        let start = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
-        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
+private struct WidgetWeekDay: View {
+    let date: Date
+    let count: Int
+    let isToday: Bool
+
+    var body: some View {
+        VStack(spacing: 3) {
+            Text(date.memdoWeekday)
+                .font(.caption2)
+            Text(date.memdoDay)
+                .font(.caption.weight(.semibold))
+            Circle()
+                .fill(count > 0 ? MemdoWidgetTheme.brand : .clear)
+                .frame(width: 3, height: 3)
+        }
+        .foregroundStyle(isToday ? MemdoWidgetTheme.onAccent : .primary)
+        .frame(maxWidth: .infinity, minHeight: 48)
+        .background(isToday ? MemdoWidgetTheme.accent : .clear, in: Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(date.memdoMonthDay), 일정 \(count)개")
     }
 }
 
@@ -196,15 +303,12 @@ struct MemdoTodayWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: MemdoWidgetProvider()) { entry in
-            MemdoWidgetView(entry: entry)
-                .containerBackground(
-                    MemdoWidgetTheme.background,
-                    for: .widget
-                )
+            MemdoTodayWidgetView(entry: entry)
+                .containerBackground(MemdoWidgetTheme.background, for: .widget)
                 .widgetURL(URL(string: "memdo://today"))
         }
         .configurationDisplayName("오늘의 Memdo")
-        .description("잠금화면에서 오늘의 일정을 확인합니다.")
+        .description("잠금화면과 홈 화면에서 오늘의 일정과 남은 개수를 확인합니다.")
         .supportedFamilies([
             .accessoryInline,
             .accessoryCircular,
@@ -230,34 +334,56 @@ struct CalendarWidgetConfigurationIntent: WidgetConfigurationIntent {
     static let title: LocalizedStringResource = "달력 설정"
     static let description = IntentDescription("위젯에 표시할 달력 범위를 선택합니다.")
 
-    @Parameter(title: "보기", default: .week)
+    @Parameter(title: "보기", default: .month)
     var range: CalendarWidgetRange
 }
 
-struct CalendarWidgetEntry: TimelineEntry {
+private struct CalendarWidgetEntry: TimelineEntry {
     let date: Date
     let range: CalendarWidgetRange
-    let items: [MemdoWidgetItem]
+    let snapshot: MemdoWidgetSnapshot
+    let hidesPrivateContent: Bool
+
+    var today: MemdoWidgetDay { snapshot.day(for: date) }
 }
 
-struct CalendarWidgetProvider: AppIntentTimelineProvider {
+private struct CalendarWidgetProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> CalendarWidgetEntry {
-        CalendarWidgetEntry(date: .now, range: .week, items: loadScheduleItems())
+        let entry = sampleWidgetEntry()
+        return CalendarWidgetEntry(
+            date: entry.date,
+            range: .month,
+            snapshot: entry.snapshot,
+            hidesPrivateContent: false
+        )
     }
 
     func snapshot(for configuration: CalendarWidgetConfigurationIntent, in context: Context) async -> CalendarWidgetEntry {
-        CalendarWidgetEntry(date: .now, range: configuration.range, items: loadScheduleItems())
+        calendarEntry(for: configuration, preview: context.isPreview)
     }
 
     func timeline(for configuration: CalendarWidgetConfigurationIntent, in context: Context) async -> Timeline<CalendarWidgetEntry> {
-        let entry = CalendarWidgetEntry(date: .now, range: configuration.range, items: loadScheduleItems())
+        let entry = calendarEntry(for: configuration, preview: false)
         let startOfToday = Calendar.current.startOfDay(for: .now)
         let nextDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday
         return Timeline(entries: [entry], policy: .after(nextDay))
     }
+
+    private func calendarEntry(
+        for configuration: CalendarWidgetConfigurationIntent,
+        preview: Bool
+    ) -> CalendarWidgetEntry {
+        let entry = preview ? sampleWidgetEntry() : loadWidgetEntry()
+        return CalendarWidgetEntry(
+            date: entry.date,
+            range: configuration.range,
+            snapshot: entry.snapshot,
+            hidesPrivateContent: entry.hidesPrivateContent
+        )
+    }
 }
 
-struct MemdoCalendarWidgetView: View {
+private struct MemdoCalendarWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: CalendarWidgetEntry
 
@@ -271,91 +397,164 @@ struct MemdoCalendarWidgetView: View {
     }
 
     private var week: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(entry.date.formatted(.dateTime.month(.wide).year()))
-                .font(.headline)
-            HStack(spacing: 4) {
-                ForEach(weekDates, id: \.self) { date in
-                    let isToday = Calendar.current.isDateInToday(date)
-                    VStack(spacing: 4) {
-                        Text(date.formatted(.dateTime.weekday(.narrow)))
-                            .font(.caption2)
-                        Text(date.formatted(.dateTime.day()))
-                            .font(.caption.bold())
+        VStack(alignment: .leading, spacing: 10) {
+            calendarHeader
+            HStack(spacing: 5) {
+                ForEach(entry.date.memdoWeekDates, id: \.self) { date in
+                    Link(destination: date.memdoCalendarURL) {
+                        WidgetWeekDay(
+                            date: date,
+                            count: entry.snapshot.day(for: date).remainingCount,
+                            isToday: Calendar.current.isDateInToday(date)
+                        )
                     }
-                    .foregroundStyle(isToday ? MemdoWidgetTheme.onAccent : .primary)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(isToday ? MemdoWidgetTheme.accent : .clear, in: Capsule())
+                    .buttonStyle(.plain)
                 }
             }
             Divider()
-            agenda(limit: 3)
+            if family == .systemLarge {
+                largeWeekAgenda
+            } else {
+                WidgetAgenda(
+                    day: entry.today,
+                    nextDay: entry.snapshot.nextDay(after: entry.date),
+                    limit: 3,
+                    hidesPrivateContent: entry.hidesPrivateContent
+                )
+            }
         }
-        .padding(4)
+        .padding(2)
+    }
+
+    private var largeWeekAgenda: some View {
+        HStack(alignment: .top, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("오늘")
+                    .font(.headline)
+                WidgetAgenda(
+                    day: entry.today,
+                    nextDay: entry.snapshot.nextDay(after: entry.date),
+                    limit: 4,
+                    hidesPrivateContent: entry.hidesPrivateContent
+                )
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Divider()
+            VStack(alignment: .leading, spacing: 8) {
+                Text("다가오는 일정")
+                    .font(.headline)
+                if let nextDay = entry.snapshot.nextDay(after: entry.date) {
+                    Text(nextDay.date.memdoMonthDay)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MemdoWidgetTheme.secondary)
+                    WidgetAgenda(
+                        day: nextDay,
+                        nextDay: nil,
+                        limit: 4,
+                        hidesPrivateContent: entry.hidesPrivateContent
+                    )
+                } else {
+                    Text("예정된 일정이 없어요")
+                        .font(.caption)
+                        .foregroundStyle(MemdoWidgetTheme.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private var month: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(entry.date.formatted(.dateTime.month(.wide).year()))
-                .font(.headline)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 4) {
-                ForEach(["월", "화", "수", "목", "금", "토", "일"], id: \.self) {
-                    Text($0)
-                        .font(.caption2.bold())
-                        .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: family == .systemLarge ? 10 : 4) {
+            calendarHeader
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 7),
+                spacing: family == .systemLarge ? 6 : 1
+            ) {
+                ForEach(["월", "화", "수", "목", "금", "토", "일"], id: \.self) { weekday in
+                    Text(weekday)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(MemdoWidgetTheme.secondary)
                 }
-                ForEach(monthDates.indices, id: \.self) { index in
-                    if let date = monthDates[index] {
-                        let isToday = Calendar.current.isDateInToday(date)
-                        Text(date.formatted(.dateTime.day()))
-                            .font(.caption2.weight(isToday ? .bold : .regular))
-                            .foregroundStyle(isToday ? MemdoWidgetTheme.onAccent : .primary)
-                            .frame(maxWidth: .infinity, minHeight: family == .systemLarge ? 28 : 20)
-                            .background(isToday ? MemdoWidgetTheme.accent : .clear, in: Circle())
+                ForEach(entry.date.memdoMonthDates.indices, id: \.self) { index in
+                    if let date = entry.date.memdoMonthDates[index] {
+                        Link(destination: date.memdoCalendarURL) {
+                            WidgetMonthDay(
+                                date: date,
+                                count: entry.snapshot.day(for: date).remainingCount,
+                                isToday: Calendar.current.isDateInToday(date),
+                                isLarge: family == .systemLarge
+                            )
+                        }
+                        .buttonStyle(.plain)
                     } else {
-                        Color.clear.frame(height: family == .systemLarge ? 28 : 20)
+                        Color.clear.frame(height: family == .systemLarge ? 29 : 17)
                     }
                 }
             }
             if family == .systemLarge {
                 Divider()
-                Text("오늘 일정")
-                    .font(.headline)
-                agenda(limit: 3)
+                HStack {
+                    Text("오늘 일정")
+                        .font(.headline)
+                    Spacer()
+                    WidgetCountBadge(count: entry.today.remainingCount)
+                }
+                WidgetAgenda(
+                    day: entry.today,
+                    nextDay: entry.snapshot.nextDay(after: entry.date),
+                    limit: 3,
+                    hidesPrivateContent: entry.hidesPrivateContent
+                )
             }
         }
-        .padding(4)
+        .padding(2)
     }
 
-    private var weekDates: [Date] {
-        let calendar = Calendar.current
-        let interval = calendar.dateInterval(of: .weekOfYear, for: entry.date)
-        return (0..<7).compactMap { offset in
-            interval.flatMap { calendar.date(byAdding: .day, value: offset, to: $0.start) }
+    private var calendarHeader: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(entry.date.memdoYearMonth)
+                .font(.headline)
+            Spacer()
+            Label("\(monthRemainingCount)개 일정", systemImage: "calendar")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(MemdoWidgetTheme.secondary)
         }
     }
 
-    private var monthDates: [Date?] {
-        let calendar = Calendar.current
-        guard let interval = calendar.dateInterval(of: .month, for: entry.date),
-              let days = calendar.range(of: .day, in: .month, for: entry.date)
-        else { return [] }
-
-        let weekday = calendar.component(.weekday, from: interval.start)
-        let leading = (weekday + 5) % 7
-        return Array(repeating: nil, count: leading)
-            + days.compactMap { calendar.date(byAdding: .day, value: $0 - 1, to: interval.start) }.map(Optional.some)
+    private var monthRemainingCount: Int {
+        entry.snapshot.days
+            .filter { Calendar.current.isDate($0.date, equalTo: entry.date, toGranularity: .month) }
+            .reduce(0) { $0 + $1.remainingCount }
     }
+}
 
-    @ViewBuilder
-    private func agenda(limit: Int) -> some View {
-        if entry.items.isEmpty {
-            Text("일정 없음").font(.caption).foregroundStyle(.secondary)
-        } else {
-            ForEach(Array(entry.items.prefix(limit)), id: \.self) { item in
-                WidgetTask(icon: "calendar", time: item.time, title: item.title)
+private struct WidgetMonthDay: View {
+    let date: Date
+    let count: Int
+    let isToday: Bool
+    let isLarge: Bool
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Text(date.memdoDay)
+                .font(.caption2.weight(isToday ? .bold : .regular))
+                .foregroundStyle(isToday ? MemdoWidgetTheme.onAccent : .primary)
+                .frame(width: isLarge ? 23 : 16, height: isLarge ? 23 : 15)
+                .background(isToday ? MemdoWidgetTheme.brand : .clear, in: Circle())
+            if isLarge {
+                Text(count > 0 ? "\(count)" : "")
+                    .font(.system(size: 7, weight: .semibold))
+                    .foregroundStyle(MemdoWidgetTheme.secondary)
+                    .frame(height: 7)
+            } else {
+                Circle()
+                    .fill(count > 0 ? MemdoWidgetTheme.brand : .clear)
+                    .frame(width: 2.5, height: 2.5)
             }
         }
+        .frame(maxWidth: .infinity, minHeight: isLarge ? 31 : 17)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(date.memdoMonthDay), 일정 \(count)개")
     }
 }
 
@@ -369,15 +568,56 @@ struct MemdoCalendarWidget: Widget {
             provider: CalendarWidgetProvider()
         ) { entry in
             MemdoCalendarWidgetView(entry: entry)
-                .containerBackground(
-                    MemdoWidgetTheme.background,
-                    for: .widget
-                )
+                .containerBackground(MemdoWidgetTheme.background, for: .widget)
                 .widgetURL(URL(string: "memdo://calendar"))
         }
         .configurationDisplayName("나의 달력")
-        .description("일주일 또는 한 달 일정을 한눈에 확인합니다.")
+        .description("일주일 또는 한 달의 일정 밀도와 오늘 일정을 확인합니다.")
         .supportedFamilies([.systemMedium, .systemLarge])
+    }
+}
+
+private extension Date {
+    var memdoMonth: String { "\(Calendar.current.component(.month, from: self))월" }
+    var memdoDay: String { "\(Calendar.current.component(.day, from: self))" }
+    var memdoMonthDay: String { "\(memdoMonth) \(memdoDay)일" }
+    var memdoYearMonth: String {
+        let calendar = Calendar.current
+        return "\(calendar.component(.year, from: self))년 \(calendar.component(.month, from: self))월"
+    }
+    var memdoWeekday: String {
+        ["일", "월", "화", "수", "목", "금", "토"][Calendar.current.component(.weekday, from: self) - 1]
+    }
+    var memdoWeekDates: [Date] {
+        let calendar = Calendar.current
+        let weekday = calendar.component(.weekday, from: self)
+        let mondayOffset = (weekday + 5) % 7
+        let start = calendar.date(byAdding: .day, value: -mondayOffset, to: calendar.startOfDay(for: self)) ?? self
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
+    }
+    var memdoMonthDates: [Date?] {
+        let calendar = Calendar.current
+        guard let interval = calendar.dateInterval(of: .month, for: self),
+              let days = calendar.range(of: .day, in: .month, for: self)
+        else { return [] }
+        let weekday = calendar.component(.weekday, from: interval.start)
+        let leading = (weekday + 5) % 7
+        return Array(repeating: nil, count: leading)
+            + days.compactMap { calendar.date(byAdding: .day, value: $0 - 1, to: interval.start) }.map(Optional.some)
+    }
+    var memdoCalendarURL: URL {
+        var components = URLComponents()
+        components.scheme = "memdo"
+        components.host = "calendar"
+        let calendar = Calendar.current
+        let parts = calendar.dateComponents([.year, .month, .day], from: self)
+        components.queryItems = [
+            URLQueryItem(
+                name: "date",
+                value: String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+            )
+        ]
+        return components.url ?? URL(string: "memdo://calendar")!
     }
 }
 
@@ -391,15 +631,58 @@ struct MemdoWidgetBundle: WidgetBundle {
 
 struct MemdoWidget_Previews: PreviewProvider {
     static var previews: some View {
+        let today = sampleWidgetEntry()
         Group {
-            MemdoWidgetView(entry: MemdoWidgetEntry(date: .now, items: []))
+            MemdoTodayWidgetView(entry: today)
+                .previewContext(WidgetPreviewContext(family: .accessoryInline))
+                .previewDisplayName("잠금화면 · 인라인")
+            MemdoTodayWidgetView(entry: today)
+                .previewContext(WidgetPreviewContext(family: .accessoryCircular))
+                .previewDisplayName("잠금화면 · 원형")
+            MemdoTodayWidgetView(entry: today)
                 .previewContext(WidgetPreviewContext(family: .accessoryRectangular))
-            MemdoWidgetView(entry: MemdoWidgetEntry(date: .now, items: []))
+                .previewDisplayName("잠금화면 · 직사각형")
+            MemdoTodayWidgetView(entry: today)
                 .previewContext(WidgetPreviewContext(family: .systemSmall))
-            MemdoCalendarWidgetView(entry: CalendarWidgetEntry(date: .now, range: .week, items: []))
+                .previewDisplayName("오늘 · Small")
+            MemdoTodayWidgetView(entry: today)
                 .previewContext(WidgetPreviewContext(family: .systemMedium))
-            MemdoCalendarWidgetView(entry: CalendarWidgetEntry(date: .now, range: .month, items: []))
+                .previewDisplayName("오늘 · Medium")
+            MemdoTodayWidgetView(entry: MemdoWidgetEntry(
+                date: today.date,
+                snapshot: .empty(at: today.date),
+                hidesPrivateContent: false
+            ))
+                .previewContext(WidgetPreviewContext(family: .systemSmall))
+                .previewDisplayName("오늘 · 빈 상태")
+            MemdoTodayWidgetView(entry: today)
                 .previewContext(WidgetPreviewContext(family: .systemMedium))
+                .preferredColorScheme(.dark)
+                .previewDisplayName("오늘 · Dark")
+            MemdoCalendarWidgetView(entry: calendarPreview(range: .week, entry: today))
+                .previewContext(WidgetPreviewContext(family: .systemMedium))
+                .previewDisplayName("주간 · Medium")
+            MemdoCalendarWidgetView(entry: calendarPreview(range: .week, entry: today))
+                .previewContext(WidgetPreviewContext(family: .systemLarge))
+                .previewDisplayName("주간 · Large")
+            MemdoCalendarWidgetView(entry: calendarPreview(range: .month, entry: today))
+                .previewContext(WidgetPreviewContext(family: .systemMedium))
+                .previewDisplayName("월간 · Medium")
+            MemdoCalendarWidgetView(entry: calendarPreview(range: .month, entry: today))
+                .previewContext(WidgetPreviewContext(family: .systemLarge))
+                .previewDisplayName("월간 · Large")
         }
+    }
+
+    private static func calendarPreview(
+        range: CalendarWidgetRange,
+        entry: MemdoWidgetEntry
+    ) -> CalendarWidgetEntry {
+        CalendarWidgetEntry(
+            date: entry.date,
+            range: range,
+            snapshot: entry.snapshot,
+            hidesPrivateContent: false
+        )
     }
 }

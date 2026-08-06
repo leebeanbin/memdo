@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 struct SettingsView: View {
     @Environment(MemdoSession.self) private var session
@@ -9,6 +10,10 @@ struct SettingsView: View {
     @State private var briefingKeywords: Set<String> = ["AI", "제품 디자인"]
     @State private var customKeywords: [String] = []
     @State private var presentedSheet: SettingsSheet?
+    @AppStorage(
+        MemdoWidgetStorage.hideContentKey,
+        store: UserDefaults(suiteName: MemdoWidgetStorage.suiteName)
+    ) private var hideWidgetContent = false
 
     var body: some View {
         MemdoPage(title: "설정", subtitle: "Memdo를 나에게 맞게 조정하세요", eyebrow: "나만의 Memdo") {
@@ -29,6 +34,14 @@ struct SettingsView: View {
                     SettingsDisclosureRow(title: "브리핑 키워드", value: "\(briefingKeywords.count)개 선택")
                 }
                 .buttonStyle(.plain)
+            }
+
+            SettingsGroup(
+                title: "위젯",
+                subtitle: "시간과 개수만 남기고 모든 위젯에서 일정 제목을 숨길 수 있어요."
+            ) {
+                Toggle("위젯 일정 제목 숨기기", isOn: $hideWidgetContent)
+                    .memdoSettingsRow()
             }
 
             SettingsGroup(
@@ -59,7 +72,7 @@ struct SettingsView: View {
                 Divider()
                 Button { presentedSheet = .aiConsent } label: {
                     AgentConnectionRow(
-                        icon: .system("sparkles"),
+                        icon: .memdo,
                         title: "Memdo Agent",
                         capability: "일정 제목 · 시간만 사용",
                         status: "범위 설정"
@@ -120,11 +133,56 @@ struct SettingsView: View {
             }
         }
         .sensoryFeedback(.selection, trigger: briefingKeywords)
+        .task { await loadPreferences() }
+        .onChange(of: hideWidgetContent) { _, value in
+            WidgetCenter.shared.reloadAllTimelines()
+            guard session.preferencesStore?.preferences?.hideWidgetContent != value else { return }
+            push { $0.hideWidgetContent = value }
+        }
+        .onChange(of: dailySummary) { _, value in
+            guard session.preferencesStore?.preferences?.dailyReviewEnabled != value else { return }
+            push {
+                $0.dailyReviewEnabled = value
+                if value {
+                    $0.dailyReviewTime = ClockString.from(summaryTime)
+                    if $0.dailyReviewDays.isEmpty { $0.dailyReviewDays = UserPreferences.allWeekdays }
+                }
+            }
+        }
+        .onChange(of: summaryTime) { _, value in
+            guard session.preferencesStore?.preferences?.dailyReviewTime != ClockString.from(value) else { return }
+            push { $0.dailyReviewTime = ClockString.from(value) }
+        }
+        .onChange(of: promptTime) { _, value in
+            guard session.preferencesStore?.preferences?.planningPromptTime != ClockString.from(value) else { return }
+            push { $0.planningPromptTime = ClockString.from(value) }
+        }
+        .onChange(of: notifications) { _, value in
+            guard session.preferencesStore?.preferences?.notificationsEnabled != value else { return }
+            push { $0.notificationsEnabled = value }
+        }
+    }
+
+    private func loadPreferences() async {
+        guard let store = session.preferencesStore else { return }
+        await store.load()
+        guard let preferences = store.preferences else { return }
+        dailySummary = preferences.dailyReviewEnabled
+        notifications = preferences.notificationsEnabled
+        hideWidgetContent = preferences.hideWidgetContent
+        if let time = ClockString.date(preferences.dailyReviewTime) { summaryTime = time }
+        if let time = ClockString.date(preferences.planningPromptTime) { promptTime = time }
+    }
+
+    private func push(_ transform: @escaping (inout UserPreferences) -> Void) {
+        guard session.preferencesStore != nil else { return }
+        Task { await session.preferencesStore?.update(transform) }
     }
 }
 
 private enum ConnectionIcon {
     case asset(String)
+    case memdo
     case system(String)
 }
 
@@ -138,6 +196,10 @@ private struct ConnectionMark: View {
                 Image(name)
                     .resizable()
                     .scaledToFit()
+            case .memdo:
+                MemdoBrandMark(size: 18)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(MemdoTheme.surface)
             case .system(let name):
                 Image(systemName: name)
                     .font(.subheadline.weight(.semibold))

@@ -8,7 +8,6 @@ AI 일정 제안, 개인 캘린더, 하루 요약, 홈·잠금화면 위젯을 �
 - 기준 기기: iPhone 15 (`393×852pt`)
 - 최소 지원 버전: iOS 17
 - iOS 일정 조회·생성·수정과 Widget snapshot: 원격 백엔드 왕복 검증 완료, 삭제·재예약 통합 검증 대기
-- 계정 없이 시작: Supabase anonymous session·RLS로 iPhone 15 재실행 복원 검증 완료
 - Google·GitHub 로그인: 앱 UI와 callback 구현 완료, OAuth client ID/secret 발급 대기
 - AI 실행, 브리핑, 외부 캘린더 동기화: 설계 완료·구현 예정
 

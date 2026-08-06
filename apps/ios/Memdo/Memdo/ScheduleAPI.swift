@@ -124,6 +124,87 @@ private struct TodoDeleteResponseDTO: Decodable {
     let id: String
 }
 
+struct TodoRescheduleRequestDTO: Encodable {
+    let baseVersion: Int
+    let targetDate: String
+    let startAt: String?
+    let endAt: String?
+    let dueAt: String?
+    let timeBucket: String
+
+    init(schedule: ScheduleDetail, baseVersion: Int) {
+        self.baseVersion = baseVersion
+        targetDate = APIDate.day(schedule.scheduledDate)
+        startAt = schedule.startAt.map(APIDate.instant)
+        endAt = schedule.endAt.map(APIDate.instant)
+        dueAt = schedule.kind == .task ? schedule.dueAt.map(APIDate.instant) : nil
+        timeBucket = schedule.timeBucket.rawValue
+    }
+}
+
+private struct TodoRescheduleResponseDTO: Decodable {
+    let original: TodoResponseDTO
+    let replacement: TodoResponseDTO
+}
+
+struct SyncItemDTO: Decodable {
+    let operation: String
+    let id: String
+    let data: TodoResponseDTO?
+}
+
+struct SyncResponseDTO: Decodable {
+    let items: [SyncItemDTO]
+    let nextCursor: String?
+    let hasMore: Bool
+}
+
+struct SearchResponseDTO: Decodable {
+    let items: [TodoResponseDTO]
+    let hasMore: Bool
+}
+
+struct ScheduleRuleRequestDTO: Encodable {
+    let calendarId: String
+    let title: String
+    let entryKind: String
+    let isAllDay: Bool
+    let note: String?
+    let startTime: String?
+    let endTime: String?
+    let timeBucket: String
+    let reminderOffsetMinutes: Int?
+    let frequency: String
+    let interval: Int
+    let anchorDate: String
+    let timezoneOffsetMinutes: Int
+
+    init(schedule: ScheduleDetail) {
+        calendarId = schedule.calendar.id
+        title = schedule.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        entryKind = schedule.kind.rawValue
+        isAllDay = schedule.isAllDay
+        note = schedule.memo.isEmpty ? nil : schedule.memo
+        startTime = schedule.startAt.map(Self.clock)
+        endTime = schedule.endAt.map(Self.clock)
+        timeBucket = schedule.timeBucket.rawValue
+        reminderOffsetMinutes = schedule.reminderOffsetMinutes
+        frequency = schedule.repeatRule.rawValue
+        interval = 1
+        anchorDate = APIDate.day(schedule.scheduledDate)
+        timezoneOffsetMinutes = TimeZone.current.secondsFromGMT(for: schedule.scheduledDate) / 60
+    }
+
+    private static func clock(_ date: Date) -> String {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", components.hour ?? 0, components.minute ?? 0)
+    }
+}
+
+private struct ScheduleRuleResponseDTO: Decodable {
+    let occurrenceCount: Int
+}
+
 enum ScheduleAPIError: Error, LocalizedError {
     case missingConfiguration
     case notAuthenticated
@@ -232,7 +313,54 @@ actor MemdoAPIClient {
         )
     }
 
-    private func send<Response: Decodable>(
+    func reschedule(
+        id: UUID,
+        input: TodoRescheduleRequestDTO,
+        idempotencyKey: UUID,
+        accessToken: String
+    ) async throws -> (original: TodoResponseDTO, replacement: TodoResponseDTO) {
+        let response: TodoRescheduleResponseDTO = try await send(
+            path: "todos/\(id.uuidString)/reschedule",
+            method: "POST",
+            body: encoder.encode(input),
+            idempotencyKey: idempotencyKey,
+            accessToken: accessToken
+        )
+        return (response.original, response.replacement)
+    }
+
+    func sync(cursor: String?, accessToken: String) async throws -> SyncResponseDTO {
+        try await send(
+            path: "sync",
+            queryItems: [
+                URLQueryItem(name: "cursor", value: cursor),
+                URLQueryItem(name: "limit", value: "200")
+            ],
+            accessToken: accessToken
+        )
+    }
+
+    func search(query: String, accessToken: String) async throws -> SearchResponseDTO {
+        try await send(
+            path: "search",
+            queryItems: [
+                URLQueryItem(name: "q", value: query),
+                URLQueryItem(name: "limit", value: "50")
+            ],
+            accessToken: accessToken
+        )
+    }
+
+    func createRule(_ input: ScheduleRuleRequestDTO, accessToken: String) async throws {
+        let _: ScheduleRuleResponseDTO = try await send(
+            path: "rules",
+            method: "POST",
+            body: encoder.encode(input),
+            accessToken: accessToken
+        )
+    }
+
+    func send<Response: Decodable>(
         path: String,
         method: String = "GET",
         body: Data? = nil,
@@ -334,6 +462,35 @@ actor ScheduleRepository {
         try await api.delete(id: schedule.id, version: schedule.version, accessToken: accessToken)
     }
 
+    func reschedule(
+        _ schedule: ScheduleDetail,
+        baseVersion: Int
+    ) async throws -> (original: ScheduleDetail, replacement: ScheduleDetail) {
+        let accessToken = try await accessToken()
+        let result = try await api.reschedule(
+            id: schedule.id,
+            input: TodoRescheduleRequestDTO(schedule: schedule, baseVersion: baseVersion),
+            idempotencyKey: UUID(),
+            accessToken: accessToken
+        )
+        return (
+            try ScheduleDetail(dto: result.original, calendar: schedule.calendar),
+            try ScheduleDetail(dto: result.replacement, calendar: schedule.calendar)
+        )
+    }
+
+    func sync(cursor: String?) async throws -> SyncResponseDTO {
+        try await api.sync(cursor: cursor, accessToken: accessToken())
+    }
+
+    func search(query: String) async throws -> [TodoResponseDTO] {
+        try await api.search(query: query, accessToken: accessToken()).items
+    }
+
+    func createRule(_ schedule: ScheduleDetail) async throws {
+        try await api.createRule(ScheduleRuleRequestDTO(schedule: schedule), accessToken: accessToken())
+    }
+
     private func accessToken() async throws -> String {
         guard auth.auth.currentSession != nil else { throw ScheduleAPIError.notAuthenticated }
         return try await auth.auth.session.accessToken
@@ -415,13 +572,22 @@ private struct ErrorEnvelope: Decodable {
 }
 
 private enum APIDate {
+    // ISO8601DateFormatter is expensive to create; formatting/parsing on a shared
+    // read-only instance is thread-safe, so cache one per format policy.
+    nonisolated(unsafe) private static let standardFormatter = ISO8601DateFormatter()
+    nonisolated(unsafe) private static let fractionalFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions.insert(.withFractionalSeconds)
+        return formatter
+    }()
+
     static func day(_ date: Date) -> String {
         let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
     }
 
     static func instant(_ date: Date) -> String {
-        ISO8601DateFormatter().string(from: date)
+        standardFormatter.string(from: date)
     }
 
     static func parseDay(_ value: String) -> Date? {
@@ -431,9 +597,7 @@ private enum APIDate {
     }
 
     static func parseInstant(_ value: String) throws -> Date {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions.insert(.withFractionalSeconds)
-        if let date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value) {
+        if let date = fractionalFormatter.date(from: value) ?? standardFormatter.date(from: value) {
             return date
         }
         throw ScheduleAPIError.incompatibleValue(value)

@@ -37,7 +37,7 @@
 | ADR-027 | 서버 관찰은 Grafana Cloud, iOS crash는 Sentry | 관리형 무료 서비스로 운영 부담 축소 |
 | ADR-028 | Supabase Free backup은 암호화 dump + R2 | Free plan 자동 백업 부재 보완 |
 | ADR-029 | 동기화 충돌은 version + 409 | 기존 last-write-wins 문구 폐기 |
-| ADR-030 | MVP의 `계정 없이 시작`은 Supabase anonymous session을 사용하고, 오프라인 로컬 outbox는 B4에서 추가 | 별도 익명 저장소 없이 같은 JWT·RLS·sync 경로를 재사용하며 공개 파일럿 전 CAPTCHA 적용 |
+| ADR-030 | ~~MVP의 `계정 없이 시작`은 Supabase anonymous session을 사용~~ (ADR-071로 폐기) | 로그인 선택지 단순화 결정으로 신규 익명 세션 진입 제거 |
 | ADR-031 | 하루 요약 시간은 사용자가 직접 선택 | 임의 기본값으로 알림 피로를 만들지 않음 |
 | ADR-032 | 일부 완료는 퍼센트만 기록하고 잔여 Todo는 명시적 선택으로 생성 | 사용자 의도 없는 일정 증식을 막음 |
 | ADR-033 | 미응답 일정은 자동 실패 처리하지 않고 다음 날 미정리 영역에 유지 | 사실이 아닌 완료·실패 판정을 피함 |
@@ -78,6 +78,7 @@
 | ADR-068 | 인덱스 최적화와 데이터 송신 최적화를 별도 예산·지표로 관리한다 | 인덱스는 DB 탐색 비용을 줄이지만 payload 크기를 직접 줄이지 않음 |
 | ADR-069 | UI·Domain·DTO·DB row는 경계에서 명시적으로 변환한다 | 화면 편의를 서버 계약으로 누출하지 않고 버전 변화 격리 |
 | ADR-070 | 서버 enum은 안정 영문 code, 사용자 문구는 iOS String Catalog로 관리한다 | 한국어 raw value와 고정 timezone이 글로벌 동작을 막지 않게 함 |
+| ADR-071 | 로그인 화면과 신규 계정 진입은 Google·GitHub로 제한하고 계정 없는 시작을 제공하지 않는다 | 인증 선택과 데이터 소유권을 명확히 하고 로그인 화면의 인지 부하를 줄임 |
 
 ## 제품 이름
 

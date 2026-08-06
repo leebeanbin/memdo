@@ -1,5 +1,19 @@
 import SwiftUI
 
+struct MemdoBrandMark: View {
+    var size: CGFloat = 28
+
+    var body: some View {
+        Image("MemdoMark")
+            .resizable()
+            .renderingMode(.template)
+            .scaledToFit()
+            .foregroundStyle(MemdoTheme.ink)
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
+    }
+}
+
 struct MemdoPage<Content: View>: View {
     let title: String
     let subtitle: String
