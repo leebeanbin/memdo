@@ -19,6 +19,7 @@ struct DailySummaryView: View {
         let interval = scope.interval(endingAt: date)
         return scheduleStore.schedules
             .filter {
+                $0.isActive &&
                 $0.kind == .task &&
                 $0.scheduledDate >= interval.start &&
                 $0.scheduledDate < interval.end

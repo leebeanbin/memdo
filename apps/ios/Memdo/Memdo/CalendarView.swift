@@ -13,7 +13,7 @@ struct CalendarView: View {
     @State private var calendarFilter = CalendarDisplayFilter.all
 
     private var filteredSchedules: [ScheduleDetail] {
-        scheduleStore.schedules.filter(calendarFilter.includes)
+        scheduleStore.schedules.filter { $0.isActive && calendarFilter.includes($0) }
     }
 
     private var selectedAgenda: [ScheduleDetail] {

@@ -216,13 +216,19 @@ struct ScheduleDetail: Identifiable, Equatable {
         self.kind = kind
         self.calendar = calendar
         self.isAllDay = isAllDay
-        self.timeBucket = startAt.map { ScheduleTimeBucket.inferred(from: $0) } ?? timeBucket
+        // Trust the caller's bucket (matching the server-backed init). Whoever sets a
+        // start time is responsible for deriving the bucket via `.inferred(from:)`.
+        self.timeBucket = timeBucket
         self.sortOrder = sortOrder
         self.version = version
     }
 
     var source: String { calendar.provider.displayName }
     var isExternal: Bool { calendar.provider == .google }
+    // Rescheduled/cancelled/skipped entries are kept for history but hidden from
+    // the active lists so a moved item doesn't leave a ghost on its old day.
+    var isActive: Bool { status != .rescheduled && status != .cancelled && status != .skipped }
+    var isReschedulable: Bool { status == .planned || status == .inProgress || status == .partial }
     var isDone: Bool {
         get { status == .completed }
         set { status = newValue ? .completed : .planned }
@@ -282,6 +288,8 @@ final class ScheduleStore {
     private(set) var calendars: [ScheduleCalendar] = []
     private(set) var state = ScheduleStoreState.idle
     private let repository: ScheduleRepository
+    private var lastWidgetDays: [MemdoWidgetDay]?
+    private var lastSyncCursor: String?
 
     init(repository: ScheduleRepository) {
         self.repository = repository
@@ -303,9 +311,18 @@ final class ScheduleStore {
     }
     #endif
 
+    func search(_ query: String) async -> [ScheduleDetail] {
+        let calendarsByID = Dictionary(uniqueKeysWithValues: calendars.map { ($0.id, $0) })
+        guard let dtos = try? await repository.search(query: query) else { return [] }
+        return dtos.compactMap { dto in
+            guard let calendar = calendarsByID[dto.calendarId] else { return nil }
+            return try? ScheduleDetail(dto: dto, calendar: calendar)
+        }
+    }
+
     func items(for date: Date) -> [ScheduleDetail] {
         schedules
-            .filter { Calendar.current.isDate($0.scheduledDate, inSameDayAs: date) }
+            .filter { $0.isActive && Calendar.current.isDate($0.scheduledDate, inSameDayAs: date) }
             .sorted { $0.timeSortKey < $1.timeSortKey }
     }
 
@@ -318,6 +335,55 @@ final class ScheduleStore {
             calendars = snapshot.calendars
             state = .loaded
             updateWidgetSnapshot()
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    /// Best-effort incremental pull of changes made elsewhere (other devices or
+    /// external edits) since the last sync cursor. Layered on top of `load()`.
+    func refresh() async {
+        guard state == .loaded else { return }
+        let calendarsByID = Dictionary(uniqueKeysWithValues: calendars.map { ($0.id, $0) })
+        var cursor = lastSyncCursor
+        var changed = false
+        do {
+            var hasMore = true
+            while hasMore {
+                let page = try await repository.sync(cursor: cursor)
+                for item in page.items {
+                    if item.operation == "delete" {
+                        if let id = UUID(uuidString: item.id), schedules.contains(where: { $0.id == id }) {
+                            schedules.removeAll { $0.id == id }
+                            changed = true
+                        }
+                    } else if let dto = item.data,
+                              let calendar = calendarsByID[dto.calendarId],
+                              let mapped = try? ScheduleDetail(dto: dto, calendar: calendar) {
+                        if let index = schedules.firstIndex(where: { $0.id == mapped.id }) {
+                            schedules[index] = mapped
+                        } else {
+                            schedules.append(mapped)
+                        }
+                        changed = true
+                    }
+                }
+                cursor = page.nextCursor ?? cursor
+                hasMore = page.hasMore
+            }
+            lastSyncCursor = cursor
+            if changed { updateWidgetSnapshot() }
+        } catch {
+            // Refresh is best-effort; leave current data intact on failure.
+        }
+    }
+
+    /// Creates a recurrence rule on the backend, which materialises the
+    /// occurrences server-side, then reloads to pull them in.
+    func createRecurring(_ schedule: ScheduleDetail) async {
+        do {
+            try await repository.createRule(schedule)
+            await load()
         } catch {
             state = .failed(error.localizedDescription)
         }
@@ -364,6 +430,7 @@ final class ScheduleStore {
         schedules = []
         calendars = []
         state = .idle
+        lastSyncCursor = nil
         updateWidgetSnapshot()
     }
 
@@ -381,8 +448,9 @@ final class ScheduleStore {
     }
 
     func move(id: UUID, to date: Date) {
-        guard let schedule = schedules.first(where: { $0.id == id }) else { return }
-        var moved = schedule
+        guard let index = schedules.firstIndex(where: { $0.id == id }) else { return }
+        let original = schedules[index]
+        var moved = original
         let calendar = Calendar.current
         let oldDate = moved.scheduledDate
         moved.scheduledDate = calendar.startOfDay(for: date)
@@ -410,7 +478,32 @@ final class ScheduleStore {
             )
         }
         assert(calendar.isDate(moved.scheduledDate, inSameDayAs: date))
-        save(moved)
+
+        // The backend only reschedules live entries (preserving the original as
+        // history); completed/cancelled ones fall back to a plain in-place update.
+        guard original.isReschedulable else {
+            save(moved)
+            return
+        }
+        schedules[index] = moved
+        updateWidgetSnapshot()
+        Task { await reschedule(original: original, moved: moved) }
+    }
+
+    private func reschedule(original: ScheduleDetail, moved: ScheduleDetail) async {
+        do {
+            let result = try await repository.reschedule(moved, baseVersion: original.version)
+            schedules.removeAll { $0.id == original.id }
+            schedules.append(result.original)
+            schedules.append(result.replacement)
+            updateWidgetSnapshot()
+        } catch {
+            if let index = schedules.firstIndex(where: { $0.id == original.id }) {
+                schedules[index] = original
+            }
+            updateWidgetSnapshot()
+            state = .failed(error.localizedDescription)
+        }
     }
 
     func delete(id: UUID) {
@@ -440,11 +533,11 @@ final class ScheduleStore {
         let days = grouped.keys.sorted().map { date in
             let schedules = (grouped[date] ?? []).sorted { $0.timeSortKey < $1.timeSortKey }
             let active = schedules.filter(\.isWidgetActive)
-            return WidgetScheduleDay(
+            return MemdoWidgetDay(
                 date: date,
                 completedCount: schedules.filter(\.isDone).count,
                 items: active.map {
-                    WidgetScheduleItem(
+                    MemdoWidgetItem(
                         id: $0.id,
                         time: $0.startTimeText,
                         title: $0.title,
@@ -453,31 +546,17 @@ final class ScheduleStore {
                 }
             )
         }
-        let snapshot = WidgetScheduleSnapshot(updatedAt: now, days: days)
+        // Optimistic updates call this twice per edit (local apply + server confirm).
+        // Only rewrite storage and reload when the widget payload actually changed.
+        guard days != lastWidgetDays else { return }
+        lastWidgetDays = days
+        let snapshot = MemdoWidgetSnapshot(updatedAt: now, days: days)
         assert(days == days.sorted { $0.date < $1.date })
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
-        UserDefaults(suiteName: "group.com.memdo.ios")?.set(data, forKey: "today-schedule-snapshot")
+        UserDefaults(suiteName: MemdoWidgetStorage.suiteName)?.set(data, forKey: MemdoWidgetStorage.snapshotKey)
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-}
-
-private struct WidgetScheduleSnapshot: Codable {
-    let updatedAt: Date
-    let days: [WidgetScheduleDay]
-}
-
-private struct WidgetScheduleDay: Codable, Equatable {
-    let date: Date
-    let completedCount: Int
-    let items: [WidgetScheduleItem]
-}
-
-private struct WidgetScheduleItem: Codable, Equatable {
-    let id: UUID
-    let time: String
-    let title: String
-    let kind: String
 }
 
 private extension ScheduleDetail {

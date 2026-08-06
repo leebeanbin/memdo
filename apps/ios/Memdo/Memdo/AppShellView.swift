@@ -27,6 +27,7 @@ enum AppTab: String, CaseIterable {
 
 struct AppShellView: View {
     let scheduleStore: ScheduleStore
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = AppTab.today
     @State private var lastContentTab = AppTab.today
     @State private var showCalendarSearch = false
@@ -46,6 +47,11 @@ struct AppShellView: View {
             )
             .environment(scheduleStore)
             .task { await scheduleStore.load() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    Task { await scheduleStore.refresh() }
+                }
+            }
             .overlay { backendStateOverlay }
     }
 

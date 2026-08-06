@@ -7,22 +7,42 @@ struct ScheduleSearchView: View {
     @State private var status = "전체 상태"
     @State private var period = "전체 기간"
     @State private var presentedSheet: SearchSheet?
+    @State private var results: [ScheduleDetail] = []
 
     private var activeFilterDescription: String? {
         let filters = [status, period].filter { $0 != "전체 상태" && $0 != "전체 기간" }
         return filters.isEmpty ? nil : filters.joined(separator: " · ")
     }
 
-    private var filteredResults: [ScheduleDetail] {
-        scheduleStore.schedules.filter {
-            ($0.title.localizedCaseInsensitiveContains(query) ||
-             $0.memo.localizedCaseInsensitiveContains(query) ||
-             $0.location.localizedCaseInsensitiveContains(query)) &&
-            (scope == .all || (scope == .google ? $0.isExternal : !$0.isExternal)) &&
-            (status == "전체 상태" || (status == "완료" ? $0.isDone : !$0.isDone)) &&
-            (period == "전체 기간" || (period == "이번 주" ? $0.day >= 27 : $0.day >= 18))
+    private var periodInterval: DateInterval? {
+        let calendar = Calendar.current
+        let now = Date.now
+        switch period {
+        case "이번 주":
+            return calendar.dateInterval(of: .weekOfYear, for: now)
+        case "최근 2주":
+            let today = calendar.startOfDay(for: now)
+            guard let start = calendar.date(byAdding: .day, value: -13, to: today),
+                  let end = calendar.date(byAdding: .day, value: 1, to: today) else { return nil }
+            return DateInterval(start: start, end: end)
+        default:
+            return nil
         }
-        .sorted { ($0.day, $0.timeSortKey) > ($1.day, $1.timeSortKey) }
+    }
+
+    // Text matching now happens server-side (`/search`); the remaining scope/
+    // status/period controls filter the returned matches client-side.
+    private var filteredResults: [ScheduleDetail] {
+        let interval = periodInterval
+        return results.filter { schedule in
+            let matchesScope = scope == .all || (scope == .google ? schedule.isExternal : !schedule.isExternal)
+            let matchesStatus = status == "전체 상태" || (status == "완료" ? schedule.isDone : !schedule.isDone)
+            let matchesPeriod = interval.map {
+                schedule.scheduledDate >= $0.start && schedule.scheduledDate < $0.end
+            } ?? true
+            return schedule.isActive && matchesScope && matchesStatus && matchesPeriod
+        }
+        .sorted { ($0.scheduledDate, $0.timeSortKey) > ($1.scheduledDate, $1.timeSortKey) }
     }
 
     var body: some View {
@@ -39,6 +59,17 @@ struct ScheduleSearchView: View {
             case .filters:
                 SearchFilterSheet(status: $status, period: $period)
             }
+        }
+        .task(id: query) {
+            let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !term.isEmpty else {
+                results = []
+                return
+            }
+            // Debounce keystrokes; `.task(id:)` cancels the prior run on each change.
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            results = await scheduleStore.search(term)
         }
     }
 }
