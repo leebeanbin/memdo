@@ -79,11 +79,19 @@ struct ScheduleRow: View {
                         .foregroundStyle(MemdoTheme.secondaryInk)
                 }
 
-                Text(schedule.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
-                    .strikethrough(schedule.isDone)
-                    .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : MemdoTheme.ink)
+                HStack(spacing: 5) {
+                    if let provider = schedule.meetingProvider {
+                        Image(systemName: provider.systemImage)
+                            .font(.caption2)
+                            .foregroundStyle(MemdoTheme.brand)
+                            .accessibilityLabel("\(provider.label) 회의")
+                    }
+                    Text(schedule.title)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
+                        .strikethrough(schedule.isDone)
+                        .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : MemdoTheme.ink)
+                }
 
                 Text(metadata)
                     .font(.caption)

@@ -39,6 +39,13 @@ struct ScheduleDetailSheet: View {
                     }
 
                     Section("일정 정보") {
+                        if let meetingURL = draft.meetingURL, let provider = draft.meetingProvider {
+                            Link(destination: meetingURL) {
+                                Label("\(provider.label) 참여", systemImage: provider.systemImage)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(MemdoTheme.accent)
+                            }
+                        }
                         LabeledContent("형식", value: draft.kindLabel)
                         LabeledContent("기간", value: draft.displayTime)
                         if let dueAt = draft.dueAt {
@@ -352,6 +359,7 @@ struct AddScheduleSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScheduleStore.self) private var scheduleStore
     @State private var draft: ScheduleDetail
+    @State private var showCapture = false
 
     let onSave: (ScheduleDetail) -> Void
 
@@ -369,9 +377,18 @@ struct AddScheduleSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Button {
+                    showCapture = true
+                } label: {
+                    Label("붙여넣기로 채우기", systemImage: "wand.and.stars")
+                        .foregroundStyle(MemdoTheme.accent)
+                }
                 ScheduleEditorFields(schedule: $draft, allowsRecurrence: true)
             }
             .memdoSystemList()
+            .sheet(isPresented: $showCapture) {
+                EventCaptureSheet { event in applyCapture(event) }
+            }
             .navigationTitle("새 일정")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -387,6 +404,19 @@ struct AddScheduleSheet: View {
             }
         }
         .memdoSheetPresentation([.large])
+    }
+
+    // Fills the draft from an extracted proposal. The editor itself is the
+    // approval gate — nothing is created until the user taps 추가.
+    private func applyCapture(_ event: EventDraft) {
+        if !event.title.isEmpty { draft.title = event.title }
+        if let start = event.startAt {
+            draft.startAt = start
+            draft.endAt = event.endAt ?? start.addingTimeInterval(3_600)
+            draft.scheduledDate = Calendar.current.startOfDay(for: start)
+            draft.timeBucket = .inferred(from: start)
+        }
+        if !event.notes.isEmpty { draft.memo = event.notes }
     }
 
     private func save() {

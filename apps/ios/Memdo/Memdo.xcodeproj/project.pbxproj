@@ -24,6 +24,7 @@
 		B941DEFC3022131300E1891A /* MemdoWidgetSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = B941DEFB3022131300E1891A /* MemdoWidgetSchedule.swift */; };
 		B941DEFD30221B9700E1891A /* MemdoWidgetSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = B941DEFB3022131300E1891A /* MemdoWidgetSchedule.swift */; };
 		B941DEFF3022D90000E1891A /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = B941DEFE3022D90000E1891A /* Preferences.swift */; };
+		B941DF013025698D00E1891A /* EventCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = B941DF003025698D00E1891A /* EventCapture.swift */; };
 		C8F4B9A01D2E4F60718293A4 /* ScheduleAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A5C0B12E3F4051728394A5 /* ScheduleAPI.swift */; };
 		E117E6A55D78273E89DFAAC0 /* ScheduleSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9B39D6188C70A056DA658E /* ScheduleSearchView.swift */; };
 		E49AD453117D9B5AB53EA8CE /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257B3BF059A0E5D9A80D8E50 /* TodayView.swift */; };
@@ -74,6 +75,7 @@
 		B4D119A0D929FA9AE7D47773 /* AppShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellView.swift; sourceTree = "<group>"; };
 		B941DEFB3022131300E1891A /* MemdoWidgetSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoWidgetSchedule.swift; sourceTree = "<group>"; };
 		B941DEFE3022D90000E1891A /* Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preferences.swift; sourceTree = "<group>"; };
+		B941DF003025698D00E1891A /* EventCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCapture.swift; sourceTree = "<group>"; };
 		C4EA7A02C55094DEBD06AF37 /* MemdoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoWidget.swift; sourceTree = "<group>"; };
 		D9A5C0B12E3F4051728394A5 /* ScheduleAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleAPI.swift; sourceTree = "<group>"; };
 		E81203EAFA09124BA54F8AE7 /* TodayComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayComponents.swift; sourceTree = "<group>"; };
@@ -133,6 +135,7 @@
 				257B3BF059A0E5D9A80D8E50 /* TodayView.swift */,
 				B941DEFB3022131300E1891A /* MemdoWidgetSchedule.swift */,
 				B941DEFE3022D90000E1891A /* Preferences.swift */,
+				B941DF003025698D00E1891A /* EventCapture.swift */,
 			);
 			path = Memdo;
 			sourceTree = "<group>";
@@ -256,6 +259,7 @@
 				B941DEFC3022131300E1891A /* MemdoWidgetSchedule.swift in Sources */,
 				C8F4B9A01D2E4F60718293A4 /* ScheduleAPI.swift in Sources */,
 				5AFEEBA9CD4F0FEBBA50F09B /* ScheduleModel.swift in Sources */,
+				B941DF013025698D00E1891A /* EventCapture.swift in Sources */,
 				98172737F1AC51B31154A93D /* ScheduleRow.swift in Sources */,
 				E117E6A55D78273E89DFAAC0 /* ScheduleSearchView.swift in Sources */,
 				480BC8CB74B2601AFEEF5DBD /* ScheduleSheets.swift in Sources */,

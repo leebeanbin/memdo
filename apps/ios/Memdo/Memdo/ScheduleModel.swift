@@ -164,6 +164,32 @@ struct ScheduleLocation: Equatable {
     }
 }
 
+enum MeetingProvider: String {
+    case zoom
+    case meet
+    case teams
+
+    var label: String {
+        switch self {
+        case .zoom: "Zoom"
+        case .meet: "Google Meet"
+        case .teams: "Teams"
+        }
+    }
+
+    var systemImage: String { "video.fill" }
+
+    /// Recognises only known video-meeting hosts so a plain link in a note
+    /// doesn't get mistaken for a joinable meeting (generic links = Phase 4).
+    static func recognized(_ url: URL) -> MeetingProvider? {
+        let host = url.host?.lowercased() ?? ""
+        if host.contains("zoom.us") { return .zoom }
+        if host.contains("meet.google.com") { return .meet }
+        if host.contains("teams.microsoft.com") || host.contains("teams.live.com") { return .teams }
+        return nil
+    }
+}
+
 struct ScheduleDetail: Identifiable, Equatable {
     let id: UUID
     var scheduledDate: Date
@@ -229,6 +255,21 @@ struct ScheduleDetail: Identifiable, Equatable {
     // the active lists so a moved item doesn't leave a ghost on its old day.
     var isActive: Bool { status != .rescheduled && status != .cancelled && status != .skipped }
     var isReschedulable: Bool { status == .planned || status == .inProgress || status == .partial }
+    /// First recognised video-meeting link found in the note or location.
+    var meetingURL: URL? {
+        let text = [memo, location].filter { !$0.isEmpty }.joined(separator: "\n")
+        guard !text.isEmpty,
+              let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        else { return nil }
+        let range = NSRange(text.startIndex..., in: text)
+        for match in detector.matches(in: text, range: range) {
+            if let url = match.url, MeetingProvider.recognized(url) != nil {
+                return url
+            }
+        }
+        return nil
+    }
+    var meetingProvider: MeetingProvider? { meetingURL.flatMap(MeetingProvider.recognized) }
     var isDone: Bool {
         get { status == .completed }
         set { status = newValue ? .completed : .planned }
