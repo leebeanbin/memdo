@@ -39,6 +39,13 @@ struct ScheduleDetailSheet: View {
                     }
 
                     Section("일정 정보") {
+                        if let meetingURL = draft.meetingURL, let provider = draft.meetingProvider {
+                            Link(destination: meetingURL) {
+                                Label("\(provider.label) 참여", systemImage: provider.systemImage)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(MemdoTheme.accent)
+                            }
+                        }
                         LabeledContent("형식", value: draft.kindLabel)
                         LabeledContent("기간", value: draft.displayTime)
                         if let dueAt = draft.dueAt {
