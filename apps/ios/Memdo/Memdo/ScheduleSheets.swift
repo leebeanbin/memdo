@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ScheduleDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(ScheduleStore.self) private var scheduleStore
     @State private var draft: ScheduleDetail
     @State private var saved: ScheduleDetail
     @State private var isEditing = false
@@ -11,6 +12,13 @@ struct ScheduleDetailSheet: View {
 
     private var canSave: Bool {
         !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && draft.isTimeRangeValid
+    }
+
+    // The store's version for this item, once it's been written back by a prior
+    // save in this same sheet session. Watched so a second save doesn't reuse a
+    // now-stale version and lose the optimistic-lock check on the server.
+    private var liveVersion: Int? {
+        scheduleStore.schedules.first { $0.id == draft.id }?.version
     }
 
     init(schedule: ScheduleDetail, onSave: @escaping (ScheduleDetail) -> Void) {
@@ -90,6 +98,19 @@ struct ScheduleDetailSheet: View {
             }
         }
         .memdoSheetPresentation([.large])
+        .onChange(of: liveVersion) { _, _ in resyncVersionFromStore() }
+    }
+
+    private func resyncVersionFromStore() {
+        guard let live = scheduleStore.schedules.first(where: { $0.id == draft.id }) else { return }
+        saved = live
+        if isEditing {
+            // Don't clobber an in-progress edit's fields, just keep the version
+            // current so the eventual save doesn't lose the optimistic-lock check.
+            draft.version = live.version
+        } else {
+            draft = live
+        }
     }
 
     private func updateCompletion(_ isDone: Bool) {

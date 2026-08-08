@@ -32,6 +32,7 @@ final class MemdoSession {
     private(set) var isBusy = false
     private(set) var errorMessage: String?
     private(set) var accountLabel = ""
+    private(set) var isGuest = false
     let scheduleStore: ScheduleStore?
     let preferencesStore: PreferencesStore?
 
@@ -43,7 +44,16 @@ final class MemdoSession {
             let configuration = try MemdoConfiguration.current()
             let client = SupabaseClient(
                 supabaseURL: configuration.projectURL,
-                supabaseKey: configuration.publishableKey
+                supabaseKey: configuration.publishableKey,
+                options: SupabaseClientOptions(
+                    // Without this, a launch-time refresh of an expired-but-real session
+                    // that fails for a transport reason (offline, timeout, 5xx) emits
+                    // .initialSession(nil) indistinguishably from true first launch, and
+                    // observe() below would silently mint a brand new guest account,
+                    // orphaning the old one. With it, the locally stored session (if any)
+                    // is always emitted first; refresh happens afterward in the background.
+                    auth: .init(emitLocalSessionAsInitialSession: true)
+                )
             )
             self.client = client
             scheduleStore = ScheduleStore(
@@ -62,21 +72,36 @@ final class MemdoSession {
 
     func observe() async {
         guard let client else { return }
-        for await (_, session) in client.auth.authStateChanges {
+        for await (event, session) in client.auth.authStateChanges {
             if let session {
                 if activeUserID != session.user.id {
                     scheduleStore?.reset()
                     preferencesStore?.reset()
                 }
                 activeUserID = session.user.id
-                accountLabel = session.user.isAnonymous ? "게스트" : session.user.email ?? "연결된 계정"
+                isGuest = session.user.isAnonymous
+                accountLabel = isGuest ? "게스트" : session.user.email ?? "연결된 계정"
                 phase = .signedIn
-            } else {
-                activeUserID = nil
-                accountLabel = ""
-                scheduleStore?.reset()
-                preferencesStore?.reset()
+                continue
+            }
+
+            activeUserID = nil
+            accountLabel = ""
+            scheduleStore?.reset()
+            preferencesStore?.reset()
+
+            switch event {
+            case .initialSession, .signedOut:
+                // No locally stored session: either a true first launch, or the
+                // session was genuinely invalidated (explicit sign-out, or the
+                // refresh token itself was rejected). emitLocalSessionAsInitialSession
+                // above guarantees .initialSession only carries a nil session when
+                // there truly is none stored, so a flaky network refresh at launch
+                // can no longer land here and silently mint a replacement guest
+                // account on top of a still-valid one.
                 await startAnonymousSession()
+            default:
+                phase = .signedOut
             }
         }
     }
