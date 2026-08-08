@@ -640,16 +640,26 @@ private struct AIConsentSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("AI가 보는 정보") {
+                Section {
+                    Text("이 항목은 설정에서 별도로 연결하는 Memdo Agent 기준입니다.")
+                        .font(.footnote)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                }
+                Section("Memdo Agent가 보는 정보") {
                     Label("일정 제목", systemImage: "textformat")
                     Label("시작·종료 시간", systemImage: "clock")
                 }
-                Section("AI가 보지 않는 정보") {
+                Section("Memdo Agent가 보지 않는 정보") {
                     Label("위치와 메모", systemImage: "lock")
                     Label("연결하지 않은 외부 데이터", systemImage: "lock")
                 }
                 Section("실행 원칙") {
                     Label("일정 변경은 확인 후 실행", systemImage: "checkmark.shield")
+                }
+                Section("붙여넣기로 일정 만들기는 별도입니다") {
+                    Text("텍스트를 붙여넣어 일정을 만드는 기능은 기기 안에서만 처리돼요(온디바이스). 이땐 붙여넣은 내용 전체(위치·메모 포함 가능)를 읽지만, 기기 밖으로 전송되지 않습니다.")
+                        .font(.footnote)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
                 }
             }
             .memdoSystemList()

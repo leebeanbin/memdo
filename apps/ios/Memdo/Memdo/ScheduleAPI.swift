@@ -525,7 +525,7 @@ struct MemdoConfiguration {
         let rawURL = environment["SUPABASE_URL"] ?? bundle.object(forInfoDictionaryKey: "SUPABASE_URL") as? String
         let key = environment["SUPABASE_PUBLISHABLE_KEY"]
             ?? bundle.object(forInfoDictionaryKey: "SUPABASE_PUBLISHABLE_KEY") as? String
-        guard let rawURL, let projectURL = URL(string: rawURL),
+        guard let rawURL, !rawURL.contains("$("), let projectURL = URL(string: rawURL),
               let key, !key.isEmpty, !key.contains("$(") else {
             throw ScheduleAPIError.missingConfiguration
         }

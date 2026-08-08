@@ -498,7 +498,13 @@ final class ScheduleStore {
         var changed = false
         do {
             var hasMore = true
-            while hasMore {
+            // hasMore/nextCursor come from the server; this cap is just cheap
+            // insurance against a future backend bug turning this into an
+            // infinite loop, not something reachable today.
+            var pagesFetched = 0
+            let maxPages = 200
+            while hasMore && pagesFetched < maxPages {
+                pagesFetched += 1
                 let page = try await repository.sync(cursor: cursor)
                 for item in page.items {
                     if item.operation == "delete" {
@@ -590,6 +596,10 @@ final class ScheduleStore {
         lastSyncCursor = nil
         loadedFrom = nil
         loadedTo = nil
+        // hideWidgetContent is a per-user privacy preference; it shouldn't carry
+        // over to whichever account signs in next on this device.
+        UserDefaults(suiteName: MemdoWidgetStorage.suiteName)?
+            .removeObject(forKey: MemdoWidgetStorage.hideContentKey)
         updateWidgetSnapshot()
     }
 

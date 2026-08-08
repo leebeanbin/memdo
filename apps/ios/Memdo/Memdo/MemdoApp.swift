@@ -46,13 +46,22 @@ final class MemdoSession {
                 supabaseURL: configuration.projectURL,
                 supabaseKey: configuration.publishableKey,
                 options: SupabaseClientOptions(
-                    // Without this, a launch-time refresh of an expired-but-real session
-                    // that fails for a transport reason (offline, timeout, 5xx) emits
-                    // .initialSession(nil) indistinguishably from true first launch, and
-                    // observe() below would silently mint a brand new guest account,
-                    // orphaning the old one. With it, the locally stored session (if any)
-                    // is always emitted first; refresh happens afterward in the background.
-                    auth: .init(emitLocalSessionAsInitialSession: true)
+                    // Without emitLocalSessionAsInitialSession, a launch-time refresh of an
+                    // expired-but-real session that fails for a transport reason (offline,
+                    // timeout, 5xx) emits .initialSession(nil) indistinguishably from true
+                    // first launch, and observe() below would silently mint a brand new
+                    // guest account, orphaning the old one. With it, the locally stored
+                    // session (if any) is always emitted first; refresh happens afterward
+                    // in the background.
+                    //
+                    // storage: DeviceOnlyKeychainStorage keeps the SDK's default Keychain
+                    // timing but excludes the item from encrypted backups / cross-device
+                    // restore -- see SecureSessionStorage.swift.
+                    auth: .init(
+                        storage: DeviceOnlyKeychainStorage(),
+                        emitLocalSessionAsInitialSession: true
+                    ),
+                    global: .init(logger: MemdoAuthLogger())
                 )
             )
             self.client = client
