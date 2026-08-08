@@ -141,6 +141,7 @@ struct TodayView: View {
         selectedDate = Calendar.current.startOfDay(for: date)
         showAllSchedules = false
         autoExpandArmed = true
+        Task { await scheduleStore.ensureLoaded(for: selectedDate) }
     }
 
     private func moveDate(by offset: Int) {
@@ -196,9 +197,11 @@ enum TodaySheetDestination: Identifiable {
     }
 }
 
+#if DEBUG
 struct TodayView_Previews: PreviewProvider {
     static var previews: some View {
         TodayView()
             .environment(ScheduleStore.preview())
     }
 }
+#endif

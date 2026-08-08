@@ -62,19 +62,46 @@ struct AppShellView: View {
                 EventCaptureSheet(initialText: intentText ?? "") { event in createFromCapture(event) }
             }
             .overlay { backendStateOverlay }
+            .overlay(alignment: .bottom) { writeErrorToast }
+    }
+
+    @ViewBuilder
+    private var writeErrorToast: some View {
+        if let message = scheduleStore.lastWriteError {
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .font(.footnote.weight(.medium))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.horizontal, MemdoMetrics.pagePadding)
+                .padding(.bottom, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .onTapGesture { scheduleStore.dismissWriteError() }
+                .task(id: message) {
+                    try? await Task.sleep(for: .seconds(4))
+                    if scheduleStore.lastWriteError == message {
+                        scheduleStore.dismissWriteError()
+                    }
+                }
+        }
     }
 
     @ViewBuilder
     private var backendStateOverlay: some View {
-        switch scheduleStore.state {
-        case .idle, .loaded:
+        // Only the schedule-driven tabs depend on scheduleStore; Settings and Agent
+        // stay reachable even while a load is stuck, so signing out (or anything
+        // else in Settings) is never blocked by a backend hiccup on Today/Calendar.
+        switch (scheduleStore.state, selectedTab) {
+        case (_, .settings), (_, .agent):
             EmptyView()
-        case .loading:
+        case (.idle, _), (.loaded, _):
+            EmptyView()
+        case (.loading, _):
             ZStack {
                 Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
                 ProgressView("일정을 불러오는 중")
             }
-        case .failed(let message):
+        case (.failed(let message), _):
             ZStack {
                 MemdoPageBackground().ignoresSafeArea()
                 ContentUnavailableView {
@@ -84,6 +111,8 @@ struct AppShellView: View {
                 } actions: {
                     Button("다시 시도") { Task { await scheduleStore.load() } }
                         .buttonStyle(.borderedProminent)
+                    Button("설정으로 이동") { selectedTab = .settings }
+                        .buttonStyle(.bordered)
                 }
                 .padding(MemdoMetrics.pagePadding)
             }
@@ -150,19 +179,28 @@ struct AppShellView: View {
 
     // Creates a schedule from an App Intent-driven capture. Uses the first
     // calendar; a missing start time falls back to a task so the entry is valid.
+    // A cold launch can race scheduleStore.load(), so wait briefly for calendars
+    // to appear rather than dropping the capture the user just made.
     private func createFromCapture(_ event: EventDraft) {
-        guard let calendar = scheduleStore.calendars.first else { return }
-        var schedule = ScheduleDetail(
-            scheduledDate: event.startAt ?? .now,
-            startAt: event.startAt,
-            endAt: event.endAt,
-            title: event.title.isEmpty ? "새 일정" : event.title,
-            kind: event.startAt != nil ? .event : .task,
-            calendar: calendar,
-            timeBucket: event.startAt.map(ScheduleTimeBucket.inferred(from:)) ?? .anytime
-        )
-        schedule.memo = event.notes
-        scheduleStore.save(schedule)
+        Task {
+            var attempts = 0
+            while scheduleStore.calendars.isEmpty && attempts < 20 {
+                try? await Task.sleep(for: .milliseconds(100))
+                attempts += 1
+            }
+            guard let calendar = scheduleStore.calendars.first else { return }
+            var schedule = ScheduleDetail(
+                scheduledDate: event.startAt ?? .now,
+                startAt: event.startAt,
+                endAt: event.endAt,
+                title: event.title.isEmpty ? "새 일정" : event.title,
+                kind: event.startAt != nil ? .event : .task,
+                calendar: calendar,
+                timeBucket: event.startAt.map(ScheduleTimeBucket.inferred(from:)) ?? .anytime
+            )
+            schedule.memo = event.notes
+            scheduleStore.save(schedule)
+        }
     }
 
     private func select(_ tab: AppTab) {

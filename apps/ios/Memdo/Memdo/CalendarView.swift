@@ -86,12 +86,14 @@ struct CalendarView: View {
             displayedMonth = Calendar.current.dateInterval(of: .month, for: date)?.start ?? date
             showAll = false
             targetDate = nil
+            Task { await scheduleStore.ensureLoaded(for: date) }
         }
     }
 
     private func select(_ date: Date) {
         selectedDate = date
         showAll = false
+        Task { await scheduleStore.ensureLoaded(for: date) }
     }
 
     private func openDay(_ date: Date) {
@@ -106,6 +108,7 @@ struct CalendarView: View {
             selectedDate = Calendar.current.date(bySetting: .day, value: 1, of: month) ?? month
             showAll = false
         }
+        Task { await scheduleStore.ensureLoaded(for: month) }
     }
 
     private func goToday() {

@@ -441,6 +441,23 @@ actor ScheduleRepository {
         return ScheduleSnapshot(schedules: schedules, calendars: calendars)
     }
 
+    /// Fetches just an additional date range (no demo-seed bootstrap), for
+    /// extending an already-loaded window when the user navigates outside it.
+    func loadRange(from: Date, to: Date) async throws -> [ScheduleDetail] {
+        let accessToken = try await accessToken()
+        let calendarDTOs = try await api.calendars(accessToken: accessToken)
+        let calendarsByID = Dictionary(
+            uniqueKeysWithValues: calendarDTOs.map { ($0.id, $0.scheduleCalendar) }
+        )
+        let todos = try await api.todos(from: from, to: to, accessToken: accessToken)
+        return try todos.map { dto in
+            guard let calendar = calendarsByID[dto.calendarId] else {
+                throw ScheduleAPIError.incompatibleValue(dto.calendarId)
+            }
+            return try ScheduleDetail(dto: dto, calendar: calendar)
+        }
+    }
+
     func create(_ schedule: ScheduleDetail) async throws -> ScheduleDetail {
         let accessToken = try await accessToken()
         let dto = try await api.create(

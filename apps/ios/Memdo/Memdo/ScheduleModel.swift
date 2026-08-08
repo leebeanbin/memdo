@@ -344,9 +344,28 @@ final class ScheduleStore {
     private(set) var schedules: [ScheduleDetail] = []
     private(set) var calendars: [ScheduleCalendar] = []
     private(set) var state = ScheduleStoreState.idle
+    /// Failure from a single item's create/update/delete/reschedule -- surfaced as a
+    /// dismissible, non-blocking notice. `state` is reserved for load() failures,
+    /// which take down the whole collection; a single item failing shouldn't.
+    private(set) var lastWriteError: String?
     private let repository: ScheduleRepository
     private var lastWidgetDays: [MemdoWidgetDay]?
     private var lastSyncCursor: String?
+    /// IDs with a create/update/delete/reschedule in flight. Re-entrant calls for the
+    /// same id (e.g. a double-tapped completion toggle) are dropped rather than firing
+    /// a second request that's guaranteed to lose the optimistic-lock race.
+    private var pendingWriteIDs: Set<UUID> = []
+    private var loadedFrom: Date?
+    private var loadedTo: Date?
+    private(set) var isLoadingRange = false
+
+    func isPending(_ id: UUID) -> Bool {
+        pendingWriteIDs.contains(id)
+    }
+
+    func dismissWriteError() {
+        lastWriteError = nil
+    }
 
     init(repository: ScheduleRepository) {
         self.repository = repository
@@ -392,9 +411,12 @@ final class ScheduleStore {
     }
     #endif
 
-    func search(_ query: String) async -> [ScheduleDetail] {
+    /// Throws on failure rather than returning an empty array, so the caller can
+    /// tell "no matches" apart from "the request failed" instead of showing the
+    /// same empty state for both.
+    func search(_ query: String) async throws -> [ScheduleDetail] {
         let calendarsByID = Dictionary(uniqueKeysWithValues: calendars.map { ($0.id, $0) })
-        guard let dtos = try? await repository.search(query: query) else { return [] }
+        let dtos = try await repository.search(query: query)
         return dtos.compactMap { dto in
             guard let calendar = calendarsByID[dto.calendarId] else { return nil }
             return try? ScheduleDetail(dto: dto, calendar: calendar)
@@ -415,10 +437,56 @@ final class ScheduleStore {
             schedules = snapshot.schedules
             calendars = snapshot.calendars
             state = .loaded
+            let calendar = Calendar.current
+            loadedFrom = calendar.date(byAdding: .day, value: -30, to: .now)
+            loadedTo = calendar.date(byAdding: .day, value: 60, to: .now)
             updateWidgetSnapshot()
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+
+    /// Extends the loaded window to cover `date` when the user has navigated
+    /// outside what load() originally fetched (-30/+60 days around launch time),
+    /// merging the results in rather than replacing the store's schedules. Without
+    /// this, browsing far enough shows an empty day that was never actually
+    /// fetched, indistinguishable from a genuinely empty one.
+    func ensureLoaded(for date: Date) async {
+        guard state == .loaded, let loadedFrom, let loadedTo, !isLoadingRange else { return }
+        let calendar = Calendar.current
+        let padding = 30
+
+        if date < loadedFrom {
+            let newFrom = calendar.date(byAdding: .day, value: -padding, to: date) ?? date
+            await fetchRange(from: newFrom, to: loadedFrom)
+            self.loadedFrom = newFrom
+        } else if date > loadedTo {
+            let newTo = calendar.date(byAdding: .day, value: padding, to: date) ?? date
+            await fetchRange(from: loadedTo, to: newTo)
+            self.loadedTo = newTo
+        }
+    }
+
+    private func fetchRange(from: Date, to: Date) async {
+        isLoadingRange = true
+        defer { isLoadingRange = false }
+        do {
+            let fetched = try await repository.loadRange(from: from, to: to)
+            merge(fetched)
+        } catch {
+            lastWriteError = error.localizedDescription
+        }
+    }
+
+    private func merge(_ fetched: [ScheduleDetail]) {
+        for item in fetched {
+            if let index = schedules.firstIndex(where: { $0.id == item.id }) {
+                schedules[index] = item
+            } else {
+                schedules.append(item)
+            }
+        }
+        updateWidgetSnapshot()
     }
 
     /// Best-effort incremental pull of changes made elsewhere (other devices or
@@ -466,20 +534,28 @@ final class ScheduleStore {
             try await repository.createRule(schedule)
             await load()
         } catch {
-            state = .failed(error.localizedDescription)
+            lastWriteError = error.localizedDescription
         }
     }
 
     func save(_ schedule: ScheduleDetail) {
+        guard !pendingWriteIDs.contains(schedule.id) else { return }
+        pendingWriteIDs.insert(schedule.id)
         if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
             let previous = schedules[index]
             schedules[index] = schedule
             updateWidgetSnapshot()
-            Task { await update(schedule, replacing: previous) }
+            Task {
+                await update(schedule, replacing: previous)
+                pendingWriteIDs.remove(schedule.id)
+            }
         } else {
             schedules.append(schedule)
             updateWidgetSnapshot()
-            Task { await create(schedule) }
+            Task {
+                await create(schedule)
+                pendingWriteIDs.remove(schedule.id)
+            }
         }
     }
 
@@ -493,7 +569,7 @@ final class ScheduleStore {
         } catch {
             schedules.removeAll { $0.id == schedule.id }
             updateWidgetSnapshot()
-            state = .failed(error.localizedDescription)
+            lastWriteError = error.localizedDescription
         }
     }
 
@@ -502,7 +578,7 @@ final class ScheduleStore {
             replace(schedule.id, with: try await repository.update(schedule))
         } catch {
             replace(schedule.id, with: previous)
-            state = .failed(error.localizedDescription)
+            lastWriteError = error.localizedDescription
         }
         updateWidgetSnapshot()
     }
@@ -512,6 +588,8 @@ final class ScheduleStore {
         calendars = []
         state = .idle
         lastSyncCursor = nil
+        loadedFrom = nil
+        loadedTo = nil
         updateWidgetSnapshot()
     }
 
@@ -529,6 +607,7 @@ final class ScheduleStore {
     }
 
     func move(id: UUID, to date: Date) {
+        guard !pendingWriteIDs.contains(id) else { return }
         guard let index = schedules.firstIndex(where: { $0.id == id }) else { return }
         let original = schedules[index]
         var moved = original
@@ -568,7 +647,11 @@ final class ScheduleStore {
         }
         schedules[index] = moved
         updateWidgetSnapshot()
-        Task { await reschedule(original: original, moved: moved) }
+        pendingWriteIDs.insert(id)
+        Task {
+            await reschedule(original: original, moved: moved)
+            pendingWriteIDs.remove(id)
+        }
     }
 
     private func reschedule(original: ScheduleDetail, moved: ScheduleDetail) async {
@@ -583,15 +666,20 @@ final class ScheduleStore {
                 schedules[index] = original
             }
             updateWidgetSnapshot()
-            state = .failed(error.localizedDescription)
+            lastWriteError = error.localizedDescription
         }
     }
 
     func delete(id: UUID) {
+        guard !pendingWriteIDs.contains(id) else { return }
         guard let index = schedules.firstIndex(where: { $0.id == id }) else { return }
         let schedule = schedules.remove(at: index)
         updateWidgetSnapshot()
-        Task { await delete(schedule) }
+        pendingWriteIDs.insert(id)
+        Task {
+            await delete(schedule)
+            pendingWriteIDs.remove(id)
+        }
     }
 
     private func delete(_ schedule: ScheduleDetail) async {
@@ -604,7 +692,7 @@ final class ScheduleStore {
                 schedules.append(schedule)
             }
             updateWidgetSnapshot()
-            state = .failed(error.localizedDescription)
+            lastWriteError = error.localizedDescription
         }
     }
 

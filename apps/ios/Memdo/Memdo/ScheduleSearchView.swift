@@ -8,6 +8,7 @@ struct ScheduleSearchView: View {
     @State private var period = "전체 기간"
     @State private var presentedSheet: SearchSheet?
     @State private var results: [ScheduleDetail] = []
+    @State private var searchError: String?
 
     private var activeFilterDescription: String? {
         let filters = [status, period].filter { $0 != "전체 상태" && $0 != "전체 기간" }
@@ -49,6 +50,7 @@ struct ScheduleSearchView: View {
         SearchResultsSection(
             schedules: filteredResults,
             filterDescription: activeFilterDescription,
+            searchError: searchError,
             onOpenFilters: { presentedSheet = .filters },
             onOpenSchedule: { presentedSheet = .detail($0) }
         )
@@ -64,12 +66,19 @@ struct ScheduleSearchView: View {
             let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !term.isEmpty else {
                 results = []
+                searchError = nil
                 return
             }
             // Debounce keystrokes; `.task(id:)` cancels the prior run on each change.
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
-            results = await scheduleStore.search(term)
+            do {
+                results = try await scheduleStore.search(term)
+                searchError = nil
+            } catch {
+                results = []
+                searchError = error.localizedDescription
+            }
         }
     }
 }
@@ -93,6 +102,7 @@ enum ScheduleSearchScope: String, CaseIterable, Identifiable {
 private struct SearchResultsSection: View {
     let schedules: [ScheduleDetail]
     let filterDescription: String?
+    let searchError: String?
     let onOpenFilters: () -> Void
     let onOpenSchedule: (ScheduleDetail) -> Void
 
@@ -109,7 +119,14 @@ private struct SearchResultsSection: View {
                     .font(.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
-            if schedules.isEmpty {
+            if let searchError {
+                ContentUnavailableView(
+                    "검색을 완료하지 못했어요",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(searchError)
+                )
+                .frame(maxWidth: .infinity, minHeight: 120)
+            } else if schedules.isEmpty {
                 ContentUnavailableView(
                     "검색 결과가 없어요",
                     systemImage: "magnifyingglass",

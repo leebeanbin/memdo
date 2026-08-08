@@ -10,6 +10,9 @@ struct SettingsView: View {
     @State private var briefingKeywords: Set<String> = ["AI", "제품 디자인"]
     @State private var customKeywords: [String] = []
     @State private var presentedSheet: SettingsSheet?
+    @State private var showsSignOutConfirmation = false
+    @State private var summaryTimePushTask: Task<Void, Never>?
+    @State private var promptTimePushTask: Task<Void, Never>?
     @AppStorage(
         MemdoWidgetStorage.hideContentKey,
         store: UserDefaults(suiteName: MemdoWidgetStorage.suiteName)
@@ -17,6 +20,18 @@ struct SettingsView: View {
 
     var body: some View {
         MemdoPage(title: "설정", subtitle: "Memdo를 나에게 맞게 조정하세요", eyebrow: "나만의 Memdo") {
+            if let error = session.preferencesStore?.lastError {
+                Button {
+                    session.preferencesStore?.dismissError()
+                } label: {
+                    Label(error, systemImage: "exclamationmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .memdoSettingsRow()
+                }
+                .buttonStyle(.plain)
+            }
+
             SettingsGroup(title: "하루") {
                 Toggle("오늘 요약", isOn: $dailySummary)
                     .memdoSettingsRow()
@@ -93,7 +108,7 @@ struct SettingsView: View {
 
             SettingsGroup(title: "계정") {
                 Button {
-                    Task { await session.signOut() }
+                    showsSignOutConfirmation = true
                 } label: {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 3) {
@@ -112,8 +127,32 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(session.isBusy)
+
+                if let errorMessage = session.errorMessage {
+                    Divider()
+                    Label(errorMessage, systemImage: "exclamationmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .memdoSettingsRow()
+                }
             }
 
+        }
+        .confirmationDialog(
+            "로그아웃 하시겠어요?",
+            isPresented: $showsSignOutConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("로그아웃", role: .destructive) {
+                Task { await session.signOut() }
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            if session.isGuest {
+                Text("게스트 계정은 로그아웃하면 이 기기의 데이터를 되찾을 방법이 없어요. 계속할까요?")
+            } else {
+                Text("이 기기에서 로그아웃합니다.")
+            }
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
@@ -151,11 +190,21 @@ struct SettingsView: View {
         }
         .onChange(of: summaryTime) { _, value in
             guard session.preferencesStore?.preferences?.dailyReviewTime != ClockString.from(value) else { return }
-            push { $0.dailyReviewTime = ClockString.from(value) }
+            summaryTimePushTask?.cancel()
+            summaryTimePushTask = Task {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+                push { $0.dailyReviewTime = ClockString.from(value) }
+            }
         }
         .onChange(of: promptTime) { _, value in
             guard session.preferencesStore?.preferences?.planningPromptTime != ClockString.from(value) else { return }
-            push { $0.planningPromptTime = ClockString.from(value) }
+            promptTimePushTask?.cancel()
+            promptTimePushTask = Task {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+                push { $0.planningPromptTime = ClockString.from(value) }
+            }
         }
         .onChange(of: notifications) { _, value in
             guard session.preferencesStore?.preferences?.notificationsEnabled != value else { return }

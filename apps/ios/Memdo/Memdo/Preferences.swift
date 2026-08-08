@@ -193,6 +193,9 @@ actor PreferencesRepository {
 @Observable
 final class PreferencesStore {
     private(set) var preferences: UserPreferences?
+    /// Set when a load or save fails. Settings must stay usable even offline, so
+    /// this doesn't block the UI -- it's a dismissible notice, not a hard error.
+    private(set) var lastError: String?
     private let repository: PreferencesRepository
 
     init(repository: PreferencesRepository) {
@@ -200,23 +203,40 @@ final class PreferencesStore {
     }
 
     func load() async {
-        // Settings must stay usable even offline, so a failure just leaves the
-        // locally-seeded UI in place without surfacing an error.
-        preferences = try? await repository.load()
+        do {
+            preferences = try await repository.load()
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
     }
 
     func reset() {
         preferences = nil
+        lastError = nil
     }
 
-    /// Mutates the cached full object and persists it. Requires a prior successful
-    /// load so untouched server fields survive the full-object upsert.
+    func dismissError() {
+        lastError = nil
+    }
+
+    /// Mutates the cached full object and persists it. Loads first if nothing is
+    /// cached yet (rather than silently dropping the change), since untouched
+    /// server fields must round-trip through the full-object upsert.
     func update(_ transform: (inout UserPreferences) -> Void) async {
+        if preferences == nil {
+            await load()
+        }
         guard var updated = preferences else { return }
+        let previous = preferences
         transform(&updated)
         preferences = updated
-        if let saved = try? await repository.save(updated) {
-            preferences = saved
+        do {
+            preferences = try await repository.save(updated)
+            lastError = nil
+        } catch {
+            preferences = previous
+            lastError = error.localizedDescription
         }
     }
 }
