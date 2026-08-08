@@ -30,6 +30,7 @@ struct AppShellView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = AppTab.today
     @State private var showIntentCapture = false
+    @State private var intentText: String?
     @State private var lastContentTab = AppTab.today
     @State private var showCalendarSearch = false
     @State private var calendarTargetDate: Date?
@@ -53,9 +54,12 @@ struct AppShellView: View {
                     Task { await scheduleStore.refresh() }
                 }
             }
-            .modifier(IntentCaptureBehavior { showIntentCapture = true })
+            .modifier(IntentCaptureBehavior { text in
+                intentText = text
+                showIntentCapture = true
+            })
             .sheet(isPresented: $showIntentCapture) {
-                EventCaptureSheet { event in createFromCapture(event) }
+                EventCaptureSheet(initialText: intentText ?? "") { event in createFromCapture(event) }
             }
             .overlay { backendStateOverlay }
     }
@@ -227,12 +231,12 @@ private extension AppTab {
 /// Routes the CaptureEventIntent into the quick-add sheet. Gated because
 /// `onAppIntentExecution` is iOS 26+; older systems simply don't wire it.
 private struct IntentCaptureBehavior: ViewModifier {
-    let onFire: () -> Void
+    let onFire: (String?) -> Void
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.onAppIntentExecution(CaptureEventIntent.self) { _ in onFire() }
+            content.onAppIntentExecution(CaptureEventIntent.self) { intent in onFire(intent.text) }
         } else {
             content
         }

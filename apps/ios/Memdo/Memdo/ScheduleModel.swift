@@ -270,6 +270,22 @@ struct ScheduleDetail: Identifiable, Equatable {
         return nil
     }
     var meetingProvider: MeetingProvider? { meetingURL.flatMap(MeetingProvider.recognized) }
+    /// Non-meeting web links found in the note/location, surfaced as attachments.
+    var attachedLinks: [URL] {
+        let text = [memo, location].filter { !$0.isEmpty }.joined(separator: "\n")
+        guard !text.isEmpty,
+              let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        else { return [] }
+        let range = NSRange(text.startIndex..., in: text)
+        let meeting = meetingURL
+        var seen = Set<String>()
+        var links: [URL] = []
+        for match in detector.matches(in: text, range: range) {
+            guard let url = match.url, url.scheme == "http" || url.scheme == "https", url != meeting else { continue }
+            if seen.insert(url.absoluteString).inserted { links.append(url) }
+        }
+        return links
+    }
     var isDone: Bool {
         get { status == .completed }
         set { status = newValue ? .completed : .planned }
