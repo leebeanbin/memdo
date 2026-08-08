@@ -62,6 +62,16 @@ struct ScheduleDetailSheet: View {
                         LabeledContent("반복", value: draft.repeatRule.label)
                         LabeledContent("메모", value: draft.memo.nilFallback)
                     }
+                    if !draft.attachedLinks.isEmpty {
+                        Section("관련 링크") {
+                            ForEach(draft.attachedLinks, id: \.self) { url in
+                                Link(destination: url) {
+                                    Label(url.host ?? url.absoluteString, systemImage: "link")
+                                        .foregroundStyle(MemdoTheme.accent)
+                                }
+                            }
+                        }
+                    }
                 }
             }
             .memdoSystemList()

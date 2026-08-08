@@ -132,10 +132,15 @@ enum EventCapture {
 struct EventCaptureSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
-    @State private var draft: EventDraft?
+    @State private var draft: EventDraft? = nil
     @State private var isAnalyzing = false
 
     let onApply: (EventDraft) -> Void
+
+    init(initialText: String = "", onApply: @escaping (EventDraft) -> Void) {
+        _text = State(initialValue: initialText)
+        self.onApply = onApply
+    }
 
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
