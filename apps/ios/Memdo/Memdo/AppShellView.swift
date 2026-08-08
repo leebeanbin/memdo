@@ -29,6 +29,7 @@ struct AppShellView: View {
     let scheduleStore: ScheduleStore
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = AppTab.today
+    @State private var showIntentCapture = false
     @State private var lastContentTab = AppTab.today
     @State private var showCalendarSearch = false
     @State private var calendarTargetDate: Date?
@@ -51,6 +52,10 @@ struct AppShellView: View {
                 if phase == .active {
                     Task { await scheduleStore.refresh() }
                 }
+            }
+            .modifier(IntentCaptureBehavior { showIntentCapture = true })
+            .sheet(isPresented: $showIntentCapture) {
+                EventCaptureSheet { event in createFromCapture(event) }
             }
             .overlay { backendStateOverlay }
     }
@@ -139,6 +144,23 @@ struct AppShellView: View {
         presentedSheet = .agent(lastContentTab.agentContext)
     }
 
+    // Creates a schedule from an App Intent-driven capture. Uses the first
+    // calendar; a missing start time falls back to a task so the entry is valid.
+    private func createFromCapture(_ event: EventDraft) {
+        guard let calendar = scheduleStore.calendars.first else { return }
+        var schedule = ScheduleDetail(
+            scheduledDate: event.startAt ?? .now,
+            startAt: event.startAt,
+            endAt: event.endAt,
+            title: event.title.isEmpty ? "새 일정" : event.title,
+            kind: event.startAt != nil ? .event : .task,
+            calendar: calendar,
+            timeBucket: event.startAt.map(ScheduleTimeBucket.inferred(from:)) ?? .anytime
+        )
+        schedule.memo = event.notes
+        scheduleStore.save(schedule)
+    }
+
     private func select(_ tab: AppTab) {
         selectedTab = tab
         lastContentTab = tab
@@ -198,6 +220,21 @@ private extension AppTab {
         case .calendar: "캘린더"
         case .settings: "설정"
         case .agent: "오늘"
+        }
+    }
+}
+
+/// Routes the CaptureEventIntent into the quick-add sheet. Gated because
+/// `onAppIntentExecution` is iOS 26+; older systems simply don't wire it.
+private struct IntentCaptureBehavior: ViewModifier {
+    let onFire: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.onAppIntentExecution(CaptureEventIntent.self) { _ in onFire() }
+        } else {
+            content
         }
     }
 }
