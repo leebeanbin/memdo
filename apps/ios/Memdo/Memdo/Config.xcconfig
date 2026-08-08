@@ -1,0 +1,6 @@
+// Tracked in git; contains no real values. Each developer/build machine supplies
+// SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY via Config.xcconfig.local (gitignored,
+// see .gitignore's "*.xcconfig.local" rule). Without it, MemdoConfiguration.current()
+// fails closed with a clear "설정을 확인해 주세요" screen rather than silently
+// pointing at a baked-in production project.
+#include? "Config.xcconfig.local"

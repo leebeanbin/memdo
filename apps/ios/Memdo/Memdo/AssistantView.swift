@@ -51,7 +51,10 @@ struct AgentSheet: View {
     private func send() {
         let prompt = composer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
-        response = "‘\(prompt)’ 요청을 확인했어요. 일정 변경안은 실행 전에 시작·종료·알림을 다시 보여드릴게요."
+        // Agent isn't implemented yet -- this is a preview of the composer/response
+        // layout, not a real response, so the copy says so rather than sounding
+        // like a genuine (if canned) confirmation of the request.
+        response = "Agent는 아직 준비 중이에요. ‘\(prompt)’ 요청은 지금은 실제로 처리되지 않아요."
         composer = ""
     }
 
