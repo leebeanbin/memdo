@@ -208,6 +208,13 @@ struct ScheduleDetail: Identifiable, Equatable {
     var timeBucket: ScheduleTimeBucket
     var sortOrder: Int
     var version: Int
+    /// Non-nil when this item belongs to a recurring rule (shown as a repeat badge).
+    var scheduleRuleId: String?
+    /// True for a computed-but-not-yet-materialized recurring event occurrence
+    /// (event-mode rules materialize nothing up front -- see ScheduleAPI's
+    /// virtual occurrence handling). Saving/completing/deleting one must create
+    /// the real row first (ScheduleStore routes this transparently).
+    var isVirtual: Bool
 
     init(
         id: UUID = UUID(),
@@ -226,7 +233,9 @@ struct ScheduleDetail: Identifiable, Equatable {
         isAllDay: Bool = false,
         timeBucket: ScheduleTimeBucket = .anytime,
         sortOrder: Int = 0,
-        version: Int = 1
+        version: Int = 1,
+        scheduleRuleId: String? = nil,
+        isVirtual: Bool = false
     ) {
         self.id = id
         self.scheduledDate = Calendar.current.startOfDay(for: scheduledDate)
@@ -247,6 +256,8 @@ struct ScheduleDetail: Identifiable, Equatable {
         self.timeBucket = timeBucket
         self.sortOrder = sortOrder
         self.version = version
+        self.scheduleRuleId = scheduleRuleId
+        self.isVirtual = isVirtual
     }
 
     var source: String { calendar.provider.displayName }
@@ -255,6 +266,17 @@ struct ScheduleDetail: Identifiable, Equatable {
     // the active lists so a moved item doesn't leave a ghost on its old day.
     var isActive: Bool { status != .rescheduled && status != .cancelled && status != .skipped }
     var isReschedulable: Bool { status == .planned || status == .inProgress || status == .partial }
+    /// True if this schedule is happening on `date` -- either it's the scheduled
+    /// day, or (for a timed event) `date` falls within its start...end span, so a
+    /// multi-day event shows on every day it covers, not just its start day.
+    func occurs(on date: Date) -> Bool {
+        let calendar = Calendar.current
+        if calendar.isDate(scheduledDate, inSameDayAs: date) { return true }
+        guard kind == .event, let startAt, let endAt else { return false }
+        let dayStart = calendar.startOfDay(for: date)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return false }
+        return startAt < dayEnd && endAt > dayStart
+    }
     /// First recognised video-meeting link found in the note or location.
     var meetingURL: URL? {
         let text = [memo, location].filter { !$0.isEmpty }.joined(separator: "\n")
@@ -315,6 +337,17 @@ struct ScheduleDetail: Identifiable, Equatable {
         return "\(components.month ?? 0)월 \(components.day ?? 0)일"
     }
     var timeSortKey: Date { isAllDay ? scheduledDate : startAt ?? scheduledDate.endOfDay }
+    /// `timeSortKey` clamped to `day` -- a multi-day event's absolute `startAt`
+    /// (its first day) would otherwise sort before every same-day item on every
+    /// later day it spans, pinning it to the top. Note: display text (e.g. in
+    /// ScheduleRow) still shows the event's absolute start/end regardless of
+    /// which spillover day it's rendered on -- a known follow-up, not fixed here.
+    func timeSortKey(on day: Date) -> Date {
+        guard kind == .event, let startAt, !Calendar.current.isDate(startAt, inSameDayAs: day) else {
+            return timeSortKey
+        }
+        return Calendar.current.startOfDay(for: day)
+    }
     var kindLabel: String { kind.label }
     var isTimeRangeValid: Bool {
         switch (startAt, endAt) {
@@ -414,6 +447,23 @@ final class ScheduleStore {
     /// Throws on failure rather than returning an empty array, so the caller can
     /// tell "no matches" apart from "the request failed" instead of showing the
     /// same empty state for both.
+    func googleCalendarStart() async throws -> URL {
+        try await repository.googleCalendarStart()
+    }
+
+    func googleCalendarStatus() async throws -> GoogleCalendarStatusResponseDTO {
+        try await repository.googleCalendarStatus()
+    }
+
+    /// Reloads afterward so the synthetic "Google Calendar" entry and any
+    /// mirrored events disappear from the store immediately, rather than
+    /// lingering until the next unrelated load().
+    func googleCalendarDisconnect() async throws {
+        try await repository.googleCalendarDisconnect()
+        state = .idle
+        await load()
+    }
+
     func search(_ query: String) async throws -> [ScheduleDetail] {
         let calendarsByID = Dictionary(uniqueKeysWithValues: calendars.map { ($0.id, $0) })
         let dtos = try await repository.search(query: query)
@@ -425,8 +475,8 @@ final class ScheduleStore {
 
     func items(for date: Date) -> [ScheduleDetail] {
         schedules
-            .filter { $0.isActive && Calendar.current.isDate($0.scheduledDate, inSameDayAs: date) }
-            .sorted { $0.timeSortKey < $1.timeSortKey }
+            .filter { $0.isActive && $0.occurs(on: date) }
+            .sorted { $0.timeSortKey(on: date) < $1.timeSortKey(on: date) }
     }
 
     func load() async {
@@ -547,6 +597,22 @@ final class ScheduleStore {
     func save(_ schedule: ScheduleDetail) {
         guard !pendingWriteIDs.contains(schedule.id) else { return }
         pendingWriteIDs.insert(schedule.id)
+        // A virtual occurrence (event-mode rule, computed but never written to the
+        // DB) has no real row to PATCH -- regardless of whether it's already in
+        // `schedules` locally (it got there via the same GET that computed it).
+        if schedule.isVirtual {
+            if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
+                schedules[index] = schedule
+            } else {
+                schedules.append(schedule)
+            }
+            updateWidgetSnapshot()
+            Task {
+                await create(schedule)
+                pendingWriteIDs.remove(schedule.id)
+            }
+            return
+        }
         if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
             let previous = schedules[index]
             schedules[index] = schedule
@@ -566,15 +632,55 @@ final class ScheduleStore {
     }
 
     private func create(_ schedule: ScheduleDetail) async {
+        let saved: ScheduleDetail
         do {
-            let saved = try await repository.create(schedule)
-            if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
-                schedules[index] = saved
-                updateWidgetSnapshot()
-            }
+            saved = try await repository.create(schedule)
         } catch {
-            schedules.removeAll { $0.id == schedule.id }
+            if schedule.isVirtual {
+                // This wasn't a net-new item -- it's a computed occurrence that
+                // still exists (the server will recompute it as virtual again on
+                // the next list). Restore the pre-edit value instead of erasing
+                // it; removing it here would just make the recurring occurrence
+                // vanish from every list/widget until a full reload.
+                if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
+                    schedules[index] = schedule
+                } else {
+                    schedules.append(schedule)
+                }
+            } else {
+                // Nothing exists server-side yet -- safe to drop the optimistic entry.
+                schedules.removeAll { $0.id == schedule.id }
+            }
             updateWidgetSnapshot()
+            lastWriteError = error.localizedDescription
+            return
+        }
+        // The row is real now regardless of what happens below -- keep it that
+        // way even if the follow-up fails, so a retry goes through update()'s
+        // PATCH path rather than create() again (which would now 409 on the id
+        // it already owns).
+        if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
+            schedules[index] = saved
+        } else {
+            schedules.append(saved)
+        }
+        updateWidgetSnapshot()
+        // POST /todos (create) doesn't accept a status -- new rows always start
+        // "planned" server-side. If the caller's intent was e.g. completing a
+        // virtual occurrence in one action, follow up with the real row's status
+        // now that it has a real version to optimistically-lock against.
+        guard saved.status != schedule.status else { return }
+        do {
+            var desired = saved
+            desired.status = schedule.status
+            let updated = try await repository.update(desired)
+            if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
+                schedules[index] = updated
+            } else {
+                schedules.append(updated)
+            }
+            updateWidgetSnapshot()
+        } catch {
             lastWriteError = error.localizedDescription
         }
     }
@@ -665,15 +771,29 @@ final class ScheduleStore {
     }
 
     private func reschedule(original: ScheduleDetail, moved: ScheduleDetail) async {
+        // `moved` keeps `original`'s id, so materializing first (same pattern as
+        // delete()) then rescheduling with the real version works transparently.
+        // Tracked separately so a later failure can roll back to the now-real
+        // row instead of the stale virtual one -- retrying against a virtual
+        // value would re-POST and 409 on the id it already owns.
+        var materialized: ScheduleDetail?
         do {
-            let result = try await repository.reschedule(moved, baseVersion: original.version)
+            let baseVersion: Int
+            if original.isVirtual {
+                let real = try await repository.create(original)
+                materialized = real
+                baseVersion = real.version
+            } else {
+                baseVersion = original.version
+            }
+            let result = try await repository.reschedule(moved, baseVersion: baseVersion)
             schedules.removeAll { $0.id == original.id }
             schedules.append(result.original)
             schedules.append(result.replacement)
             updateWidgetSnapshot()
         } catch {
             if let index = schedules.firstIndex(where: { $0.id == original.id }) {
-                schedules[index] = original
+                schedules[index] = materialized ?? original
             }
             updateWidgetSnapshot()
             lastWriteError = error.localizedDescription
@@ -693,13 +813,25 @@ final class ScheduleStore {
     }
 
     private func delete(_ schedule: ScheduleDetail) async {
+        // Tracked separately so a later failure restores the now-real row
+        // instead of the stale virtual one -- retrying delete against a virtual
+        // value would re-POST and 409 on the id it already owns.
+        var materialized: ScheduleDetail?
         do {
-            try await repository.delete(schedule)
+            if schedule.isVirtual {
+                // No real row exists yet to delete -- materialize it first (so the
+                // series knows this date is spoken for) and delete that.
+                let real = try await repository.create(schedule)
+                materialized = real
+                try await repository.delete(real)
+            } else {
+                try await repository.delete(schedule)
+            }
         } catch {
             // Restore by identity, not a stale index — other optimistic edits may
             // have shifted positions. Lists re-sort by timeSortKey on read.
             if !schedules.contains(where: { $0.id == schedule.id }) {
-                schedules.append(schedule)
+                schedules.append(materialized ?? schedule)
             }
             updateWidgetSnapshot()
             lastWriteError = error.localizedDescription
@@ -711,23 +843,33 @@ final class ScheduleStore {
         let now = Date.now
         let start = calendar.dateInterval(of: .month, for: now)?.start ?? calendar.startOfDay(for: now)
         let end = calendar.date(byAdding: .month, value: 2, to: start) ?? now
-        let visibleSchedules = schedules.filter { $0.scheduledDate >= start && $0.scheduledDate < end }
-        let grouped = Dictionary(grouping: visibleSchedules) { calendar.startOfDay(for: $0.scheduledDate) }
-        let days = grouped.keys.sorted().map { date in
-            let schedules = (grouped[date] ?? []).sorted { $0.timeSortKey < $1.timeSortKey }
-            let active = schedules.filter(\.isWidgetActive)
-            return MemdoWidgetDay(
-                date: date,
-                completedCount: schedules.filter(\.isDone).count,
-                items: active.map {
-                    MemdoWidgetItem(
-                        id: $0.id,
-                        time: $0.startTimeText,
-                        title: $0.title,
-                        kind: $0.kind.rawValue
-                    )
-                }
-            )
+        // Scans day by day (matching CalendarView.scheduleCounts) rather than
+        // grouping by exact scheduledDate, so a multi-day event appears on every
+        // day it spans, not just its start day. `schedules` is unbounded (grows
+        // with ensureLoaded() and is never evicted) and this runs on every
+        // write, so pre-filter to what could possibly intersect [start, end)
+        // before the O(days) scan rather than re-scanning everything per day.
+        let candidates = schedules.filter { $0.scheduledDate < end && ($0.endAt ?? $0.scheduledDate) >= start }
+        var days: [MemdoWidgetDay] = []
+        var day = start
+        while day < end {
+            let dayCandidates = candidates.filter { $0.occurs(on: day) }
+            if !dayCandidates.isEmpty {
+                let sorted = dayCandidates.sorted { $0.timeSortKey(on: day) < $1.timeSortKey(on: day) }
+                days.append(MemdoWidgetDay(
+                    date: day,
+                    completedCount: sorted.filter(\.isDone).count,
+                    items: sorted.filter(\.isWidgetActive).map {
+                        MemdoWidgetItem(
+                            id: $0.id,
+                            time: $0.startTimeText,
+                            title: $0.title,
+                            kind: $0.kind.rawValue
+                        )
+                    }
+                ))
+            }
+            day = calendar.date(byAdding: .day, value: 1, to: day) ?? end
         }
         // Optimistic updates call this twice per edit (local apply + server confirm).
         // Only rewrite storage and reload when the widget payload actually changed.

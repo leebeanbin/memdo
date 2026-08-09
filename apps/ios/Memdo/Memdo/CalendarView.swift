@@ -18,14 +18,30 @@ struct CalendarView: View {
 
     private var selectedAgenda: [ScheduleDetail] {
         filteredSchedules
-            .filter { Calendar.current.isDate($0.scheduledDate, inSameDayAs: selectedDate) }
-            .sorted { $0.timeSortKey < $1.timeSortKey }
+            .filter { $0.occurs(on: selectedDate) }
+            .sorted { $0.timeSortKey(on: selectedDate) < $1.timeSortKey(on: selectedDate) }
     }
 
     private var scheduleCounts: [Int: Int] {
-        Dictionary(grouping: filteredSchedules.filter {
-            !$0.isDone && Calendar.current.isDate($0.scheduledDate, equalTo: displayedMonth, toGranularity: .month)
-        }, by: \.day).mapValues(\.count)
+        let calendar = Calendar.current
+        guard let monthInterval = calendar.dateInterval(of: .month, for: displayedMonth)
+        else { return [:] }
+        // Hoisted out of the loop: these were being re-evaluated (a fresh array
+        // filter, and Calendar.current's lookup) once per day of the month on
+        // every body re-render. Also pre-filtered to what could possibly
+        // intersect this month before the day-by-day scan.
+        let schedules = filteredSchedules.filter {
+            !$0.isDone && $0.scheduledDate < monthInterval.end &&
+                ($0.endAt ?? $0.scheduledDate) >= monthInterval.start
+        }
+        var counts: [Int: Int] = [:]
+        var day = monthInterval.start
+        while day < monthInterval.end {
+            let count = schedules.count { $0.occurs(on: day) }
+            if count > 0 { counts[calendar.component(.day, from: day)] = count }
+            day = calendar.date(byAdding: .day, value: 1, to: day) ?? monthInterval.end
+        }
+        return counts
     }
 
     var body: some View {

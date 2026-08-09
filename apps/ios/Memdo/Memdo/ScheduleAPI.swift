@@ -15,10 +15,32 @@ struct CalendarResponseDTO: Decodable {
     let colorToken: String?
     let isVisible: Bool
     let sortOrder: Int
+    let provider: String?
 
     var scheduleCalendar: ScheduleCalendar {
-        ScheduleCalendar(id: id, title: name, purpose: purpose, provider: .memdo)
+        ScheduleCalendar(
+            id: id,
+            title: name,
+            purpose: purpose,
+            provider: ScheduleCalendar.Provider(rawValue: provider ?? "memdo") ?? .memdo
+        )
     }
+}
+
+struct GoogleCalendarStartResponseDTO: Decodable {
+    let authorizationUrl: String
+}
+
+struct GoogleCalendarStatusResponseDTO: Decodable {
+    let connected: Bool
+    let status: String
+    let calendarId: String?
+    let lastSyncedAt: String?
+    let lastError: String?
+}
+
+struct GoogleCalendarDisconnectResponseDTO: Decodable {
+    let connected: Bool
 }
 
 struct TodoListResponseDTO: Decodable {
@@ -62,6 +84,11 @@ struct TodoResponseDTO: Decodable {
     let sortOrder: Int
     let status: String
     let version: Int
+    let scheduleRuleId: String?
+    // Optional (defaults false at the mapping site below) so a build that
+    // ships before the backend deploys the field doesn't hard-fail decoding
+    // the entire todos list over one missing key.
+    let isVirtual: Bool?
 }
 
 struct TodoCreateRequestDTO: Encodable {
@@ -80,6 +107,7 @@ struct TodoCreateRequestDTO: Encodable {
     let reminderOffsetMinutes: Int?
     let version: Int?
     let status: String?
+    let scheduleRuleId: String?
 
     init(schedule: ScheduleDetail, includeVersion: Bool = false) throws {
         guard UUID(uuidString: schedule.calendar.id) != nil else {
@@ -113,6 +141,7 @@ struct TodoCreateRequestDTO: Encodable {
         reminderOffsetMinutes = schedule.reminderOffsetMinutes
         version = includeVersion ? schedule.version : nil
         status = includeVersion ? schedule.status.rawValue : nil
+        scheduleRuleId = schedule.scheduleRuleId
     }
 }
 
@@ -360,6 +389,18 @@ actor MemdoAPIClient {
         )
     }
 
+    func googleCalendarStart(accessToken: String) async throws -> GoogleCalendarStartResponseDTO {
+        try await send(path: "google-calendar-start", method: "POST", accessToken: accessToken)
+    }
+
+    func googleCalendarStatus(accessToken: String) async throws -> GoogleCalendarStatusResponseDTO {
+        try await send(path: "google-calendar-status", accessToken: accessToken)
+    }
+
+    func googleCalendarDisconnect(accessToken: String) async throws -> GoogleCalendarDisconnectResponseDTO {
+        try await send(path: "google-calendar-disconnect", method: "POST", accessToken: accessToken)
+    }
+
     func send<Response: Decodable>(
         path: String,
         method: String = "GET",
@@ -508,6 +549,22 @@ actor ScheduleRepository {
         try await api.createRule(ScheduleRuleRequestDTO(schedule: schedule), accessToken: accessToken())
     }
 
+    func googleCalendarStart() async throws -> URL {
+        let response = try await api.googleCalendarStart(accessToken: accessToken())
+        guard let url = URL(string: response.authorizationUrl) else {
+            throw ScheduleAPIError.invalidResponse
+        }
+        return url
+    }
+
+    func googleCalendarStatus() async throws -> GoogleCalendarStatusResponseDTO {
+        try await api.googleCalendarStatus(accessToken: accessToken())
+    }
+
+    func googleCalendarDisconnect() async throws {
+        _ = try await api.googleCalendarDisconnect(accessToken: accessToken())
+    }
+
     private func accessToken() async throws -> String {
         guard auth.auth.currentSession != nil else { throw ScheduleAPIError.notAuthenticated }
         return try await auth.auth.session.accessToken
@@ -575,6 +632,8 @@ extension ScheduleDetail {
         self.timeBucket = timeBucket
         sortOrder = dto.sortOrder
         version = dto.version
+        scheduleRuleId = dto.scheduleRuleId
+        isVirtual = dto.isVirtual ?? false
     }
 }
 
