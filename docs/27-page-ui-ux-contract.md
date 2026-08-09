@@ -1,7 +1,7 @@
 # 페이지별 UI/UX 계약
 
 상태: iPhone 15 구현 기준선
-기준일: 2026-08-01
+기준일: 2026-08-09
 상위 문서: [제품 요구사항](./01-product-requirements.md), [결정 기록](./10-decisions-and-open-questions.md)
 구현 토큰·컴포넌트: [iOS 디자인 기준선](../apps/ios/Memdo/DESIGN.md)
 밀도·카드·Agent UI: [디자인 시스템·밀도·Agent UI 계약](./28-design-system-density-and-agent-ui.md)
@@ -10,6 +10,8 @@
 
 ## 1. 제품 표현 원칙
 
+- 앱은 `Native shell / Memdo content` 구조를 따른다. 탭바·툴바·검색·시트·메뉴·피커·토글은 Apple 네이티브 문법을 우선하고, 캘린더 그리드·일정 행·브리핑·오늘 요약·Agent 변경안이 Memdo의 제품 정체성을 담당한다.
+- Apple UI를 닮게 만드는 별도 커스텀 셸을 만들지 않는다. 최신 시스템에서 자동으로 갱신되는 SwiftUI 컴포넌트를 사용하고, 지원하는 이전 OS에서는 같은 컴포넌트의 시스템 표현을 유지한다.
 - Notion Calendar처럼 기본 화면은 조용하고, 세부 기능은 메뉴·시트 안에 둔다.
 - Google Calendar처럼 생성은 빠르게 시작하되 날짜와 시간은 시스템 picker로 정확히 입력한다.
 - Agent는 별도 목적지가 아니라 사용자가 일정을 보고 쓰는 모든 순간의 보조 계층이다.
@@ -50,6 +52,8 @@
 | 설정 | 언제 알림을 받고 어떤 정보 접근을 허용할까? |
 
 Agent는 별도 페이지가 아니다. 시스템 탭바의 `Agent` 선택을 Binding에서 가로채 직전 콘텐츠 탭을 유지한 채 Agent 시트만 연다. 빈 화면으로 전환한 뒤 되돌리거나 콘텐츠 위 플로팅 버튼을 사용하지 않는다.
+
+앱 셸은 `TabView`, `NavigationStack`, 시스템 toolbar, `searchable`, `sheet`, `Menu`, `confirmationDialog`, `Form`, `List`, `Picker`, `DatePicker`, `Toggle`을 먼저 검토한다. 이 컴포넌트가 해결하는 동작을 외형 때문에 다시 구현하지 않는다. 커스텀 셸은 네이티브 API로 표현할 수 없는 제품 고유 콘텐츠가 있고 사용자 이점이 검증된 경우에만 ADR을 추가한 뒤 허용한다.
 
 최상위 탭을 좌우 스와이프로 바꾸지 않는다. 그 제스처는 날짜·월 이동 및 시스템 뒤로가기에 남겨 둔다.
 
