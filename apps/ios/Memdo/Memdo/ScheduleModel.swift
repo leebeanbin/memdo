@@ -3,7 +3,7 @@ import Observation
 import Supabase
 import WidgetKit
 
-enum ScheduleKind: String, CaseIterable, Identifiable {
+enum ScheduleKind: String, CaseIterable, Identifiable, Codable {
     case event
     case task
 
@@ -17,8 +17,8 @@ enum ScheduleKind: String, CaseIterable, Identifiable {
     }
 }
 
-struct ScheduleCalendar: Identifiable, Equatable, Hashable {
-    enum Provider: String {
+struct ScheduleCalendar: Identifiable, Equatable, Hashable, Codable {
+    enum Provider: String, Codable {
         case memdo
         case google
 
@@ -45,7 +45,7 @@ struct ScheduleCalendar: Identifiable, Equatable, Hashable {
     static let unassigned = ScheduleCalendar(id: "", title: "캘린더 선택", purpose: "", provider: .memdo)
 }
 
-enum ScheduleRepeatRule: String, CaseIterable, Identifiable {
+enum ScheduleRepeatRule: String, CaseIterable, Identifiable, Codable {
     case never
     case daily
     case weekdays
@@ -69,7 +69,7 @@ enum ScheduleRepeatRule: String, CaseIterable, Identifiable {
     }
 }
 
-enum ScheduleStatus: String {
+enum ScheduleStatus: String, Codable {
     case planned
     case inProgress = "in_progress"
     case partial
@@ -79,7 +79,7 @@ enum ScheduleStatus: String {
     case cancelled
 }
 
-enum ScheduleTimeBucket: String, CaseIterable, Identifiable {
+enum ScheduleTimeBucket: String, CaseIterable, Identifiable, Codable {
     case morning
     case afternoon
     case evening
@@ -128,8 +128,8 @@ struct ScheduleReminderOption: Identifiable, Hashable {
     }
 }
 
-struct ScheduleLocation: Equatable {
-    enum Provider: String {
+struct ScheduleLocation: Equatable, Codable {
+    enum Provider: String, Codable {
         case appleMaps = "apple_maps"
         case googlePlaces = "google_places"
         case manual
@@ -190,7 +190,7 @@ enum MeetingProvider: String {
     }
 }
 
-struct ScheduleDetail: Identifiable, Equatable {
+struct ScheduleDetail: Identifiable, Equatable, Codable {
     let id: UUID
     var scheduledDate: Date
     var startAt: Date?
@@ -391,6 +391,9 @@ final class ScheduleStore {
     private var loadedFrom: Date?
     private var loadedTo: Date?
     private(set) var isLoadingRange = false
+    private let outbox: OutboxStore
+    private var networkMonitor: NetworkMonitor?
+    private var isDraining = false
 
     func isPending(_ id: UUID) -> Bool {
         pendingWriteIDs.contains(id)
@@ -400,8 +403,12 @@ final class ScheduleStore {
         lastWriteError = nil
     }
 
-    init(repository: ScheduleRepository) {
+    init(repository: ScheduleRepository, outbox: OutboxStore = OutboxStore()) {
         self.repository = repository
+        self.outbox = outbox
+        networkMonitor = NetworkMonitor { [weak self] in
+            Task { @MainActor in await self?.drainOutbox() }
+        }
     }
 
     #if DEBUG
@@ -491,6 +498,11 @@ final class ScheduleStore {
             loadedFrom = calendar.date(byAdding: .day, value: -30, to: .now)
             loadedTo = calendar.date(byAdding: .day, value: 60, to: .now)
             updateWidgetSnapshot()
+            // Replays anything queued from a previous session that was killed
+            // while offline. The network-monitor trigger alone can't cover
+            // this: its first callback can fire before `state` becomes
+            // `.loaded`, at which point drainOutbox() is a deliberate no-op.
+            await drainOutbox()
         } catch {
             state = .failed(error.localizedDescription)
         }
@@ -583,6 +595,62 @@ final class ScheduleStore {
         }
     }
 
+    /// Replays writes that failed offline (see `ScheduleAPIError.offline`),
+    /// oldest first. Stops -- rather than erroring -- the moment a replay
+    /// fails offline again, leaving the rest queued for the next reconnect.
+    /// A replay that fails for a real reason (e.g. a version conflict from
+    /// an edit made on another device while this one was offline) is dropped
+    /// and reconciled via refresh() instead of retried forever.
+    func drainOutbox() async {
+        guard !isDraining, state == .loaded else { return }
+        isDraining = true
+        defer { isDraining = false }
+
+        for entry in await outbox.all() {
+            do {
+                switch entry.operation {
+                case .create(let schedule):
+                    replaceOrAppend(try await repository.create(schedule))
+                case .update(let schedule):
+                    replaceOrAppend(try await repository.update(schedule))
+                case .delete(let id, let version):
+                    try await repository.delete(id: id, version: version)
+                case .reschedule(let original, let moved, let baseVersion):
+                    let result = try await repository.reschedule(moved, baseVersion: baseVersion)
+                    schedules.removeAll { $0.id == original.id }
+                    schedules.append(result.original)
+                    schedules.append(result.replacement)
+                case .materializeThenDelete(let schedule):
+                    let real = try await repository.create(schedule)
+                    try await repository.delete(real)
+                    schedules.removeAll { $0.id == schedule.id }
+                case .materializeThenReschedule(let original, let moved):
+                    let real = try await repository.create(original)
+                    let result = try await repository.reschedule(moved, baseVersion: real.version)
+                    schedules.removeAll { $0.id == original.id }
+                    schedules.append(result.original)
+                    schedules.append(result.replacement)
+                }
+                await outbox.remove(entry.scheduleID)
+            } catch ScheduleAPIError.offline {
+                break
+            } catch {
+                await outbox.remove(entry.scheduleID)
+                lastWriteError = error.localizedDescription
+            }
+        }
+        updateWidgetSnapshot()
+        await refresh()
+    }
+
+    private func replaceOrAppend(_ schedule: ScheduleDetail) {
+        if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
+            schedules[index] = schedule
+        } else {
+            schedules.append(schedule)
+        }
+    }
+
     /// Creates a recurrence rule on the backend, which materialises the
     /// occurrences server-side, then reloads to pull them in.
     func createRecurring(_ schedule: ScheduleDetail) async {
@@ -635,6 +703,11 @@ final class ScheduleStore {
         let saved: ScheduleDetail
         do {
             saved = try await repository.create(schedule)
+        } catch ScheduleAPIError.offline {
+            // Keep the optimistic row as-is (it's already in `schedules`) and
+            // queue the create for replay -- no rollback, no error shown.
+            await outbox.enqueue(.create(schedule), scheduleID: schedule.id)
+            return
         } catch {
             if schedule.isVirtual {
                 // This wasn't a net-new item -- it's a computed occurrence that
@@ -688,6 +761,11 @@ final class ScheduleStore {
     private func update(_ schedule: ScheduleDetail, replacing previous: ScheduleDetail) async {
         do {
             replace(schedule.id, with: try await repository.update(schedule))
+        } catch ScheduleAPIError.offline {
+            // Optimistic value in `schedules` already reflects the edit --
+            // leave it and queue the PATCH for replay.
+            await outbox.enqueue(.update(schedule), scheduleID: schedule.id)
+            return
         } catch {
             replace(schedule.id, with: previous)
             lastWriteError = error.localizedDescription
@@ -791,6 +869,19 @@ final class ScheduleStore {
             schedules.append(result.original)
             schedules.append(result.replacement)
             updateWidgetSnapshot()
+        } catch ScheduleAPIError.offline {
+            // `schedules` already shows `moved` optimistically -- leave it and
+            // queue replay. If materialize landed before the drop, replay just
+            // the reschedule against the now-real row; otherwise redo both.
+            if let materialized {
+                await outbox.enqueue(
+                    .reschedule(original: materialized, moved: moved, baseVersion: materialized.version),
+                    scheduleID: original.id
+                )
+            } else {
+                await outbox.enqueue(.materializeThenReschedule(original: original, moved: moved), scheduleID: original.id)
+            }
+            return
         } catch {
             if let index = schedules.firstIndex(where: { $0.id == original.id }) {
                 schedules[index] = materialized ?? original
@@ -827,6 +918,18 @@ final class ScheduleStore {
             } else {
                 try await repository.delete(schedule)
             }
+        } catch ScheduleAPIError.offline {
+            // Optimistic removal from `schedules` already happened in
+            // delete(id:) -- leave it removed and queue replay.
+            if let materialized {
+                await outbox.enqueue(
+                    .delete(id: materialized.id, version: materialized.version),
+                    scheduleID: schedule.id
+                )
+            } else {
+                await outbox.enqueue(.materializeThenDelete(schedule), scheduleID: schedule.id)
+            }
+            return
         } catch {
             // Restore by identity, not a stale index — other optimistic edits may
             // have shifted positions. Lists re-sort by timeSortKey on read.

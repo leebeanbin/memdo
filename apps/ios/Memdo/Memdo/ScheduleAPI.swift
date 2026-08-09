@@ -242,6 +242,10 @@ enum ScheduleAPIError: Error, LocalizedError {
     case invalidResponse
     case incompatibleValue(String)
     case server(status: Int, code: String, message: String, requestID: String?)
+    /// The request never reached the server -- no connection, a dropped
+    /// connection, or a timeout. Distinguished from `.server` so callers can
+    /// queue-and-retry instead of treating it as a real rejection.
+    case offline(URLError)
 
     var errorDescription: String? {
         switch self {
@@ -252,9 +256,21 @@ enum ScheduleAPIError: Error, LocalizedError {
         case .invalidResponse: "서버 응답을 읽을 수 없습니다."
         case .incompatibleValue(let value): "지원하지 않는 서버 값입니다: \(value)"
         case .server(_, _, let message, _): message
+        case .offline: "오프라인 상태예요. 연결되면 자동으로 저장돼요."
         }
     }
 }
+
+private let offlineURLErrorCodes: Set<URLError.Code> = [
+    .notConnectedToInternet,
+    .networkConnectionLost,
+    .timedOut,
+    .cannotConnectToHost,
+    .cannotFindHost,
+    .dnsLookupFailed,
+    .dataNotAllowed,
+    .internationalRoamingOff,
+]
 
 actor MemdoAPIClient {
     private let functionsURL: URL
@@ -423,7 +439,13 @@ actor MemdoAPIClient {
             request.setValue(idempotencyKey.uuidString, forHTTPHeaderField: "Idempotency-Key")
         }
 
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch let error as URLError where offlineURLErrorCodes.contains(error.code) {
+            throw ScheduleAPIError.offline(error)
+        }
         guard let response = response as? HTTPURLResponse else {
             throw ScheduleAPIError.invalidResponse
         }
@@ -516,8 +538,14 @@ actor ScheduleRepository {
     }
 
     func delete(_ schedule: ScheduleDetail) async throws {
+        try await delete(id: schedule.id, version: schedule.version)
+    }
+
+    /// Used by the outbox replay path, which only has an id/version pair
+    /// (from a queued `.delete` operation), not a full `ScheduleDetail`.
+    func delete(id: UUID, version: Int) async throws {
         let accessToken = try await accessToken()
-        try await api.delete(id: schedule.id, version: schedule.version, accessToken: accessToken)
+        try await api.delete(id: id, version: version, accessToken: accessToken)
     }
 
     func reschedule(
