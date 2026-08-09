@@ -109,9 +109,13 @@ struct ScheduleDetailSheet: View {
         guard let live = scheduleStore.schedules.first(where: { $0.id == draft.id }) else { return }
         saved = live
         if isEditing {
-            // Don't clobber an in-progress edit's fields, just keep the version
-            // current so the eventual save doesn't lose the optimistic-lock check.
+            // Don't clobber an in-progress edit's fields, just keep version and
+            // materialization state current -- e.g. a virtual occurrence that
+            // got materialized elsewhere while this sheet was open must save via
+            // update() (PATCH) next, not create() again (which would 409).
             draft.version = live.version
+            draft.isVirtual = live.isVirtual
+            draft.scheduleRuleId = live.scheduleRuleId
         } else {
             draft = live
         }

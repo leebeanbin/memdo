@@ -604,24 +604,38 @@ final class ScheduleStore {
     }
 
     private func create(_ schedule: ScheduleDetail) async {
+        let saved: ScheduleDetail
         do {
-            var saved = try await repository.create(schedule)
-            // POST /todos (create) doesn't accept a status -- new rows always start
-            // "planned" server-side. If the caller's intent was e.g. completing a
-            // virtual occurrence in one action, follow up with the real row's
-            // status now that it has a real version to optimistically-lock against.
-            if saved.status != schedule.status {
-                var desired = schedule
-                desired.version = saved.version
-                saved = try await repository.update(desired)
-            }
+            saved = try await repository.create(schedule)
+        } catch {
+            // Nothing exists server-side yet -- safe to drop the optimistic entry.
+            schedules.removeAll { $0.id == schedule.id }
+            updateWidgetSnapshot()
+            lastWriteError = error.localizedDescription
+            return
+        }
+        // The row is real now regardless of what happens below -- keep it that
+        // way even if the follow-up fails, so a retry goes through update()'s
+        // PATCH path rather than create() again (which would now 409 on the id
+        // it already owns).
+        if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
+            schedules[index] = saved
+            updateWidgetSnapshot()
+        }
+        // POST /todos (create) doesn't accept a status -- new rows always start
+        // "planned" server-side. If the caller's intent was e.g. completing a
+        // virtual occurrence in one action, follow up with the real row's status
+        // now that it has a real version to optimistically-lock against.
+        guard saved.status != schedule.status else { return }
+        do {
+            var desired = schedule
+            desired.version = saved.version
+            let updated = try await repository.update(desired)
             if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
-                schedules[index] = saved
+                schedules[index] = updated
                 updateWidgetSnapshot()
             }
         } catch {
-            schedules.removeAll { $0.id == schedule.id }
-            updateWidgetSnapshot()
             lastWriteError = error.localizedDescription
         }
     }
@@ -712,12 +726,21 @@ final class ScheduleStore {
     }
 
     private func reschedule(original: ScheduleDetail, moved: ScheduleDetail) async {
+        // `moved` keeps `original`'s id, so materializing first (same pattern as
+        // delete()) then rescheduling with the real version works transparently.
+        // Tracked separately so a later failure can roll back to the now-real
+        // row instead of the stale virtual one -- retrying against a virtual
+        // value would re-POST and 409 on the id it already owns.
+        var materialized: ScheduleDetail?
         do {
-            // `moved` keeps `original`'s id, so materializing first (same pattern as
-            // delete()) then rescheduling with the real version works transparently.
-            let baseVersion = original.isVirtual
-                ? try await repository.create(original).version
-                : original.version
+            let baseVersion: Int
+            if original.isVirtual {
+                let real = try await repository.create(original)
+                materialized = real
+                baseVersion = real.version
+            } else {
+                baseVersion = original.version
+            }
             let result = try await repository.reschedule(moved, baseVersion: baseVersion)
             schedules.removeAll { $0.id == original.id }
             schedules.append(result.original)
@@ -725,7 +748,7 @@ final class ScheduleStore {
             updateWidgetSnapshot()
         } catch {
             if let index = schedules.firstIndex(where: { $0.id == original.id }) {
-                schedules[index] = original
+                schedules[index] = materialized ?? original
             }
             updateWidgetSnapshot()
             lastWriteError = error.localizedDescription
@@ -745,12 +768,17 @@ final class ScheduleStore {
     }
 
     private func delete(_ schedule: ScheduleDetail) async {
+        // Tracked separately so a later failure restores the now-real row
+        // instead of the stale virtual one -- retrying delete against a virtual
+        // value would re-POST and 409 on the id it already owns.
+        var materialized: ScheduleDetail?
         do {
             if schedule.isVirtual {
                 // No real row exists yet to delete -- materialize it first (so the
                 // series knows this date is spoken for) and delete that.
-                let materialized = try await repository.create(schedule)
-                try await repository.delete(materialized)
+                let real = try await repository.create(schedule)
+                materialized = real
+                try await repository.delete(real)
             } else {
                 try await repository.delete(schedule)
             }
@@ -758,7 +786,7 @@ final class ScheduleStore {
             // Restore by identity, not a stale index — other optimistic edits may
             // have shifted positions. Lists re-sort by timeSortKey on read.
             if !schedules.contains(where: { $0.id == schedule.id }) {
-                schedules.append(schedule)
+                schedules.append(materialized ?? schedule)
             }
             updateWidgetSnapshot()
             lastWriteError = error.localizedDescription
