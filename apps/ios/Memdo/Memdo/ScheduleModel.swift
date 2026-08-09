@@ -798,23 +798,29 @@ final class ScheduleStore {
         let now = Date.now
         let start = calendar.dateInterval(of: .month, for: now)?.start ?? calendar.startOfDay(for: now)
         let end = calendar.date(byAdding: .month, value: 2, to: start) ?? now
-        let visibleSchedules = schedules.filter { $0.scheduledDate >= start && $0.scheduledDate < end }
-        let grouped = Dictionary(grouping: visibleSchedules) { calendar.startOfDay(for: $0.scheduledDate) }
-        let days = grouped.keys.sorted().map { date in
-            let schedules = (grouped[date] ?? []).sorted { $0.timeSortKey < $1.timeSortKey }
-            let active = schedules.filter(\.isWidgetActive)
-            return MemdoWidgetDay(
-                date: date,
-                completedCount: schedules.filter(\.isDone).count,
-                items: active.map {
-                    MemdoWidgetItem(
-                        id: $0.id,
-                        time: $0.startTimeText,
-                        title: $0.title,
-                        kind: $0.kind.rawValue
-                    )
-                }
-            )
+        // Scans day by day (matching CalendarView.scheduleCounts) rather than
+        // grouping by exact scheduledDate, so a multi-day event appears on every
+        // day it spans, not just its start day.
+        var days: [MemdoWidgetDay] = []
+        var day = start
+        while day < end {
+            let dayCandidates = schedules.filter { $0.occurs(on: day) }
+            if !dayCandidates.isEmpty {
+                let sorted = dayCandidates.sorted { $0.timeSortKey < $1.timeSortKey }
+                days.append(MemdoWidgetDay(
+                    date: day,
+                    completedCount: sorted.filter(\.isDone).count,
+                    items: sorted.filter(\.isWidgetActive).map {
+                        MemdoWidgetItem(
+                            id: $0.id,
+                            time: $0.startTimeText,
+                            title: $0.title,
+                            kind: $0.kind.rawValue
+                        )
+                    }
+                ))
+            }
+            day = calendar.date(byAdding: .day, value: 1, to: day) ?? end
         }
         // Optimistic updates call this twice per edit (local apply + server confirm).
         // Only rewrite storage and reload when the widget payload actually changed.

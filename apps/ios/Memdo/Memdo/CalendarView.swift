@@ -23,14 +23,19 @@ struct CalendarView: View {
     }
 
     private var scheduleCounts: [Int: Int] {
-        guard let monthInterval = Calendar.current.dateInterval(of: .month, for: displayedMonth)
+        let calendar = Calendar.current
+        guard let monthInterval = calendar.dateInterval(of: .month, for: displayedMonth)
         else { return [:] }
+        // Hoisted out of the loop: both were being re-evaluated (a fresh array
+        // filter, and Calendar.current's lookup) once per day of the month on
+        // every body re-render.
+        let schedules = filteredSchedules.filter { !$0.isDone }
         var counts: [Int: Int] = [:]
         var day = monthInterval.start
         while day < monthInterval.end {
-            let count = filteredSchedules.filter { !$0.isDone && $0.occurs(on: day) }.count
-            if count > 0 { counts[Calendar.current.component(.day, from: day)] = count }
-            day = Calendar.current.date(byAdding: .day, value: 1, to: day) ?? monthInterval.end
+            let count = schedules.filter { $0.occurs(on: day) }.count
+            if count > 0 { counts[calendar.component(.day, from: day)] = count }
+            day = calendar.date(byAdding: .day, value: 1, to: day) ?? monthInterval.end
         }
         return counts
     }
