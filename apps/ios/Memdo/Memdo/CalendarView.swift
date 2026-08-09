@@ -19,21 +19,25 @@ struct CalendarView: View {
     private var selectedAgenda: [ScheduleDetail] {
         filteredSchedules
             .filter { $0.occurs(on: selectedDate) }
-            .sorted { $0.timeSortKey < $1.timeSortKey }
+            .sorted { $0.timeSortKey(on: selectedDate) < $1.timeSortKey(on: selectedDate) }
     }
 
     private var scheduleCounts: [Int: Int] {
         let calendar = Calendar.current
         guard let monthInterval = calendar.dateInterval(of: .month, for: displayedMonth)
         else { return [:] }
-        // Hoisted out of the loop: both were being re-evaluated (a fresh array
+        // Hoisted out of the loop: these were being re-evaluated (a fresh array
         // filter, and Calendar.current's lookup) once per day of the month on
-        // every body re-render.
-        let schedules = filteredSchedules.filter { !$0.isDone }
+        // every body re-render. Also pre-filtered to what could possibly
+        // intersect this month before the day-by-day scan.
+        let schedules = filteredSchedules.filter {
+            !$0.isDone && $0.scheduledDate < monthInterval.end &&
+                ($0.endAt ?? $0.scheduledDate) >= monthInterval.start
+        }
         var counts: [Int: Int] = [:]
         var day = monthInterval.start
         while day < monthInterval.end {
-            let count = schedules.filter { $0.occurs(on: day) }.count
+            let count = schedules.count { $0.occurs(on: day) }
             if count > 0 { counts[calendar.component(.day, from: day)] = count }
             day = calendar.date(byAdding: .day, value: 1, to: day) ?? monthInterval.end
         }

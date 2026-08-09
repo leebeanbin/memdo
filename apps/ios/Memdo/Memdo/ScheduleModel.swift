@@ -337,6 +337,17 @@ struct ScheduleDetail: Identifiable, Equatable {
         return "\(components.month ?? 0)월 \(components.day ?? 0)일"
     }
     var timeSortKey: Date { isAllDay ? scheduledDate : startAt ?? scheduledDate.endOfDay }
+    /// `timeSortKey` clamped to `day` -- a multi-day event's absolute `startAt`
+    /// (its first day) would otherwise sort before every same-day item on every
+    /// later day it spans, pinning it to the top. Note: display text (e.g. in
+    /// ScheduleRow) still shows the event's absolute start/end regardless of
+    /// which spillover day it's rendered on -- a known follow-up, not fixed here.
+    func timeSortKey(on day: Date) -> Date {
+        guard kind == .event, let startAt, !Calendar.current.isDate(startAt, inSameDayAs: day) else {
+            return timeSortKey
+        }
+        return Calendar.current.startOfDay(for: day)
+    }
     var kindLabel: String { kind.label }
     var isTimeRangeValid: Bool {
         switch (startAt, endAt) {
@@ -448,7 +459,7 @@ final class ScheduleStore {
     func items(for date: Date) -> [ScheduleDetail] {
         schedules
             .filter { $0.isActive && $0.occurs(on: date) }
-            .sorted { $0.timeSortKey < $1.timeSortKey }
+            .sorted { $0.timeSortKey(on: date) < $1.timeSortKey(on: date) }
     }
 
     func load() async {
@@ -608,8 +619,21 @@ final class ScheduleStore {
         do {
             saved = try await repository.create(schedule)
         } catch {
-            // Nothing exists server-side yet -- safe to drop the optimistic entry.
-            schedules.removeAll { $0.id == schedule.id }
+            if schedule.isVirtual {
+                // This wasn't a net-new item -- it's a computed occurrence that
+                // still exists (the server will recompute it as virtual again on
+                // the next list). Restore the pre-edit value instead of erasing
+                // it; removing it here would just make the recurring occurrence
+                // vanish from every list/widget until a full reload.
+                if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
+                    schedules[index] = schedule
+                } else {
+                    schedules.append(schedule)
+                }
+            } else {
+                // Nothing exists server-side yet -- safe to drop the optimistic entry.
+                schedules.removeAll { $0.id == schedule.id }
+            }
             updateWidgetSnapshot()
             lastWriteError = error.localizedDescription
             return
@@ -620,21 +644,25 @@ final class ScheduleStore {
         // it already owns).
         if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
             schedules[index] = saved
-            updateWidgetSnapshot()
+        } else {
+            schedules.append(saved)
         }
+        updateWidgetSnapshot()
         // POST /todos (create) doesn't accept a status -- new rows always start
         // "planned" server-side. If the caller's intent was e.g. completing a
         // virtual occurrence in one action, follow up with the real row's status
         // now that it has a real version to optimistically-lock against.
         guard saved.status != schedule.status else { return }
         do {
-            var desired = schedule
-            desired.version = saved.version
+            var desired = saved
+            desired.status = schedule.status
             let updated = try await repository.update(desired)
             if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
                 schedules[index] = updated
-                updateWidgetSnapshot()
+            } else {
+                schedules.append(updated)
             }
+            updateWidgetSnapshot()
         } catch {
             lastWriteError = error.localizedDescription
         }
@@ -800,13 +828,17 @@ final class ScheduleStore {
         let end = calendar.date(byAdding: .month, value: 2, to: start) ?? now
         // Scans day by day (matching CalendarView.scheduleCounts) rather than
         // grouping by exact scheduledDate, so a multi-day event appears on every
-        // day it spans, not just its start day.
+        // day it spans, not just its start day. `schedules` is unbounded (grows
+        // with ensureLoaded() and is never evicted) and this runs on every
+        // write, so pre-filter to what could possibly intersect [start, end)
+        // before the O(days) scan rather than re-scanning everything per day.
+        let candidates = schedules.filter { $0.scheduledDate < end && ($0.endAt ?? $0.scheduledDate) >= start }
         var days: [MemdoWidgetDay] = []
         var day = start
         while day < end {
-            let dayCandidates = schedules.filter { $0.occurs(on: day) }
+            let dayCandidates = candidates.filter { $0.occurs(on: day) }
             if !dayCandidates.isEmpty {
-                let sorted = dayCandidates.sorted { $0.timeSortKey < $1.timeSortKey }
+                let sorted = dayCandidates.sorted { $0.timeSortKey(on: day) < $1.timeSortKey(on: day) }
                 days.append(MemdoWidgetDay(
                     date: day,
                     completedCount: sorted.filter(\.isDone).count,

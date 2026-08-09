@@ -63,7 +63,10 @@ struct TodoResponseDTO: Decodable {
     let status: String
     let version: Int
     let scheduleRuleId: String?
-    let isVirtual: Bool
+    // Optional (defaults false at the mapping site below) so a build that
+    // ships before the backend deploys the field doesn't hard-fail decoding
+    // the entire todos list over one missing key.
+    let isVirtual: Bool?
 }
 
 struct TodoCreateRequestDTO: Encodable {
@@ -580,7 +583,7 @@ extension ScheduleDetail {
         sortOrder = dto.sortOrder
         version = dto.version
         scheduleRuleId = dto.scheduleRuleId
-        isVirtual = dto.isVirtual
+        isVirtual = dto.isVirtual ?? false
     }
 }
 
