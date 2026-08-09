@@ -541,16 +541,9 @@ private struct WidgetMonthDay: View {
                 .foregroundStyle(isToday ? MemdoWidgetTheme.onAccent : .primary)
                 .frame(width: isLarge ? 23 : 16, height: isLarge ? 23 : 15)
                 .background(isToday ? MemdoWidgetTheme.brand : .clear, in: Circle())
-            if isLarge {
-                Text(count > 0 ? "\(count)" : "")
-                    .font(.system(size: 7, weight: .semibold))
-                    .foregroundStyle(MemdoWidgetTheme.secondary)
-                    .frame(height: 7)
-            } else {
-                Circle()
-                    .fill(count > 0 ? MemdoWidgetTheme.brand : .clear)
-                    .frame(width: 2.5, height: 2.5)
-            }
+            Circle()
+                .fill(count > 0 ? MemdoWidgetTheme.brand : .clear)
+                .frame(width: 3, height: 3)
         }
         .frame(maxWidth: .infinity, minHeight: isLarge ? 31 : 17)
         .accessibilityElement(children: .ignore)

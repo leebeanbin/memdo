@@ -4,6 +4,7 @@ import SwiftUI
 struct ScheduleDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScheduleStore.self) private var scheduleStore
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var draft: ScheduleDetail
     @State private var saved: ScheduleDetail
     @State private var isEditing = false
@@ -44,6 +45,7 @@ struct ScheduleDetailSheet: View {
                                 get: { draft.isDone },
                                 set: { isDone in updateCompletion(isDone) }
                             ))
+                            .memdoToggle()
                         }
                     }
 
@@ -92,7 +94,7 @@ struct ScheduleDetailSheet: View {
                 }
             }
             .memdoSystemList()
-            .navigationTitle("일정 상세")
+            .navigationTitle(isEditing && dynamicTypeSize.isAccessibilitySize ? "수정" : "일정 상세")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -252,6 +254,7 @@ struct ScheduleEditorFields: View {
                     )
                     .datePickerStyle(.compact)
                     Toggle("종일", isOn: $schedule.isAllDay)
+                        .memdoToggle()
 
                     if schedule.kind == .task {
                         Button("시간 제거", systemImage: "clock.badge.xmark", action: removeScheduledTime)

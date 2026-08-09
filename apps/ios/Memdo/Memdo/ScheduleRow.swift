@@ -79,7 +79,7 @@ struct ScheduleRow: View {
                         .foregroundStyle(MemdoTheme.secondaryInk)
                 }
 
-                HStack(spacing: 5) {
+                HStack(spacing: 4) {
                     if let provider = schedule.meetingProvider {
                         Image(systemName: provider.systemImage)
                             .font(.caption2)
@@ -166,7 +166,10 @@ struct ScheduleSourceIcon: View {
             .font(.caption.weight(.bold))
             .foregroundStyle(schedule.kind == .task ? MemdoTheme.brand : MemdoTheme.secondaryInk)
             .frame(width: 30, height: 30)
-            .background(MemdoTheme.accentSoft, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .background(
+                MemdoTheme.accentSoft,
+                in: RoundedRectangle(cornerRadius: MemdoMetrics.iconRadius, style: .continuous)
+            )
             .accessibilityHidden(true)
     }
 }

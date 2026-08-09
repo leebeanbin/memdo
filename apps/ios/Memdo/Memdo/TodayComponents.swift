@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TodayHeader: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .title2) private var titleSize: CGFloat = 26
     let eyebrow: String
     let title: String
     let subtitle: String
@@ -35,7 +36,7 @@ struct TodayHeader: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(MemdoTheme.brand)
                 Text(title)
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .font(.system(size: titleSize, weight: .bold, design: .rounded))
                     .foregroundStyle(MemdoTheme.ink)
                 Text(subtitle)
                     .font(.subheadline.weight(.medium))
@@ -56,7 +57,7 @@ struct TodayHeader: View {
                         Text("\(completedCount)/\(totalCount)")
                             .font(.caption.weight(.bold))
                         Text("완료")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.caption2.weight(.semibold))
                             .foregroundStyle(MemdoTheme.secondaryInk)
                     }
             }
@@ -162,19 +163,19 @@ struct TodayIntentionPrompt: View {
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(MemdoTheme.peach)
                         .frame(width: 36, height: 36)
-                        .background(.white.opacity(0.7), in: Circle())
+                        .background(MemdoTheme.brandSoft, in: Circle())
                 }
             }
             .multilineTextAlignment(.leading)
             .padding(16)
             .background(
-                LinearGradient(
-                    colors: [MemdoTheme.peachSoft, MemdoTheme.surface],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                in: RoundedRectangle(cornerRadius: MemdoMetrics.cardRadius, style: .continuous)
+                MemdoTheme.surface,
+                in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                    .stroke(MemdoTheme.outline, lineWidth: 0.5)
+            }
         }
         .buttonStyle(.plain)
     }
@@ -230,22 +231,12 @@ struct TodayScheduleSection: View {
 struct TodayBriefingSection: View {
     var body: some View {
         MemdoSection(title: "오늘의 브리핑", trailing: "연결 준비 중") {
-            HStack(spacing: MemdoMetrics.rowSpacing) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(MemdoTheme.brand)
-                    .frame(width: MemdoMetrics.rowLeadingWidth)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("관심사 브리핑을 준비하고 있어요")
-                        .font(.subheadline.weight(.semibold))
-                    Text("뉴스 파이프라인이 연결되면 이곳에 요약이 표시됩니다.")
-                        .font(.caption)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, MemdoMetrics.rowInset)
-            .frame(minHeight: 64)
-            .memdoRowGroup()
+            MemdoStatusRow(
+                title: "관심사 브리핑을 준비하고 있어요",
+                systemImage: "sparkles",
+                detail: "뉴스 파이프라인이 연결되면 이곳에 요약이 표시됩니다.",
+                tint: MemdoTheme.brand
+            )
         }
     }
 }

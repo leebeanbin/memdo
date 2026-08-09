@@ -21,6 +21,7 @@
 		8440D2E9F99B1C9848CF21ED /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD6B2D482673663626353C2 /* CalendarView.swift */; };
 		98172737F1AC51B31154A93D /* ScheduleRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19BD21007334C06C0B2028F9 /* ScheduleRow.swift */; };
 		A085AB23D35F4875B964535E /* SecureSessionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8977951309B34272B060D2A9 /* SecureSessionStorage.swift */; };
+		19973C61960F45159C607064 /* OutboxQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 173DED52623F4F218AC22CC0 /* OutboxQueue.swift */; };
 		A09C21CAE62B67DF6753F375 /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C57EC467343059432D7D60D /* AssistantView.swift */; };
 		B941DEFC3022131300E1891A /* MemdoWidgetSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = B941DEFB3022131300E1891A /* MemdoWidgetSchedule.swift */; };
 		B941DEFD30221B9700E1891A /* MemdoWidgetSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = B941DEFB3022131300E1891A /* MemdoWidgetSchedule.swift */; };
@@ -64,6 +65,7 @@
 		19BD21007334C06C0B2028F9 /* ScheduleRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleRow.swift; sourceTree = "<group>"; };
 		CCC5E26AFD2D4A52B0B54F34 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		8977951309B34272B060D2A9 /* SecureSessionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureSessionStorage.swift; sourceTree = "<group>"; };
+		173DED52623F4F218AC22CC0 /* OutboxQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxQueue.swift; sourceTree = "<group>"; };
 		1F8C4864695656352FE70BA3 /* ScheduleSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleSheets.swift; sourceTree = "<group>"; };
 		257B3BF059A0E5D9A80D8E50 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		2C57EC467343059432D7D60D /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
@@ -135,6 +137,7 @@
 				19BD21007334C06C0B2028F9 /* ScheduleRow.swift */,
 				CCC5E26AFD2D4A52B0B54F34 /* Config.xcconfig */,
 				8977951309B34272B060D2A9 /* SecureSessionStorage.swift */,
+				173DED52623F4F218AC22CC0 /* OutboxQueue.swift */,
 				FC9B39D6188C70A056DA658E /* ScheduleSearchView.swift */,
 				1F8C4864695656352FE70BA3 /* ScheduleSheets.swift */,
 				02910E4D9DB4CBEE1D8C7C10 /* SettingsView.swift */,
@@ -270,6 +273,7 @@
 				B941DF013025698D00E1891A /* EventCapture.swift in Sources */,
 				98172737F1AC51B31154A93D /* ScheduleRow.swift in Sources */,
 				A085AB23D35F4875B964535E /* SecureSessionStorage.swift in Sources */,
+				19973C61960F45159C607064 /* OutboxQueue.swift in Sources */,
 				B941DF033026FD4800E1891A /* AppShortcuts.swift in Sources */,
 				E117E6A55D78273E89DFAAC0 /* ScheduleSearchView.swift in Sources */,
 				480BC8CB74B2601AFEEF5DBD /* ScheduleSheets.swift in Sources */,

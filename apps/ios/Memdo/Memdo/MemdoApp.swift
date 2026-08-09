@@ -12,6 +12,7 @@ struct MemdoApp: App {
         WindowGroup {
             MemdoRootView(session: session)
                 .environment(session)
+                .dynamicTypeSize(.xSmall ... .accessibility3)
                 .onOpenURL { session.handle($0) }
                 .task { await session.observe() }
         }
@@ -32,7 +33,6 @@ final class MemdoSession {
     private(set) var isBusy = false
     private(set) var errorMessage: String?
     private(set) var accountLabel = ""
-    private(set) var isGuest = false
     let scheduleStore: ScheduleStore?
     let preferencesStore: PreferencesStore?
 
@@ -83,13 +83,20 @@ final class MemdoSession {
         guard let client else { return }
         for await (event, session) in client.auth.authStateChanges {
             if let session {
+                guard !session.user.isAnonymous else {
+                    activeUserID = nil
+                    accountLabel = ""
+                    scheduleStore?.reset()
+                    preferencesStore?.reset()
+                    phase = .signedOut
+                    continue
+                }
                 if activeUserID != session.user.id {
                     scheduleStore?.reset()
                     preferencesStore?.reset()
                 }
                 activeUserID = session.user.id
-                isGuest = session.user.isAnonymous
-                accountLabel = isGuest ? "게스트" : session.user.email ?? "연결된 계정"
+                accountLabel = session.user.email ?? "연결된 계정"
                 phase = .signedIn
                 continue
             }
@@ -101,30 +108,10 @@ final class MemdoSession {
 
             switch event {
             case .initialSession, .signedOut:
-                // No locally stored session: either a true first launch, or the
-                // session was genuinely invalidated (explicit sign-out, or the
-                // refresh token itself was rejected). emitLocalSessionAsInitialSession
-                // above guarantees .initialSession only carries a nil session when
-                // there truly is none stored, so a flaky network refresh at launch
-                // can no longer land here and silently mint a replacement guest
-                // account on top of a still-valid one.
-                await startAnonymousSession()
+                phase = .signedOut
             default:
                 phase = .signedOut
             }
-        }
-    }
-
-    /// Anonymous-first entry: no login wall. On a missing session we silently
-    /// create an anonymous one so the app opens straight to the main screen;
-    /// accounts are connected later. Only a hard failure falls back to sign-in.
-    private func startAnonymousSession() async {
-        guard let client else { return }
-        do {
-            try await client.auth.signInAnonymously()
-            // Success emits a new auth state change carrying the session.
-        } catch {
-            phase = .signedOut
         }
     }
 
@@ -313,17 +300,25 @@ private struct MemdoSignInView: View {
         Button {
             Task { await session.signIn(with: provider) }
         } label: {
-            HStack(spacing: 8) {
-                providerLogo(image, provider: provider)
+            ZStack {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.subheadline.weight(.medium))
                     .lineLimit(1)
+
+                HStack {
+                    providerLogo(image, provider: provider)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
             }
             .frame(maxWidth: .infinity, minHeight: 52)
-            .background(providerBackground(provider), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(
+                providerBackground(provider),
+                in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+            )
             .overlay {
                 if provider == .google {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
                         .stroke(providerOutline, lineWidth: 1)
                 }
             }
@@ -342,12 +337,12 @@ private struct MemdoSignInView: View {
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 18, height: 18)
+                .frame(width: 20, height: 20)
         } else {
             Image(image)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 18, height: 18)
+                .frame(width: 20, height: 20)
         }
     }
 
@@ -368,7 +363,7 @@ private struct MemdoSignInView: View {
         }
         .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
         .frame(height: 52)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
     }
 
     private static func randomNonce(length: Int = 32) -> String {

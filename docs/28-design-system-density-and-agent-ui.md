@@ -2,7 +2,7 @@
 
 상태: 구현 기준선
 
-기준일: 2026-08-02
+기준일: 2026-08-09
 
 상위 문서: [제품 요구사항](./01-product-requirements.md), [페이지별 UI/UX 계약](./27-page-ui-ux-contract.md)
 
@@ -30,12 +30,43 @@ Memdo는 기능이 적은 앱이 아니라, 필요한 기능을 필요한 순간
 
 | 참고 | 확인한 패턴 | Memdo 적용 | 적용하지 않는 것 |
 |---|---|---|---|
+| [Apple Design Resources](https://developer.apple.com/design/resources/) | 최신 iOS UI Kit, 앱 아이콘 제작 템플릿, SF Symbols, 시스템 서체, 기술별 공식 에셋 | Figma 검수 기준, Icon Composer 앱 아이콘, SF Symbols, 시스템 서체, 해당 기능을 실제 구현할 때의 공식 로그인·기술 에셋 | UI Kit 레이어의 코드 복제, Product Bezel의 앱 내부 사용, 쓰지 않는 기능의 선제 에셋 도입 |
+| [Apple HIG: Liquid Glass](https://developer.apple.com/design/human-interface-guidelines/materials) | 콘텐츠 위에 떠 있는 기능적 조작 계층 | 탭바·툴바·검색·Agent 입력기처럼 현재 문맥 위에서 조작하는 표면 | 일정·브리핑·설정 행을 Glass 카드로 장식 |
+| [WWDC26: Communicate your brand identity on iOS](https://developer.apple.com/videos/play/wwdc2026/251/) | 네이티브 UI 계층과 브랜드 콘텐츠 계층 분리 | 시스템 셸을 유지하고 캘린더·일정·요약·Agent 결과에 Memdo 표현 집중 | 내비게이션·메뉴·피커를 브랜드 외형으로 재구현 |
 | [Apple HIG: Generative AI](https://developer.apple.com/design/human-interface-guidelines/generative-ai) | AI 표시, 사용자 통제, 개인정보 설명, 비 AI 대안 | `Agent` 라벨, 실행 전 승인, 권한 범위, 기본 일정 기능 유지 | AI가 사용자를 대신해 승인하는 흐름 |
 | [assistant-ui](https://github.com/assistant-ui/assistant-ui) | Thread, Composer, Action Bar, inline approval을 분리한 조합형 구조 | 고정 composer, 결과와 승인 UI 분리, 접근성 우선 | React 패키지 또는 화면 복제 |
 | [Vercel Chatbot](https://github.com/vercel/chatbot) | 입력 중심의 조용한 기본 상태, 필요할 때만 구조화 결과 표시 | 빈 상태의 소수 빠른 요청, 응답 후 제안 목록 숨김 | 전체 채팅 제품화, 대화 목록 탭 |
 | [CopilotKit](https://github.com/CopilotKit/CopilotKit) | 앱 상태를 공유하는 Agent, human-in-the-loop, generative UI | 현재 탭 문맥, 일정 변경안 승인, 도구 상태 행 | 매 응답마다 임의 UI 생성 |
 
 X의 시각 시안은 출처·접근성·상태 계약을 확인하기 어려워 직접 기준으로 삼지 않는다. GitHub 원본과 Apple HIG를 우선한다.
+
+### 2.1 Native shell / Memdo content
+
+Memdo는 Apple의 모양을 복제하지 않고 역할 분리 전략을 따른다.
+
+| 계층 | 소유자 | 구성 | 변경 원칙 |
+|---|---|---|---|
+| 시스템 셸 | Apple | 탭바, 내비게이션, toolbar, 검색, 시트, 메뉴, 경고, 피커, 토글, 포커스·접근성 상태 | 네이티브 SwiftUI 우선. 화면별 장식 변형 금지 |
+| 제품 콘텐츠 | Memdo | 월·주 캘린더, Event/Task 행, 날짜 밀도, 브리핑, 오늘 요약, Agent 변경안과 근거 | 정보 위계·문장·데이터 표현을 커스텀 |
+| 브랜드 접점 | Memdo + Apple 규격 | 앱 아이콘, 로그인 심벌, 위젯, 작은 브랜드 틴트 | 공식 템플릿과 시스템 적응 범위 안에서 표현 |
+
+- 시스템 셸에는 제품 색을 고정 면으로 칠하지 않는다. 콘텐츠의 색과 상태가 시스템 Glass에 자연스럽게 반영되도록 둔다.
+- 제품 콘텐츠는 기본적으로 불투명 semantic background와 열린 행을 사용한다. Glass는 콘텐츠 카드 스타일이 아니다.
+- 새 커스텀 컴포넌트를 만들기 전에 동일 역할의 SwiftUI 컴포넌트와 기존 `MemdoComponents`를 확인한다.
+- 네이티브 컴포넌트를 커스텀으로 대체하려면 접근성, Dynamic Type, Reduce Motion, safe area, 이전 OS fallback을 모두 충족하는 이유를 ADR에 기록한다.
+
+### 2.2 Apple Design Resources 사용 계약
+
+| 리소스 | 사용하는 시점 | 산출물 | 금지 |
+|---|---|---|---|
+| 최신 iOS/iPadOS UI Kit | 화면 설계·리뷰 | 시스템 컴포넌트 크기·배치·상태 비교용 Figma 기준 | Figma 픽셀을 하드코딩하거나 전체 화면을 SwiftUI로 수작업 복제 |
+| App Icon Template + Icon Composer | 앱 아이콘 제작 | Light/Dark 및 지원 appearance를 가진 계층형 앱 아이콘 | 화면 안의 일반 아이콘을 앱 아이콘 레이어로 제작 |
+| SF Symbols | 기능 아이콘 선택 | 의미·weight·scale·현지화가 일관된 심벌 | 유니코드 문자, 서로 다른 아이콘 패밀리 혼용, 의미가 불명확한 장식 아이콘 |
+| SF Pro 계열 | 앱 타이포그래피 | SwiftUI 시스템 폰트와 Dynamic Type | 앱 번들에 SF Pro를 넣거나 고정 크기로 시스템 적응 차단 |
+| Sign in with Apple assets | 해당 인증을 실제 제공할 때 | Apple 규격 로그인 버튼·로고 | 미구현 기능의 장식용 로고, 임의 변형 |
+| Product Bezels | App Store·소개 이미지 제작 때 | 공식 기기 프레임의 마케팅 이미지 | 앱 UI 내부 장식 |
+
+최신 리소스의 버전 번호는 문서 토큰으로 고정하지 않는다. 설계 시작 시 공식 페이지의 최신 iOS UI Kit를 확인하고, 구현은 배포 대상 SDK와 availability를 따른다.
 
 ## 3. 화면 밀도 원칙
 
@@ -182,6 +213,7 @@ Agent는 별도 AI 페이지가 아니라 현재 앱 문맥 위에 열리는 com
 - 사용자가 요청하면 빠른 요청 목록은 사라지고 결과에 공간을 양보한다.
 - Agent 응답은 말풍선 피드가 아니라 짧은 본문과 3pt 브랜드 기준선으로 표시한다.
 - composer는 키보드와 함께 고정되며 현재 콘텐츠를 과도하게 가리지 않는다.
+- composer만 조작용 Liquid Glass를 사용한다. 시트 하단 전체에 별도 `.bar` 재질을 겹치지 않고, 전송은 44pt 터치 영역 안의 작은 상태 아이콘으로 표현한다.
 - draft와 응답은 시트 재진입에도 유지하며, 초기화는 명시적인 `새 대화`로만 수행한다.
 - 무의미한 회전, 빠른 morph, 자동 이동 애니메이션을 쓰지 않는다.
 

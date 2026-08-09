@@ -35,6 +35,7 @@ struct SettingsView: View {
 
             SettingsGroup(title: "하루") {
                 Toggle("오늘 요약", isOn: $dailySummary)
+                    .memdoToggle()
                     .memdoSettingsRow()
                 if dailySummary {
                     Divider()
@@ -44,6 +45,7 @@ struct SettingsView: View {
                 SettingsTimePicker(title: "계획 알림", selection: $promptTime)
                 Divider()
                 Toggle("알림", isOn: $notifications)
+                    .memdoToggle()
                     .memdoSettingsRow()
                 Divider()
                 Button { presentedSheet = .briefingKeywords } label: {
@@ -57,6 +59,7 @@ struct SettingsView: View {
                 subtitle: "시간과 개수만 남기고 모든 위젯에서 일정 제목을 숨길 수 있어요."
             ) {
                 Toggle("위젯 일정 제목 숨기기", isOn: $hideWidgetContent)
+                    .memdoToggle()
                     .memdoSettingsRow()
             }
 
@@ -112,7 +115,7 @@ struct SettingsView: View {
                     showsSignOutConfirmation = true
                 } label: {
                     HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 3) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text(session.accountLabel)
                                 .font(.subheadline.weight(.semibold))
                             Text("이 기기의 세션을 종료합니다")
@@ -269,15 +272,23 @@ private struct AgentConnectionRow: View {
     var badge: String?
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .center, spacing: 12) {
             ConnectionMark(icon: icon)
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
+                if dynamicTypeSize.isAccessibilitySize {
                     Text(title)
                         .font(.subheadline.weight(.semibold))
                     if let badge {
                         ConnectionBadge(title: badge)
+                    }
+                } else {
+                    HStack(spacing: 4) {
+                        Text(title)
+                            .font(.subheadline.weight(.semibold))
+                        if let badge {
+                            ConnectionBadge(title: badge)
+                        }
                     }
                 }
                 Text(capability)
@@ -302,7 +313,7 @@ private struct AgentConnectionRow: View {
                 .accessibilityHidden(true)
         }
         .multilineTextAlignment(.leading)
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
         .frame(minHeight: 60)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
@@ -315,11 +326,12 @@ private struct ConnectionBadge: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 9, weight: .bold, design: .rounded))
+            .font(.caption2.bold())
+            .dynamicTypeSize(.small ... .large)
             .tracking(0.4)
             .foregroundStyle(MemdoTheme.brand)
-            .padding(.horizontal, 6)
-            .frame(height: 18)
+            .padding(.horizontal, 8)
+            .frame(height: 20)
             .background(MemdoTheme.brandSoft, in: Capsule())
     }
 }
@@ -522,18 +534,36 @@ private struct GoogleCalendarConnectionSheet: View {
                         if let lastSyncedAt = status?.lastSyncedAt {
                             LabeledContent("마지막 동기화", value: lastSyncedAt)
                         }
-                        Button("연결 해지", role: .destructive) { disconnect() }
+                        Button(role: .destructive, action: disconnect) {
+                            if isBusy {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                    Text("연결 해제 중")
+                                }
+                            } else {
+                                Text("연결 해지")
+                            }
+                        }
                             .disabled(isBusy)
                     }
                 } else {
                     Section {
-                        Button("Google Calendar 연결") { connect() }
+                        Button(action: connect) {
+                            if isBusy {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                    Text("연결 중")
+                                }
+                            } else {
+                                Text("Google Calendar 연결")
+                            }
+                        }
                             .disabled(isBusy)
                     }
                 }
                 if let errorMessage {
                     Section {
-                        Text(errorMessage)
+                        Label(errorMessage, systemImage: "exclamationmark.circle.fill")
                             .foregroundStyle(.red)
                     }
                 }
@@ -668,6 +698,7 @@ private struct SlackConnectionSheet: View {
 }
 
 private struct MCPToolIdentityRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let icon: ConnectionIcon
     let title: String
     let summary: String
@@ -675,11 +706,17 @@ private struct MCPToolIdentityRow: View {
     var body: some View {
         HStack(spacing: 12) {
             ConnectionMark(icon: icon)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
+                if dynamicTypeSize.isAccessibilitySize {
                     Text(title)
                         .font(.subheadline.weight(.semibold))
                     ConnectionBadge(title: "MCP")
+                } else {
+                    HStack(spacing: 4) {
+                        Text(title)
+                            .font(.subheadline.weight(.semibold))
+                        ConnectionBadge(title: "MCP")
+                    }
                 }
                 Text(summary)
                     .font(.caption)

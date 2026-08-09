@@ -9,6 +9,7 @@ struct ScheduleSearchView: View {
     @State private var presentedSheet: SearchSheet?
     @State private var results: [ScheduleDetail] = []
     @State private var searchError: String?
+    @State private var isSearching = false
 
     private var activeFilterDescription: String? {
         let filters = [status, period].filter { $0 != "전체 상태" && $0 != "전체 기간" }
@@ -51,6 +52,7 @@ struct ScheduleSearchView: View {
             schedules: filteredResults,
             filterDescription: activeFilterDescription,
             searchError: searchError,
+            isSearching: isSearching,
             onOpenFilters: { presentedSheet = .filters },
             onOpenSchedule: { presentedSheet = .detail($0) }
         )
@@ -67,8 +69,10 @@ struct ScheduleSearchView: View {
             guard !term.isEmpty else {
                 results = []
                 searchError = nil
+                isSearching = false
                 return
             }
+            isSearching = true
             // Debounce keystrokes; `.task(id:)` cancels the prior run on each change.
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
@@ -79,6 +83,7 @@ struct ScheduleSearchView: View {
                 results = []
                 searchError = error.localizedDescription
             }
+            isSearching = false
         }
     }
 }
@@ -103,6 +108,7 @@ private struct SearchResultsSection: View {
     let schedules: [ScheduleDetail]
     let filterDescription: String?
     let searchError: String?
+    let isSearching: Bool
     let onOpenFilters: () -> Void
     let onOpenSchedule: (ScheduleDetail) -> Void
 
@@ -119,20 +125,28 @@ private struct SearchResultsSection: View {
                     .font(.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
-            if let searchError {
-                ContentUnavailableView(
-                    "검색을 완료하지 못했어요",
+            if isSearching {
+                HStack(spacing: MemdoMetrics.rowSpacing) {
+                    ProgressView()
+                        .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
+                    Text("검색 중")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .padding(.horizontal, MemdoMetrics.rowInset)
+                .memdoRowGroup()
+            } else if let searchError {
+                MemdoStatusRow(
+                    title: "검색을 완료하지 못했어요",
                     systemImage: "exclamationmark.triangle",
-                    description: Text(searchError)
+                    detail: searchError,
+                    tint: MemdoTheme.brand
                 )
-                .frame(maxWidth: .infinity, minHeight: 120)
             } else if schedules.isEmpty {
-                ContentUnavailableView(
-                    "검색 결과가 없어요",
+                MemdoStatusRow(
+                    title: "검색 결과가 없어요",
                     systemImage: "magnifyingglass",
-                    description: Text("검색어 또는 필터를 바꿔보세요.")
+                    detail: "검색어 또는 필터를 바꿔보세요."
                 )
-                .frame(maxWidth: .infinity, minHeight: 120)
             } else {
                 VStack(spacing: 0) {
                     ForEach(schedules) { schedule in

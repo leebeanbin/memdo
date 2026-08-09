@@ -21,6 +21,7 @@ struct MemdoPage<Content: View>: View {
     let headerActionIcon: String?
     let headerActionLabel: String
     let headerAction: () -> Void
+    let bottomClearance: CGFloat
     @ViewBuilder let content: Content
 
     init(
@@ -30,6 +31,7 @@ struct MemdoPage<Content: View>: View {
         headerActionIcon: String? = nil,
         headerActionLabel: String = "",
         headerAction: @escaping () -> Void = {},
+        bottomClearance: CGFloat = MemdoMetrics.tabBarClearance,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
@@ -38,6 +40,7 @@ struct MemdoPage<Content: View>: View {
         self.headerActionIcon = headerActionIcon
         self.headerActionLabel = headerActionLabel
         self.headerAction = headerAction
+        self.bottomClearance = bottomClearance
         self.content = content()
     }
 
@@ -58,7 +61,7 @@ struct MemdoPage<Content: View>: View {
                         content
                     }
                     .padding(MemdoMetrics.pagePadding)
-                    .padding(.bottom, MemdoMetrics.tabBarClearance)
+                    .padding(.bottom, bottomClearance)
                 }
                 .scrollIndicators(.hidden)
             }
@@ -71,6 +74,7 @@ struct MemdoPage<Content: View>: View {
 
 struct MemdoPageHeader: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .title2) private var titleSize: CGFloat = 26
     let title: String
     let subtitle: String
     let eyebrow: String
@@ -104,7 +108,7 @@ struct MemdoPageHeader: View {
                 .font(.caption.weight(.bold))
                 .foregroundStyle(MemdoTheme.brand)
             Text(title)
-                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .font(.system(size: titleSize, weight: .bold, design: .rounded))
                 .foregroundStyle(MemdoTheme.ink)
             Text(subtitle)
                 .font(.subheadline)
@@ -119,7 +123,7 @@ struct MemdoPageHeader: View {
                 MemdoIconButtonLabel(systemImage: actionIcon)
             }
             .buttonStyle(.plain)
-            .memdoFloatingSurface(radius: 22)
+            .memdoFloatingSurface(cornerRadius: MemdoMetrics.groupRadius)
             .accessibilityLabel(actionLabel)
         }
     }
@@ -241,7 +245,6 @@ struct MemdoChoiceButton: View {
                 }
                 Text(title)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
             }
                 .font(.caption.bold())
                 .foregroundStyle(isSelected ? MemdoTheme.onAccent : MemdoTheme.ink)
@@ -253,6 +256,37 @@ struct MemdoChoiceButton: View {
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityValue(isSelected ? "선택됨" : "선택 안 됨")
+    }
+}
+
+struct MemdoStatusRow: View {
+    let title: String
+    let systemImage: String
+    var detail: String?
+    var tint = MemdoTheme.secondaryInk
+
+    var body: some View {
+        HStack(spacing: MemdoMetrics.rowSpacing) {
+            Image(systemName: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                if let detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, MemdoMetrics.rowInset)
+        .padding(.vertical, 4)
+        .memdoRowGroup()
+        .accessibilityElement(children: .combine)
     }
 }
 

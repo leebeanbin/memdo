@@ -10,6 +10,8 @@ private struct TodayScrollOffsetKey: PreferenceKey {
 
 struct TodayView: View {
     @Environment(ScheduleStore.self) private var scheduleStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var presentedSheet: TodaySheetDestination?
     @State private var selectedDate = Calendar.current.startOfDay(for: .now)
     @State private var showAllSchedules = false
@@ -77,7 +79,10 @@ struct TodayView: View {
                             onSelect: selectDate,
                             onAdd: openAddSchedule
                         )
-                            .highPriorityGesture(dateSwipeGesture)
+                            .highPriorityGesture(
+                                dateSwipeGesture,
+                                including: dynamicTypeSize.isAccessibilitySize ? .subviews : .all
+                            )
 
                         if schedules.isEmpty {
                             TodayIntentionPrompt(isToday: isToday, onAdd: openAddSchedule)
@@ -105,7 +110,7 @@ struct TodayView: View {
                     }
                     guard autoExpandArmed, offset < -120, schedules.count > 3, !showAllSchedules else { return }
                     autoExpandArmed = false
-                    withAnimation(.easeOut(duration: 0.2)) {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                         showAllSchedules = true
                     }
                 }
@@ -146,7 +151,7 @@ struct TodayView: View {
 
     private func moveDate(by offset: Int) {
         guard let nextDate = Calendar.current.date(byAdding: .day, value: offset, to: selectedDate) else { return }
-        withAnimation(.snappy(duration: 0.25)) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) {
             selectDate(nextDate)
         }
     }
@@ -173,7 +178,7 @@ struct TodayView: View {
     }
 
     private func toggleSchedules() {
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
             showAllSchedules.toggle()
         }
         if !showAllSchedules {
