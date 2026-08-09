@@ -27,6 +27,7 @@ enum AppTab: String, CaseIterable {
 
 struct AppShellView: View {
     let scheduleStore: ScheduleStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = AppTab.today
     @State private var showIntentCapture = false
@@ -70,12 +71,15 @@ struct AppShellView: View {
         if let message = scheduleStore.lastWriteError {
             Label(message, systemImage: "exclamationmark.triangle.fill")
                 .font(.footnote.weight(.medium))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    .regularMaterial,
+                    in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                )
                 .padding(.horizontal, MemdoMetrics.pagePadding)
                 .padding(.bottom, 12)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
                 .onTapGesture { scheduleStore.dismissWriteError() }
                 .task(id: message) {
                     try? await Task.sleep(for: .seconds(4))

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CalendarView: View {
     @Environment(ScheduleStore.self) private var scheduleStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isSearchPresented: Bool
     @Binding var targetDate: Date?
     @State private var selectedDate = Date.now
@@ -56,12 +57,11 @@ struct CalendarView: View {
             if isSearchPresented {
                 CalendarSearchControls(query: $searchQuery, scope: $searchScope)
                 if searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    ContentUnavailableView(
-                        "일정을 검색해 보세요",
+                    MemdoStatusRow(
+                        title: "일정을 검색해 보세요",
                         systemImage: "magnifyingglass",
-                        description: Text("제목뿐 아니라 메모와 장소도 함께 찾아요.")
+                        detail: "제목뿐 아니라 메모와 장소도 함께 찾아요."
                     )
-                    .frame(maxWidth: .infinity, minHeight: 180)
                 } else {
                     ScheduleSearchView(query: $searchQuery, scope: searchScope)
                 }
@@ -119,7 +119,7 @@ struct CalendarView: View {
 
     private func moveMonth(_ offset: Int) {
         guard let month = Calendar.current.date(byAdding: .month, value: offset, to: displayedMonth) else { return }
-        withAnimation(.snappy(duration: 0.25)) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) {
             displayedMonth = month
             selectedDate = Calendar.current.date(bySetting: .day, value: 1, of: month) ?? month
             showAll = false
@@ -128,7 +128,7 @@ struct CalendarView: View {
     }
 
     private func goToday() {
-        withAnimation(.snappy(duration: 0.25)) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) {
             selectedDate = .now
             displayedMonth = Calendar.current.dateInterval(of: .month, for: selectedDate)?.start ?? selectedDate
             showAll = false
@@ -136,13 +136,13 @@ struct CalendarView: View {
     }
 
     private func toggleAgenda() {
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
             showAll.toggle()
         }
     }
 
     private func toggleSearch() {
-        withAnimation(.snappy(duration: 0.25)) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) {
             isSearchPresented.toggle()
             if !isSearchPresented { searchQuery = "" }
         }
@@ -150,13 +150,14 @@ struct CalendarView: View {
 }
 
 private struct CalendarSearchControls: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var query: String
     @Binding var scope: ScheduleSearchScope
     @FocusState private var isFocused: Bool
 
     var body: some View {
         controls
-            .transition(.move(edge: .top).combined(with: .opacity))
+            .transition(reduceMotion ? .identity : .move(edge: .top).combined(with: .opacity))
             .onAppear { isFocused = true }
     }
 
@@ -182,7 +183,7 @@ private struct CalendarSearchControls: View {
             }
             .padding(.horizontal, 12)
             .frame(minHeight: MemdoMetrics.touchTarget)
-            .memdoFloatingSurface(radius: 22)
+            .memdoFloatingSurface()
 
             Picker("검색 범위", selection: $scope) {
                 ForEach(ScheduleSearchScope.allCases) { option in
@@ -196,6 +197,7 @@ private struct CalendarSearchControls: View {
 }
 
 private struct CalendarMonthCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private let weekdays = ["월", "화", "수", "목", "금", "토", "일"]
 
     @Binding var filter: CalendarDisplayFilter
@@ -228,52 +230,7 @@ private struct CalendarMonthCard: View {
 
     var body: some View {
         VStack(spacing: MemdoMetrics.sectionContentSpacing) {
-            HStack(spacing: 8) {
-                HStack(spacing: 0) {
-                    Button { onMoveMonth(-1) } label: {
-                        Image(systemName: "chevron.left")
-                            .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("이전 달")
-
-                    VStack(spacing: 4) {
-                        Text(month.memdoMonth)
-                            .font(.headline)
-                        if filter != .all {
-                            Text(filter.title)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(MemdoTheme.brand)
-                        }
-                    }
-                    .frame(minWidth: 52)
-
-                    Button { onMoveMonth(1) } label: {
-                        Image(systemName: "chevron.right")
-                            .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("다음 달")
-                }
-                Spacer(minLength: 4)
-                Button("오늘", action: onGoToday)
-                    .font(.caption.weight(.semibold))
-                    .frame(minHeight: MemdoMetrics.touchTarget)
-                    .buttonStyle(.plain)
-                Menu {
-                    Picker("표시 일정", selection: $filter) {
-                        ForEach(CalendarDisplayFilter.allCases) { filter in
-                            Text(filter.title).tag(filter)
-                        }
-                    }
-                } label: {
-                    MemdoIconButtonLabel(systemImage: "line.3.horizontal.decrease")
-                }
-                .buttonStyle(.plain)
-                .memdoFloatingSurface(radius: 22)
-                .accessibilityLabel("일정 필터")
-                .accessibilityValue(filter.title)
-            }
+            monthControls
             .contentShape(Rectangle())
             .highPriorityGesture(monthSwipeGesture)
 
@@ -299,6 +256,82 @@ private struct CalendarMonthCard: View {
         .memdoRowGroup()
         .accessibilityAction(named: "이전 달") { onMoveMonth(-1) }
         .accessibilityAction(named: "다음 달") { onMoveMonth(1) }
+    }
+
+    @ViewBuilder
+    private var monthControls: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: 4) {
+                HStack {
+                    monthNavigation
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 12) {
+                    todayButton
+                    Spacer(minLength: 0)
+                    filterMenu
+                }
+            }
+        } else {
+            HStack(spacing: 8) {
+                monthNavigation
+                Spacer(minLength: 4)
+                todayButton
+                filterMenu
+            }
+        }
+    }
+
+    private var monthNavigation: some View {
+        HStack(spacing: 0) {
+            Button { onMoveMonth(-1) } label: {
+                Image(systemName: "chevron.left")
+                    .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("이전 달")
+
+            Text(month.memdoMonth)
+                .font(.headline)
+                .frame(minWidth: 52)
+
+            Button { onMoveMonth(1) } label: {
+                Image(systemName: "chevron.right")
+                    .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("다음 달")
+        }
+    }
+
+    private var todayButton: some View {
+        Button("오늘", action: onGoToday)
+            .font(.caption.weight(.semibold))
+            .frame(minHeight: MemdoMetrics.touchTarget)
+            .buttonStyle(.plain)
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            Picker("표시 일정", selection: $filter) {
+                ForEach(CalendarDisplayFilter.allCases) { filter in
+                    Text(filter.title).tag(filter)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "line.3.horizontal.decrease")
+                Text(filter.title)
+                    .lineLimit(1)
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(filter == .all ? MemdoTheme.ink : MemdoTheme.brand)
+            .frame(minHeight: MemdoMetrics.touchTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("일정 필터")
+        .accessibilityValue(filter.title)
     }
 
     private func dayButton(_ date: Date) -> some View {
@@ -387,12 +420,12 @@ private struct CalendarAgendaSection: View {
             action: onAdd
         ) {
             if schedules.isEmpty {
-                ContentUnavailableView(
-                    "등록된 일정이 없어요",
+                MemdoStatusRow(
+                    title: "등록된 일정이 없어요",
                     systemImage: "calendar.badge.plus",
-                    description: Text("위의 + 또는 날짜 길게 누르기로 시작해 보세요.")
+                    detail: "위의 + 또는 날짜 길게 누르기로 시작해 보세요.",
+                    tint: MemdoTheme.brand
                 )
-                .frame(maxWidth: .infinity, minHeight: 120)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(visibleSchedules.enumerated()), id: \.element.id) { index, schedule in

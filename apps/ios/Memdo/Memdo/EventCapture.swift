@@ -182,9 +182,12 @@ struct EventCaptureSheet: View {
                     Button("취소") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    if draft == nil {
+                    if isAnalyzing {
+                        ProgressView()
+                            .accessibilityLabel("일정 분석 중")
+                    } else if draft == nil {
                         Button("분석") { analyze() }
-                            .disabled(trimmed.isEmpty || isAnalyzing)
+                            .disabled(trimmed.isEmpty)
                     } else {
                         Button("채우기") {
                             if let draft { onApply(draft) }

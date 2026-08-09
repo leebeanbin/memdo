@@ -38,8 +38,11 @@ enum MemdoMetrics {
     static let rowLeadingWidth: CGFloat = 44
     static let rowSpacing: CGFloat = 8
     static let rowContentLeading = rowInset + rowLeadingWidth + rowSpacing
-    static let cardRadius: CGFloat = 16
+    static let iconRadius: CGFloat = 8
     static let fieldRadius: CGFloat = 12
+    static let contentRadius: CGFloat = 16
+    static let groupRadius: CGFloat = 22
+    static let widgetRadius: CGFloat = 28
     static let touchTarget: CGFloat = 44
     static let sectionSpacing: CGFloat = 18
     static let sectionContentSpacing: CGFloat = 10
@@ -58,6 +61,10 @@ extension View {
             .contentShape(Rectangle())
     }
 
+    func memdoToggle() -> some View {
+        tint(MemdoTheme.brand)
+    }
+
     func memdoRowGroup() -> some View {
         overlay(alignment: .top) { Divider() }
             .overlay(alignment: .bottom) { Divider() }
@@ -70,14 +77,19 @@ extension View {
     }
 
     @ViewBuilder
-    func memdoFloatingSurface(radius: CGFloat) -> some View {
+    func memdoFloatingSurface(
+        cornerRadius: CGFloat = MemdoMetrics.fieldRadius
+    ) -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(.regular.interactive(), in: .rect(cornerRadius: radius))
+            glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
         } else {
-            background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            background(
+                .ultraThinMaterial,
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
                 .overlay(
-                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .stroke(MemdoTheme.controlOutline)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(MemdoTheme.controlOutline, lineWidth: 0.5)
                 )
         }
     }

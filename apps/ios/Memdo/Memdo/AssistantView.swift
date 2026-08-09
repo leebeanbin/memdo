@@ -25,8 +25,7 @@ struct AgentSheet: View {
             .safeAreaInset(edge: .bottom) {
                 AgentComposer(text: $composer, onSend: send)
                     .padding(.horizontal, MemdoMetrics.pagePadding)
-                    .padding(.vertical, 8)
-                    .background(.bar)
+                    .padding(.vertical, 6)
             }
             .navigationTitle("Agent")
             .navigationBarTitleDisplayMode(.inline)
@@ -123,26 +122,30 @@ private struct AgentQuickActions: View {
                             Image(systemName: "arrow.up.right")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(MemdoTheme.brand)
-                            Text(item.0)
-                                .font(.subheadline.weight(.semibold))
-                            Text(item.1)
-                                .font(.caption)
-                                .foregroundStyle(MemdoTheme.secondaryInk)
-                                .lineLimit(1)
-                            Spacer(minLength: 0)
+                                .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(item.0)
+                                    .font(.subheadline.weight(.semibold))
+                                Text(item.1)
+                                    .font(.caption)
+                                    .foregroundStyle(MemdoTheme.secondaryInk)
+                                    .lineLimit(2)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .foregroundStyle(MemdoTheme.ink)
-                        .frame(minHeight: MemdoMetrics.touchTarget)
+                        .padding(.horizontal, MemdoMetrics.rowInset)
+                        .padding(.vertical, 4)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
 
                     if index < prompts.count - 1 {
-                        Divider()
+                        Divider().padding(.leading, MemdoMetrics.rowContentLeading)
                     }
                 }
             }
-            .overlay(alignment: .bottom) { Divider() }
+            .memdoRowGroup()
         }
     }
 }
@@ -185,14 +188,17 @@ private struct AgentComposer: View {
                 .frame(minHeight: MemdoMetrics.touchTarget)
 
             Button(action: onSend) {
-                MemdoIconButtonLabel(systemImage: "arrow.up")
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(isEmpty ? MemdoTheme.secondaryInk : MemdoTheme.brand)
+                    .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+                    .contentShape(Circle())
             }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.circle)
+            .buttonStyle(.plain)
             .disabled(isEmpty)
             .accessibilityLabel("요청 보내기")
         }
         .padding(4)
-        .memdoFloatingSurface(radius: 20)
+        .memdoFloatingSurface(cornerRadius: MemdoMetrics.groupRadius)
     }
 }

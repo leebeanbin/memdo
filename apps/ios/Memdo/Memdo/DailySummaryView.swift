@@ -42,7 +42,8 @@ struct DailySummaryView: View {
             eyebrow: scope == .today ? "하루 마무리" : "기록 회고",
             headerActionIcon: "xmark",
             headerActionLabel: "요약 닫기",
-            headerAction: { dismiss() }
+            headerAction: { dismiss() },
+            bottomClearance: 0
         ) {
             SummaryScopePicker(selection: $scope)
             SummaryProgressLine(
@@ -333,6 +334,7 @@ private enum SummaryHistoryStatus {
 }
 
 private struct SummaryHistorySection: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded = false
     let status: SummaryHistoryStatus
     let schedules: [ScheduleDetail]
@@ -344,11 +346,10 @@ private struct SummaryHistorySection: View {
     var body: some View {
         MemdoSection(title: status.title, trailing: "\(schedules.count)개") {
             if schedules.isEmpty {
-                ContentUnavailableView(
-                    status == .completed ? "완료 기록이 없어요" : "놓친 작업이 없어요",
+                MemdoStatusRow(
+                    title: status == .completed ? "완료 기록이 없어요" : "놓친 작업이 없어요",
                     systemImage: status.systemImage
                 )
-                .frame(maxWidth: .infinity, minHeight: 120)
             } else {
                 VStack(spacing: 0) {
                     ForEach(visibleSchedules) { schedule in
@@ -363,7 +364,7 @@ private struct SummaryHistorySection: View {
                             isExpanded: isExpanded,
                             hiddenCount: schedules.count - 3,
                             totalCount: schedules.count,
-                            action: { withAnimation(.easeOut(duration: 0.2)) { isExpanded.toggle() } }
+                            action: { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { isExpanded.toggle() } }
                         )
                     }
                 }
@@ -401,20 +402,29 @@ private struct SummaryHistoryRow: View {
 }
 
 private struct SummaryReviewSection: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isExpanded = false
     let reviews: [ScheduleDetail]
     let onComplete: (ScheduleDetail) -> Void
     let onMoveToTomorrow: (ScheduleDetail) -> Void
     let onChooseDate: (ScheduleDetail) -> Void
     let onDelete: (ScheduleDetail) -> Void
 
+    private var visibleReviews: [ScheduleDetail] {
+        Array(reviews.prefix(isExpanded ? reviews.count : 3))
+    }
+
     var body: some View {
         MemdoSection(title: "결정이 필요한 일정", trailing: "\(reviews.count)개") {
             if reviews.isEmpty {
-                ContentUnavailableView("정리가 끝났어요", systemImage: "checkmark.circle.fill")
-                    .frame(maxWidth: .infinity, minHeight: 140)
+                MemdoStatusRow(
+                    title: "정리가 끝났어요",
+                    systemImage: "checkmark.circle.fill",
+                    detail: "결정이 필요한 일정이 없어요."
+                )
             } else {
                 VStack(spacing: 0) {
-                    ForEach(reviews) { schedule in
+                    ForEach(visibleReviews) { schedule in
                         SummaryReviewRow(
                             schedule: schedule,
                             onComplete: { onComplete(schedule) },
@@ -422,9 +432,18 @@ private struct SummaryReviewSection: View {
                             onChooseDate: { onChooseDate(schedule) },
                             onDelete: { onDelete(schedule) }
                         )
-                        if schedule.id != reviews.last?.id {
+                        if schedule.id != visibleReviews.last?.id {
                             Divider().padding(.leading, MemdoMetrics.rowContentLeading)
                         }
+                    }
+                    if reviews.count > 3 {
+                        Divider().padding(.leading, MemdoMetrics.rowContentLeading)
+                        MemdoDisclosureRow(
+                            isExpanded: isExpanded,
+                            hiddenCount: reviews.count - 3,
+                            totalCount: reviews.count,
+                            action: { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { isExpanded.toggle() } }
+                        )
                     }
                 }
                 .memdoRowGroup()
@@ -449,7 +468,7 @@ private struct SummaryReviewRow: View {
                         completeButton
                         titleBlock
                     }
-                    HStack(spacing: 4) {
+                    HStack(spacing: 8) {
                         Spacer(minLength: 0)
                         tomorrowButton
                         moreMenu
