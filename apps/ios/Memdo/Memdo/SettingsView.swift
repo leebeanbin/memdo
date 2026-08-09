@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 import WidgetKit
 
@@ -148,11 +149,7 @@ struct SettingsView: View {
             }
             Button("취소", role: .cancel) {}
         } message: {
-            if session.isGuest {
-                Text("게스트 계정은 로그아웃하면 이 기기의 데이터를 되찾을 방법이 없어요. 계속할까요?")
-            } else {
-                Text("이 기기에서 로그아웃합니다.")
-            }
+            Text("이 기기에서 로그아웃합니다.")
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
@@ -258,7 +255,7 @@ private struct ConnectionMark: View {
             }
         }
         .frame(width: 32, height: 32)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MemdoMetrics.iconRadius, style: .continuous))
         .accessibilityHidden(true)
     }
 }
@@ -432,7 +429,7 @@ private struct BriefingKeywordsSheet: View {
                     .padding(.leading, 12)
                     .padding(.trailing, 4)
                     .frame(minHeight: MemdoMetrics.touchTarget)
-                    .memdoFloatingSurface(radius: 22)
+                    .memdoFloatingSurface()
 
                     MemdoSection(title: "키워드", trailing: "\(selectedKeywords.count)/5") {
                         LazyVGrid(
@@ -480,8 +477,24 @@ private struct BriefingKeywordsSheet: View {
     }
 }
 
+@MainActor
+private final class GoogleCalendarAuthPresentationContext: NSObject,
+    ASWebAuthenticationPresentationContextProviding {
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        ASPresentationAnchor()
+    }
+}
+
 private struct GoogleCalendarConnectionSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(ScheduleStore.self) private var scheduleStore
+    @State private var status: GoogleCalendarStatusResponseDTO?
+    @State private var isBusy = false
+    @State private var errorMessage: String?
+    @State private var authSession: ASWebAuthenticationSession?
+    private let presentationContext = GoogleCalendarAuthPresentationContext()
+
+    private var isConnected: Bool { status?.connected == true }
 
     var body: some View {
         NavigationStack {
@@ -504,11 +517,25 @@ private struct GoogleCalendarConnectionSheet: View {
                     Label("기본은 읽기 전용", systemImage: "eye")
                     Label("쓰기 권한은 필요할 때 별도 요청", systemImage: "square.and.pencil")
                 }
-                Section {
-                    Button("Google Calendar 연결") {}
-                        .disabled(true)
-                } footer: {
-                    Text("Google OAuth 클라이언트와 서버 콜백을 등록한 뒤 활성화돼요.")
+                if isConnected {
+                    Section {
+                        if let lastSyncedAt = status?.lastSyncedAt {
+                            LabeledContent("마지막 동기화", value: lastSyncedAt)
+                        }
+                        Button("연결 해지", role: .destructive) { disconnect() }
+                            .disabled(isBusy)
+                    }
+                } else {
+                    Section {
+                        Button("Google Calendar 연결") { connect() }
+                            .disabled(isBusy)
+                    }
+                }
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage)
+                            .foregroundStyle(.red)
+                    }
                 }
             }
             .memdoSystemList()
@@ -521,6 +548,72 @@ private struct GoogleCalendarConnectionSheet: View {
             }
         }
         .memdoSheetPresentation([.large])
+        .task { await loadStatus() }
+    }
+
+    private func loadStatus() async {
+        do {
+            status = try await scheduleStore.googleCalendarStatus()
+        } catch {
+            // Silent: an unknown connection state just shows the "연결" button,
+            // which re-checks on the next action anyway.
+        }
+    }
+
+    private func connect() {
+        isBusy = true
+        errorMessage = nil
+        Task {
+            defer { isBusy = false }
+            do {
+                let authorizationURL = try await scheduleStore.googleCalendarStart()
+                let callbackURL = try await withCheckedThrowingContinuation { (
+                    continuation: CheckedContinuation<URL, Error>
+                ) in
+                    let session = ASWebAuthenticationSession(
+                        url: authorizationURL,
+                        callbackURLScheme: "memdo"
+                    ) { url, error in
+                        if let url {
+                            continuation.resume(returning: url)
+                        } else {
+                            continuation.resume(
+                                throwing: error ?? ScheduleAPIError.invalidResponse
+                            )
+                        }
+                    }
+                    session.presentationContextProvider = presentationContext
+                    session.prefersEphemeralWebBrowserSession = true
+                    authSession = session
+                    session.start()
+                }
+                let statusValue = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?
+                    .queryItems?.first(where: { $0.name == "status" })?.value
+                if statusValue != "success" {
+                    errorMessage = "연결이 취소되었어요."
+                    return
+                }
+                await loadStatus()
+            } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
+                return
+            } catch {
+                errorMessage = "연결하지 못했어요. 잠시 후 다시 시도해 주세요."
+            }
+        }
+    }
+
+    private func disconnect() {
+        isBusy = true
+        errorMessage = nil
+        Task {
+            defer { isBusy = false }
+            do {
+                try await scheduleStore.googleCalendarDisconnect()
+                await loadStatus()
+            } catch {
+                errorMessage = "연결 해지에 실패했어요. 잠시 후 다시 시도해 주세요."
+            }
+        }
     }
 }
 

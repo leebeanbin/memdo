@@ -15,10 +15,32 @@ struct CalendarResponseDTO: Decodable {
     let colorToken: String?
     let isVisible: Bool
     let sortOrder: Int
+    let provider: String?
 
     var scheduleCalendar: ScheduleCalendar {
-        ScheduleCalendar(id: id, title: name, purpose: purpose, provider: .memdo)
+        ScheduleCalendar(
+            id: id,
+            title: name,
+            purpose: purpose,
+            provider: ScheduleCalendar.Provider(rawValue: provider ?? "memdo") ?? .memdo
+        )
     }
+}
+
+struct GoogleCalendarStartResponseDTO: Decodable {
+    let authorizationUrl: String
+}
+
+struct GoogleCalendarStatusResponseDTO: Decodable {
+    let connected: Bool
+    let status: String
+    let calendarId: String?
+    let lastSyncedAt: String?
+    let lastError: String?
+}
+
+struct GoogleCalendarDisconnectResponseDTO: Decodable {
+    let connected: Bool
 }
 
 struct TodoListResponseDTO: Decodable {
@@ -367,6 +389,18 @@ actor MemdoAPIClient {
         )
     }
 
+    func googleCalendarStart(accessToken: String) async throws -> GoogleCalendarStartResponseDTO {
+        try await send(path: "google-calendar-start", method: "POST", accessToken: accessToken)
+    }
+
+    func googleCalendarStatus(accessToken: String) async throws -> GoogleCalendarStatusResponseDTO {
+        try await send(path: "google-calendar-status", accessToken: accessToken)
+    }
+
+    func googleCalendarDisconnect(accessToken: String) async throws -> GoogleCalendarDisconnectResponseDTO {
+        try await send(path: "google-calendar-disconnect", method: "POST", accessToken: accessToken)
+    }
+
     func send<Response: Decodable>(
         path: String,
         method: String = "GET",
@@ -513,6 +547,22 @@ actor ScheduleRepository {
 
     func createRule(_ schedule: ScheduleDetail) async throws {
         try await api.createRule(ScheduleRuleRequestDTO(schedule: schedule), accessToken: accessToken())
+    }
+
+    func googleCalendarStart() async throws -> URL {
+        let response = try await api.googleCalendarStart(accessToken: accessToken())
+        guard let url = URL(string: response.authorizationUrl) else {
+            throw ScheduleAPIError.invalidResponse
+        }
+        return url
+    }
+
+    func googleCalendarStatus() async throws -> GoogleCalendarStatusResponseDTO {
+        try await api.googleCalendarStatus(accessToken: accessToken())
+    }
+
+    func googleCalendarDisconnect() async throws {
+        _ = try await api.googleCalendarDisconnect(accessToken: accessToken())
     }
 
     private func accessToken() async throws -> String {

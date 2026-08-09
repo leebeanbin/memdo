@@ -447,6 +447,23 @@ final class ScheduleStore {
     /// Throws on failure rather than returning an empty array, so the caller can
     /// tell "no matches" apart from "the request failed" instead of showing the
     /// same empty state for both.
+    func googleCalendarStart() async throws -> URL {
+        try await repository.googleCalendarStart()
+    }
+
+    func googleCalendarStatus() async throws -> GoogleCalendarStatusResponseDTO {
+        try await repository.googleCalendarStatus()
+    }
+
+    /// Reloads afterward so the synthetic "Google Calendar" entry and any
+    /// mirrored events disappear from the store immediately, rather than
+    /// lingering until the next unrelated load().
+    func googleCalendarDisconnect() async throws {
+        try await repository.googleCalendarDisconnect()
+        state = .idle
+        await load()
+    }
+
     func search(_ query: String) async throws -> [ScheduleDetail] {
         let calendarsByID = Dictionary(uniqueKeysWithValues: calendars.map { ($0.id, $0) })
         let dtos = try await repository.search(query: query)

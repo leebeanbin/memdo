@@ -7,6 +7,7 @@ struct ScheduleDetailSheet: View {
     @State private var draft: ScheduleDetail
     @State private var saved: ScheduleDetail
     @State private var isEditing = false
+    @State private var showsDeleteConfirmation = false
 
     let onSave: (ScheduleDetail) -> Void
 
@@ -66,13 +67,17 @@ struct ScheduleDetailSheet: View {
                         } else {
                             LabeledContent("장소", value: "없음")
                         }
-                        LabeledContent("알림", value: draft.reminder)
-                        // repeatRule isn't round-tripped from the server (the todo
-                        // response only carries scheduleRuleId, not the rule's
-                        // frequency) -- reflect presence rather than a value that's
-                        // always "반복 안 함" even when the row does repeat.
-                        LabeledContent("반복", value: draft.scheduleRuleId != nil ? "반복 중" : "반복 안 함")
-                        LabeledContent("메모", value: draft.memo.nilFallback)
+                        if draft.isExternal {
+                            LabeledContent("출처", value: draft.calendar.title)
+                        } else {
+                            LabeledContent("알림", value: draft.reminder)
+                            // repeatRule isn't round-tripped from the server (the todo
+                            // response only carries scheduleRuleId, not the rule's
+                            // frequency) -- reflect presence rather than a value that's
+                            // always "반복 안 함" even when the row does repeat.
+                            LabeledContent("반복", value: draft.scheduleRuleId != nil ? "반복 중" : "반복 안 함")
+                            LabeledContent("메모", value: draft.memo.nilFallback)
+                        }
                     }
                     if !draft.attachedLinks.isEmpty {
                         Section("관련 링크") {
@@ -94,15 +99,42 @@ struct ScheduleDetailSheet: View {
                     Button(isEditing ? "취소" : "닫기") { cancelOrDismiss() }
                         .foregroundStyle(MemdoTheme.accent)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(isEditing ? "저장" : "수정") { editOrSave() }
-                        .fontWeight(.semibold)
-                        .disabled(!canSave)
+                if !draft.isExternal {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        HStack(spacing: 8) {
+                            Button(isEditing ? "저장" : "수정") { editOrSave() }
+                                .fontWeight(.semibold)
+                                .disabled(!canSave)
+                            if !isEditing {
+                                Menu {
+                                    Button("삭제", systemImage: "trash", role: .destructive) {
+                                        showsDeleteConfirmation = true
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis")
+                                }
+                                .accessibilityLabel("일정 더보기")
+                            }
+                        }
+                    }
                 }
             }
         }
         .memdoSheetPresentation([.large])
         .onChange(of: liveVersion) { _, _ in resyncVersionFromStore() }
+        .confirmationDialog(
+            "일정을 삭제할까요?",
+            isPresented: $showsDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("삭제", role: .destructive) {
+                scheduleStore.delete(id: draft.id)
+                dismiss()
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("일정이 목록에서 삭제됩니다.")
+        }
     }
 
     private func resyncVersionFromStore() {
