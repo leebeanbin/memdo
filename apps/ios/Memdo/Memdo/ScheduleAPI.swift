@@ -62,6 +62,8 @@ struct TodoResponseDTO: Decodable {
     let sortOrder: Int
     let status: String
     let version: Int
+    let scheduleRuleId: String?
+    let isVirtual: Bool
 }
 
 struct TodoCreateRequestDTO: Encodable {
@@ -80,6 +82,7 @@ struct TodoCreateRequestDTO: Encodable {
     let reminderOffsetMinutes: Int?
     let version: Int?
     let status: String?
+    let scheduleRuleId: String?
 
     init(schedule: ScheduleDetail, includeVersion: Bool = false) throws {
         guard UUID(uuidString: schedule.calendar.id) != nil else {
@@ -113,6 +116,7 @@ struct TodoCreateRequestDTO: Encodable {
         reminderOffsetMinutes = schedule.reminderOffsetMinutes
         version = includeVersion ? schedule.version : nil
         status = includeVersion ? schedule.status.rawValue : nil
+        scheduleRuleId = schedule.scheduleRuleId
     }
 }
 
@@ -575,6 +579,8 @@ extension ScheduleDetail {
         self.timeBucket = timeBucket
         sortOrder = dto.sortOrder
         version = dto.version
+        scheduleRuleId = dto.scheduleRuleId
+        isVirtual = dto.isVirtual
     }
 }
 

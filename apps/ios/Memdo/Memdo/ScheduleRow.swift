@@ -86,6 +86,12 @@ struct ScheduleRow: View {
                             .foregroundStyle(MemdoTheme.brand)
                             .accessibilityLabel("\(provider.label) 회의")
                     }
+                    if schedule.scheduleRuleId != nil {
+                        Image(systemName: "repeat")
+                            .font(.caption2)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                            .accessibilityLabel("반복 일정")
+                    }
                     Text(schedule.title)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)

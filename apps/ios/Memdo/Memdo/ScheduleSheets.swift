@@ -67,7 +67,11 @@ struct ScheduleDetailSheet: View {
                             LabeledContent("장소", value: "없음")
                         }
                         LabeledContent("알림", value: draft.reminder)
-                        LabeledContent("반복", value: draft.repeatRule.label)
+                        // repeatRule isn't round-tripped from the server (the todo
+                        // response only carries scheduleRuleId, not the rule's
+                        // frequency) -- reflect presence rather than a value that's
+                        // always "반복 안 함" even when the row does repeat.
+                        LabeledContent("반복", value: draft.scheduleRuleId != nil ? "반복 중" : "반복 안 함")
                         LabeledContent("메모", value: draft.memo.nilFallback)
                     }
                     if !draft.attachedLinks.isEmpty {

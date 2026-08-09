@@ -18,14 +18,21 @@ struct CalendarView: View {
 
     private var selectedAgenda: [ScheduleDetail] {
         filteredSchedules
-            .filter { Calendar.current.isDate($0.scheduledDate, inSameDayAs: selectedDate) }
+            .filter { $0.occurs(on: selectedDate) }
             .sorted { $0.timeSortKey < $1.timeSortKey }
     }
 
     private var scheduleCounts: [Int: Int] {
-        Dictionary(grouping: filteredSchedules.filter {
-            !$0.isDone && Calendar.current.isDate($0.scheduledDate, equalTo: displayedMonth, toGranularity: .month)
-        }, by: \.day).mapValues(\.count)
+        guard let monthInterval = Calendar.current.dateInterval(of: .month, for: displayedMonth)
+        else { return [:] }
+        var counts: [Int: Int] = [:]
+        var day = monthInterval.start
+        while day < monthInterval.end {
+            let count = filteredSchedules.filter { !$0.isDone && $0.occurs(on: day) }.count
+            if count > 0 { counts[Calendar.current.component(.day, from: day)] = count }
+            day = Calendar.current.date(byAdding: .day, value: 1, to: day) ?? monthInterval.end
+        }
+        return counts
     }
 
     var body: some View {
