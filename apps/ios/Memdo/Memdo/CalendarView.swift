@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct CalendarView: View {
+    let coachMarkTarget: CoachMarkTarget?
     @Environment(ScheduleStore.self) private var scheduleStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isSearchPresented: Bool
@@ -12,6 +13,16 @@ struct CalendarView: View {
     @State private var searchQuery = ""
     @State private var searchScope = ScheduleSearchScope.all
     @State private var calendarFilter = CalendarDisplayFilter.all
+
+    init(
+        coachMarkTarget: CoachMarkTarget? = nil,
+        isSearchPresented: Binding<Bool>,
+        targetDate: Binding<Date?>
+    ) {
+        self.coachMarkTarget = coachMarkTarget
+        _isSearchPresented = isSearchPresented
+        _targetDate = targetDate
+    }
 
     private var filteredSchedules: [ScheduleDetail] {
         scheduleStore.schedules.filter { $0.isActive && calendarFilter.includes($0) }
@@ -52,7 +63,8 @@ struct CalendarView: View {
             eyebrow: "나의 시간",
             headerActionIcon: isSearchPresented ? "xmark" : "magnifyingglass",
             headerActionLabel: isSearchPresented ? "검색 닫기" : "일정 검색",
-            headerAction: toggleSearch
+            headerAction: toggleSearch,
+            scrollTarget: coachMarkTarget == .calendarOverview ? .calendarOverview : nil
         ) {
             if isSearchPresented {
                 CalendarSearchControls(query: $searchQuery, scope: $searchScope)
@@ -76,6 +88,8 @@ struct CalendarView: View {
                     onGoToday: goToday,
                     onMoveMonth: moveMonth
                 )
+                .id(CoachMarkTarget.calendarOverview)
+                .coachMarkTarget(.calendarOverview)
                 CalendarAgendaSection(
                     date: selectedDate,
                     schedules: selectedAgenda,

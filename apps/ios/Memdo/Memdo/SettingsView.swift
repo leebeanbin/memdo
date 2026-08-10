@@ -1,16 +1,20 @@
 import AuthenticationServices
 import SwiftUI
-import WidgetKit
 
 struct SettingsView: View {
+    let coachMarkTarget: CoachMarkTarget?
     @Environment(MemdoSession.self) private var session
+    @Environment(ScheduleStore.self) private var scheduleStore
     @State private var dailySummary = true
     @State private var notifications = true
     @State private var summaryTime = Calendar.current.date(from: DateComponents(hour: 21, minute: 30)) ?? .now
     @State private var promptTime = Calendar.current.date(from: DateComponents(hour: 9)) ?? .now
-    @State private var briefingKeywords: Set<String> = ["AI", "제품 디자인"]
-    @State private var customKeywords: [String] = []
+    // Persisted locally only: the backend preferences contract has no keyword
+    // column yet (moves server-side with B9 briefing work).
+    @State private var briefingKeywords: Set<String>
+    @State private var customKeywords: [String]
     @State private var presentedSheet: SettingsSheet?
+    @State private var googleCalendarConnected = false
     @State private var showsSignOutConfirmation = false
     @State private var summaryTimePushTask: Task<Void, Never>?
     @State private var promptTimePushTask: Task<Void, Never>?
@@ -19,8 +23,33 @@ struct SettingsView: View {
         store: UserDefaults(suiteName: MemdoWidgetStorage.suiteName)
     ) private var hideWidgetContent = false
 
+    private static let selectedKeywordsKey = "briefing-selected-keywords"
+    private static let customKeywordsKey = "briefing-custom-keywords"
+
+    init(coachMarkTarget: CoachMarkTarget? = nil) {
+        self.coachMarkTarget = coachMarkTarget
+        let defaults = UserDefaults.standard
+        // nil means "never saved" (seed the suggested defaults); an empty array
+        // is a deliberate deselect-all and must stay empty.
+        _briefingKeywords = State(
+            initialValue: defaults.stringArray(forKey: Self.selectedKeywordsKey)
+                .map(Set.init) ?? ["AI", "제품 디자인"]
+        )
+        _customKeywords = State(
+            initialValue: defaults.stringArray(forKey: Self.customKeywordsKey) ?? []
+        )
+    }
+
     var body: some View {
-        MemdoPage(title: "설정", subtitle: "Memdo를 나에게 맞게 조정하세요", eyebrow: "나만의 Memdo") {
+        MemdoPage(
+            title: "설정",
+            subtitle: "Memdo를 나에게 맞게 조정하세요",
+            eyebrow: "나만의 Memdo",
+            bottomClearance: coachMarkTarget == nil
+                ? MemdoMetrics.tabBarClearance
+                : MemdoMetrics.tabBarClearance + 280,
+            scrollTarget: coachMarkTarget
+        ) {
             if let error = session.preferencesStore?.lastError {
                 Button {
                     session.preferencesStore?.dismissError()
@@ -53,15 +82,17 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
+            .id(CoachMarkTarget.settingsDay)
+            .coachMarkTarget(.settingsDay)
 
-            SettingsGroup(
-                title: "위젯",
-                subtitle: "시간과 개수만 남기고 모든 위젯에서 일정 제목을 숨길 수 있어요."
-            ) {
-                Toggle("위젯 일정 제목 숨기기", isOn: $hideWidgetContent)
-                    .memdoToggle()
-                    .memdoSettingsRow()
+            SettingsGroup(title: "위젯") {
+                Button { presentedSheet = .wallpaperPreview } label: {
+                    SettingsDisclosureRow(title: "전체 달력 배경화면", value: "미리보기 · 저장")
+                }
+                .buttonStyle(.plain)
             }
+            .id(CoachMarkTarget.settingsWidget)
+            .coachMarkTarget(.settingsWidget)
 
             SettingsGroup(
                 title: "내 Agent 연결",
@@ -72,7 +103,7 @@ struct SettingsView: View {
                         icon: .asset("GoogleCalendar"),
                         title: "Google Calendar",
                         capability: "일정 읽기 · 승인 후 쓰기",
-                        status: "미연결",
+                        status: googleCalendarConnected ? "연결됨" : "미연결",
                         badge: "MCP"
                     )
                 }
@@ -109,6 +140,8 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
+            .id(CoachMarkTarget.settingsConnections)
+            .coachMarkTarget(.settingsConnections)
 
             SettingsGroup(title: "계정") {
                 Button {
@@ -169,14 +202,22 @@ struct SettingsView: View {
                 SlackConnectionSheet()
             case .googleCalendar:
                 GoogleCalendarConnectionSheet()
+            case .wallpaperPreview:
+                WallpaperPreviewSheet()
             }
         }
         .sensoryFeedback(.selection, trigger: briefingKeywords)
+        .onChange(of: briefingKeywords) { _, value in
+            UserDefaults.standard.set(Array(value).sorted(), forKey: Self.selectedKeywordsKey)
+        }
+        .onChange(of: customKeywords) { _, value in
+            UserDefaults.standard.set(value, forKey: Self.customKeywordsKey)
+        }
         .task { await loadPreferences() }
-        .onChange(of: hideWidgetContent) { _, value in
-            WidgetCenter.shared.reloadAllTimelines()
-            guard session.preferencesStore?.preferences?.hideWidgetContent != value else { return }
-            push { $0.hideWidgetContent = value }
+        .task { await loadGoogleCalendarStatus() }
+        .onChange(of: presentedSheet) { _, sheet in
+            guard sheet == nil else { return }
+            Task { await loadGoogleCalendarStatus() }
         }
         .onChange(of: dailySummary) { _, value in
             guard session.preferencesStore?.preferences?.dailyReviewEnabled != value else { return }
@@ -226,6 +267,10 @@ struct SettingsView: View {
     private func push(_ transform: @escaping (inout UserPreferences) -> Void) {
         guard session.preferencesStore != nil else { return }
         Task { await session.preferencesStore?.update(transform) }
+    }
+
+    private func loadGoogleCalendarStatus() async {
+        googleCalendarConnected = (try? await scheduleStore.googleCalendarStatus())?.connected == true
     }
 }
 
@@ -393,6 +438,7 @@ private enum SettingsSheet: String, Identifiable {
     case googleCalendar
     case privacy
     case slack
+    case wallpaperPreview
     var id: String { rawValue }
 }
 
