@@ -73,7 +73,7 @@ private struct AgentSheetHeader: View {
                 .foregroundStyle(MemdoTheme.brand)
             Text("무엇을 정리할까요?")
                 .font(.title2.bold())
-            Text("읽기와 제안은 바로, 변경은 확인 뒤 실행합니다.")
+            Text("Agent 기능은 준비 중이에요. 요청을 미리 작성해두고, 기능이 열리면 바로 쓸 수 있어요.")
                 .font(.subheadline)
                 .foregroundStyle(MemdoTheme.secondaryInk)
         }
@@ -155,7 +155,7 @@ private struct AgentResponse: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Agent 초안", systemImage: "checkmark.shield")
+            Label("준비 중 미리보기", systemImage: "hourglass")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(MemdoTheme.brand)
             Text(text)
@@ -182,7 +182,7 @@ private struct AgentComposer: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            TextField("Agent에게 요청", text: $text)
+            TextField("어떤 일을 정리할까요?", text: $text)
                 .onSubmit(onSend)
                 .padding(.leading, 12)
                 .frame(minHeight: MemdoMetrics.touchTarget)
