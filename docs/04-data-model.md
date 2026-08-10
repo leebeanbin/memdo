@@ -102,6 +102,7 @@ erDiagram
         text location_provider_id
         text time_bucket
         integer estimated_minutes
+        text meeting_url
         integer reminder_offset_minutes
         integer sort_order
         text status
