@@ -14,6 +14,38 @@ private enum MemdoWidgetTheme {
                 : UIColor(red: 0.36, green: 0.30, blue: 0.72, alpha: 1)
         }
     )
+
+    static func scheduleColor(_ name: String) -> Color? {
+        let uiColor: UIColor
+        switch name {
+        case "coral":
+            uiColor = UIColor { t in t.userInterfaceStyle == .dark
+                ? UIColor(red: 1.00, green: 0.60, blue: 0.55, alpha: 1)
+                : UIColor(red: 0.95, green: 0.36, blue: 0.29, alpha: 1) }
+        case "amber":
+            uiColor = UIColor { t in t.userInterfaceStyle == .dark
+                ? UIColor(red: 1.00, green: 0.82, blue: 0.45, alpha: 1)
+                : UIColor(red: 0.95, green: 0.65, blue: 0.14, alpha: 1) }
+        case "sage":
+            uiColor = UIColor { t in t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.62, green: 0.86, blue: 0.65, alpha: 1)
+                : UIColor(red: 0.31, green: 0.67, blue: 0.35, alpha: 1) }
+        case "sky":
+            uiColor = UIColor { t in t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.55, green: 0.80, blue: 1.00, alpha: 1)
+                : UIColor(red: 0.19, green: 0.61, blue: 0.92, alpha: 1) }
+        case "indigo":
+            uiColor = UIColor { t in t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.72, green: 0.67, blue: 1.00, alpha: 1)
+                : UIColor(red: 0.36, green: 0.30, blue: 0.72, alpha: 1) }
+        case "violet":
+            uiColor = UIColor { t in t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.90, green: 0.65, blue: 1.00, alpha: 1)
+                : UIColor(red: 0.64, green: 0.28, blue: 0.84, alpha: 1) }
+        default: return nil
+        }
+        return Color(uiColor: uiColor)
+    }
 }
 
 private struct MemdoWidgetEntry: TimelineEntry {
@@ -178,10 +210,18 @@ private struct WidgetTaskRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
-            Image(systemName: item.systemImage)
-                .font(.caption2)
-                .foregroundStyle(item.kind == "task" ? MemdoWidgetTheme.brand : MemdoWidgetTheme.secondary)
-                .frame(width: 12)
+            if let colorName = item.color, let c = MemdoWidgetTheme.scheduleColor(colorName) {
+                Circle()
+                    .fill(c)
+                    .frame(width: 7, height: 7)
+                    .frame(width: 12)
+                    .padding(.top, 2)
+            } else {
+                Image(systemName: item.systemImage)
+                    .font(.caption2)
+                    .foregroundStyle(item.kind == "task" ? MemdoWidgetTheme.brand : MemdoWidgetTheme.secondary)
+                    .frame(width: 12)
+            }
             Text(item.time)
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(MemdoWidgetTheme.secondary)
@@ -208,9 +248,16 @@ private struct WidgetCompactAgenda: View {
             let visibleItems = Array(day.items.prefix(limit))
             ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
                 HStack(spacing: 4) {
-                    Image(systemName: item.systemImage)
-                        .font(.caption2)
-                        .frame(width: 11)
+                    if let colorName = item.color, let c = MemdoWidgetTheme.scheduleColor(colorName) {
+                        Circle()
+                            .fill(c)
+                            .frame(width: 6, height: 6)
+                            .frame(width: 11)
+                    } else {
+                        Image(systemName: item.systemImage)
+                            .font(.caption2)
+                            .frame(width: 11)
+                    }
                     Text(item.time)
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
@@ -243,7 +290,9 @@ private struct WidgetAgenda: View {
         } else {
             VStack(alignment: .leading, spacing: compact ? 6 : 7) {
                 ForEach(day.items.prefix(limit), id: \.id) { item in
-                    WidgetTaskRow(item: item, hidesPrivateContent: hidesPrivateContent)
+                    Link(destination: URL(string: "memdo://schedule/\(item.id.uuidString.lowercased())")!) {
+                        WidgetTaskRow(item: item, hidesPrivateContent: hidesPrivateContent)
+                    }
                 }
                 if day.remainingCount > limit {
                     Text("+\(day.remainingCount - limit)개 더")

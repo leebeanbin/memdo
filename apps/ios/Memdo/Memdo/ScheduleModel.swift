@@ -724,9 +724,11 @@ final class ScheduleStore {
     }
 
     func save(_ schedule: ScheduleDetail) {
+        // Always reschedule the reminder, even when a concurrent write is already
+        // in-flight. The guard below deduplicates network writes only.
+        Task { await NotificationScheduler.scheduleReminder(for: schedule) }
         guard !pendingWriteIDs.contains(schedule.id) else { return }
         pendingWriteIDs.insert(schedule.id)
-        Task { await NotificationScheduler.scheduleReminder(for: schedule) }
         // A virtual occurrence (event-mode rule, computed but never written to the
         // DB) has no real row to PATCH -- regardless of whether it's already in
         // `schedules` locally (it got there via the same GET that computed it).
@@ -1045,7 +1047,8 @@ final class ScheduleStore {
                             id: $0.id,
                             time: $0.startTimeText,
                             title: $0.title,
-                            kind: $0.kind.rawValue
+                            kind: $0.kind.rawValue,
+                            color: $0.color?.rawValue
                         )
                     }
                 ))

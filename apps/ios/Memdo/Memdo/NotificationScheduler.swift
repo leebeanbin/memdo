@@ -7,6 +7,25 @@ import UserNotifications
 enum NotificationScheduler {
     private static let planningID = "memdo.planning-prompt"
     private static let reviewPrefix = "memdo.daily-review-"
+    private static let reminderCategoryID = "memdo.category.reminder"
+    static let completeActionID = "memdo.action.complete"
+
+    /// Registers the notification category that powers the "완료" banner button.
+    /// Call once at launch before any notifications are displayed.
+    static func registerCategories() {
+        let completeAction = UNNotificationAction(
+            identifier: completeActionID,
+            title: "완료",
+            options: .foreground
+        )
+        let category = UNNotificationCategory(
+            identifier: reminderCategoryID,
+            actions: [completeAction],
+            intentIdentifiers: [],
+            options: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([category])
+    }
 
     /// Requests authorization if not yet determined; returns whether notifications
     /// are authorized (or provisional). Call when the user enables the toggle.
@@ -134,9 +153,14 @@ enum NotificationScheduler {
 
         let content = UNMutableNotificationContent()
         content.title = schedule.emoji.map { "\($0) \(schedule.title)" } ?? schedule.title
-        content.body = reminderBody(offset: offsetMinutes)
+        content.subtitle = reminderTimeRange(start: startAt, end: schedule.endAt)
+        content.body = reminderOffsetText(offset: offsetMinutes)
         content.sound = .default
         content.userInfo = ["memdo_link": "schedule/\(schedule.id.uuidString.lowercased())"]
+        content.categoryIdentifier = reminderCategoryID
+        if let attachment = colorAttachment(for: schedule.color) {
+            content.attachments = [attachment]
+        }
 
         let components = Calendar.current.dateComponents(
             [.year, .month, .day, .hour, .minute],
@@ -156,7 +180,45 @@ enum NotificationScheduler {
         "memdo.reminder-\(id.uuidString.lowercased())"
     }
 
-    private static func reminderBody(offset: Int) -> String {
+    private static func reminderTimeRange(start: Date, end: Date?) -> String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "ko_KR")
+        fmt.dateFormat = "a h:mm"
+        var text = fmt.string(from: start)
+        if let end { text += " – " + fmt.string(from: end) }
+        return text
+    }
+
+    private static func colorUIColor(for color: ScheduleColor) -> UIColor {
+        UIColor { t in
+            let dark = t.userInterfaceStyle == .dark
+            switch color {
+            case .coral:  return dark ? UIColor(red: 1.00, green: 0.60, blue: 0.55, alpha: 1) : UIColor(red: 0.95, green: 0.36, blue: 0.29, alpha: 1)
+            case .amber:  return dark ? UIColor(red: 1.00, green: 0.82, blue: 0.45, alpha: 1) : UIColor(red: 0.95, green: 0.65, blue: 0.14, alpha: 1)
+            case .sage:   return dark ? UIColor(red: 0.62, green: 0.86, blue: 0.65, alpha: 1) : UIColor(red: 0.31, green: 0.67, blue: 0.35, alpha: 1)
+            case .sky:    return dark ? UIColor(red: 0.55, green: 0.80, blue: 1.00, alpha: 1) : UIColor(red: 0.19, green: 0.61, blue: 0.92, alpha: 1)
+            case .indigo: return dark ? UIColor(red: 0.72, green: 0.67, blue: 1.00, alpha: 1) : UIColor(red: 0.36, green: 0.30, blue: 0.72, alpha: 1)
+            case .violet: return dark ? UIColor(red: 0.90, green: 0.65, blue: 1.00, alpha: 1) : UIColor(red: 0.64, green: 0.28, blue: 0.84, alpha: 1)
+            }
+        }
+    }
+
+    // Generates a small rounded-rectangle PNG and returns a UNNotificationAttachment
+    // that iOS displays as a thumbnail on the trailing edge of the banner.
+    private static func colorAttachment(for color: ScheduleColor?) -> UNNotificationAttachment? {
+        guard let color else { return nil }
+        let size = CGSize(width: 60, height: 60)
+        let image = UIGraphicsImageRenderer(size: size).image { _ in
+            colorUIColor(for: color).setFill()
+            UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 16).fill()
+        }
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("memdo-color-\(color.rawValue).png")
+        guard let data = image.pngData(), (try? data.write(to: url)) != nil else { return nil }
+        return try? UNNotificationAttachment(identifier: color.rawValue, url: url)
+    }
+
+    private static func reminderOffsetText(offset: Int) -> String {
         switch offset {
         case 0: return "지금 시작해요"
         case 1..<60: return "\(offset)분 후 시작해요"
@@ -180,8 +242,16 @@ final class MemdoNotificationDelegate: NSObject, UNUserNotificationCenterDelegat
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        if let link = response.notification.request.content.userInfo["memdo_link"] as? String,
-           let url = URL(string: "memdo://\(link)") {
+        let userInfo = response.notification.request.content.userInfo
+        if response.actionIdentifier == NotificationScheduler.completeActionID,
+           let link = userInfo["memdo_link"] as? String,
+           let idString = link.components(separatedBy: "/").last {
+            // .foreground action opens the app; route to complete deep link
+            DispatchQueue.main.async {
+                UIApplication.shared.open(URL(string: "memdo://complete/\(idString)")!)
+            }
+        } else if let link = userInfo["memdo_link"] as? String,
+                  let url = URL(string: "memdo://\(link)") {
             DispatchQueue.main.async { UIApplication.shared.open(url) }
         }
         completionHandler()

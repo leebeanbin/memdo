@@ -174,6 +174,7 @@ struct SettingsView: View {
                 }
             }
 
+
         }
         .confirmationDialog(
             "로그아웃 하시겠어요?",

@@ -18,6 +18,7 @@ struct MemdoApp: App {
                 .task { await session.observe() }
                 .task {
                     UNUserNotificationCenter.current().delegate = MemdoNotificationDelegate.shared
+                    NotificationScheduler.registerCategories()
                 }
         }
     }

@@ -37,20 +37,20 @@ struct MemdoWidgetSnapshot: Codable {
                 items: items
             )
         }
-        func item(_ time: String, _ title: String, _ kind: String = "event") -> MemdoWidgetItem {
-            MemdoWidgetItem(id: UUID(), time: time, title: title, kind: kind)
+        func item(_ time: String, _ title: String, _ kind: String = "event", _ color: String? = nil) -> MemdoWidgetItem {
+            MemdoWidgetItem(id: UUID(), time: time, title: title, kind: kind, color: color)
         }
         return Self(updatedAt: date, days: [
             day(0, [
-                item("10:00", "기획 문서 다듬기"),
-                item("14:30", "디자인 시안 확인"),
-                item("19:00", "30분 산책", "task"),
+                item("10:00", "기획 문서 다듬기", "event", "indigo"),
+                item("14:30", "디자인 시안 확인", "event", "sky"),
+                item("19:00", "30분 산책", "task", "sage"),
                 item("저녁", "하루 정리", "task")
             ], completed: 2),
-            day(1, [item("09:30", "주간 계획 정리", "task")]),
-            day(3, [item("15:00", "프로젝트 미팅")]),
-            day(5, [item("오전", "장보기", "task"), item("18:00", "운동", "task")]),
-            day(8, [item("11:00", "제품 리뷰")])
+            day(1, [item("09:30", "주간 계획 정리", "task", "amber")]),
+            day(3, [item("15:00", "프로젝트 미팅", "event", "coral")]),
+            day(5, [item("오전", "장보기", "task"), item("18:00", "운동", "task", "sage")]),
+            day(8, [item("11:00", "제품 리뷰", "event", "violet")])
         ])
     }
 }
@@ -69,6 +69,15 @@ struct MemdoWidgetItem: Codable, Hashable {
     let time: String
     let title: String
     let kind: String
+    let color: String?
 
     var systemImage: String { kind == "task" ? "checkmark.square" : "clock" }
+
+    init(id: UUID, time: String, title: String, kind: String, color: String? = nil) {
+        self.id = id
+        self.time = time
+        self.title = title
+        self.kind = kind
+        self.color = color
+    }
 }

@@ -217,6 +217,16 @@ struct AppShellView: View {
         case "assistant": openAgent()
         case "settings": select(.settings)
         case "summary": presentedSheet = .summary
+        case "complete":
+            // memdo://complete/{uuid} — "완료" action from notification banner
+            if let idString = url.pathComponents.dropFirst().first,
+               let id = UUID(uuidString: idString),
+               let schedule = scheduleStore.schedules.first(where: { $0.id == id }),
+               !schedule.isDone {
+                var completed = schedule
+                completed.isDone = true
+                scheduleStore.save(completed)
+            }
         case "schedule":
             // memdo://schedule/{uuid} — tap on a per-schedule reminder
             if let idString = url.pathComponents.dropFirst().first,
