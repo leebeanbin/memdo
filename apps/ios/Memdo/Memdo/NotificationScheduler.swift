@@ -24,7 +24,15 @@ enum NotificationScheduler {
     /// Cancels everything if `notificationsEnabled` is false or permission is missing.
     static func schedule(for preferences: UserPreferences) async {
         let center = UNUserNotificationCenter.current()
-        let status = await center.notificationSettings().authorizationStatus
+        var status = await center.notificationSettings().authorizationStatus
+
+        // First launch: notifications are enabled by default but permission was
+        // never explicitly requested. Request it now so scheduling can proceed.
+        if preferences.notificationsEnabled && status == .notDetermined {
+            _ = await requestPermission()
+            status = await center.notificationSettings().authorizationStatus
+        }
+
         guard preferences.notificationsEnabled,
               status == .authorized || status == .provisional
         else {

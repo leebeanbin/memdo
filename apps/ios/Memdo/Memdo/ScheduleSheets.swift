@@ -284,6 +284,33 @@ struct ScheduleEditorFields: View {
                 if schedule.hasScheduledTime {
                     DatePicker("시작", selection: startBinding, displayedComponents: datePickerComponents)
                         .datePickerStyle(.compact)
+
+                    HStack(spacing: 6) {
+                        Button {
+                            startBinding.wrappedValue = .now
+                        } label: {
+                            Label("지금으로", systemImage: "clock.badge.fill")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .controlSize(.mini)
+                        .foregroundStyle(MemdoTheme.brand)
+
+                        Spacer(minLength: 0)
+
+                        ForEach([30, 60, 120] as [Int], id: \.self) { mins in
+                            Button(ScheduleDuration.label(for: mins)) {
+                                endBinding.wrappedValue = (schedule.startAt ?? .now)
+                                    .addingTimeInterval(Double(mins * 60))
+                            }
+                            .buttonStyle(.bordered)
+                            .buttonBorderShape(.capsule)
+                            .controlSize(.mini)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                        }
+                    }
+
                     DatePicker(
                         "종료",
                         selection: endBinding,
@@ -353,7 +380,7 @@ struct ScheduleEditorFields: View {
                 } label: {
                     LabeledContent("장소", value: schedule.location.nilFallback)
                 }
-                Picker("알림", selection: $schedule.reminderOffsetMinutes) {
+                Picker("미리 알림", selection: $schedule.reminderOffsetMinutes) {
                     ForEach(ScheduleReminderOption.options) { option in
                         Text(option.label).tag(option.offsetMinutes)
                     }
@@ -383,28 +410,29 @@ struct ScheduleEditorFields: View {
             }
 
             Section("서식") {
-                HStack(spacing: 12) {
+                HStack(spacing: 8) {
                     TextField("이모지", text: emojiBinding)
                         .frame(width: 36)
                         .multilineTextAlignment(.center)
                         .font(.title3)
-                    Spacer()
+                    Spacer(minLength: 4)
                     ForEach(ScheduleColor.allCases) { c in
                         let selected = schedule.color == c
                         Circle()
                             .fill(c.swiftUIColor)
-                            .frame(width: 26, height: 26)
+                            .frame(width: 22, height: 22)
                             .overlay(
                                 Circle().stroke(.primary, lineWidth: selected ? 2 : 0)
                                     .padding(2)
                             )
-                            .scaleEffect(selected ? 1.15 : 1)
+                            .scaleEffect(selected ? 1.12 : 1, anchor: .center)
                             .animation(.easeInOut(duration: 0.15), value: selected)
                             .onTapGesture { schedule.color = selected ? nil : c }
                             .accessibilityLabel(c.label)
                             .accessibilityAddTraits(selected ? .isSelected : [])
                     }
                 }
+                .frame(minHeight: 36)
                 .padding(.vertical, 4)
             }
 
