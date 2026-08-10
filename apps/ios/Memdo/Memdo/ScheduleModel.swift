@@ -105,6 +105,28 @@ enum ScheduleTimeBucket: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum ScheduleColor: String, CaseIterable, Identifiable, Codable {
+    case coral
+    case amber
+    case sage
+    case sky
+    case indigo
+    case violet
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .coral: "코랄"
+        case .amber: "앰버"
+        case .sage: "세이지"
+        case .sky: "스카이"
+        case .indigo: "인디고"
+        case .violet: "바이올렛"
+        }
+    }
+}
+
 struct ScheduleReminderOption: Identifiable, Hashable {
     let offsetMinutes: Int?
     let label: String
@@ -210,6 +232,13 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
     var version: Int
     /// Non-nil when this item belongs to a recurring rule (shown as a repeat badge).
     var scheduleRuleId: String?
+    var color: ScheduleColor?
+    var emoji: String?
+    var estimatedMinutes: Int?
+    /// Dedicated meeting-link field. Takes priority over links embedded in memo/location.
+    /// Stored separately so MCP (and future integrations) can write a clean URL without
+    /// touching the note text.
+    var meetingURLString: String?
     /// True for a computed-but-not-yet-materialized recurring event occurrence
     /// (event-mode rules materialize nothing up front -- see ScheduleAPI's
     /// virtual occurrence handling). Saving/completing/deleting one must create
@@ -235,6 +264,10 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         sortOrder: Int = 0,
         version: Int = 1,
         scheduleRuleId: String? = nil,
+        color: ScheduleColor? = nil,
+        emoji: String? = nil,
+        estimatedMinutes: Int? = nil,
+        meetingURLString: String? = nil,
         isVirtual: Bool = false
     ) {
         self.id = id
@@ -257,6 +290,10 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         self.sortOrder = sortOrder
         self.version = version
         self.scheduleRuleId = scheduleRuleId
+        self.color = color
+        self.emoji = emoji
+        self.estimatedMinutes = estimatedMinutes
+        self.meetingURLString = meetingURLString.flatMap { $0.isEmpty ? nil : $0 }
         self.isVirtual = isVirtual
     }
 
@@ -277,8 +314,15 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return false }
         return startAt < dayEnd && endAt > dayStart
     }
-    /// First recognised video-meeting link found in the note or location.
+    /// Any valid URL stored in the dedicated link field (meetings, docs, any URL).
+    var linkURL: URL? { meetingURLString.flatMap(URL.init(string:)) }
+
+    /// First recognised video-meeting link. Checks the dedicated field first so MCP
+    /// and future integrations can write a clean URL; falls back to scanning memo/location.
     var meetingURL: URL? {
+        if let stored = meetingURLString, let url = URL(string: stored), MeetingProvider.recognized(url) != nil {
+            return url
+        }
         let text = [memo, location].filter { !$0.isEmpty }.joined(separator: "\n")
         guard !text.isEmpty,
               let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
@@ -659,6 +703,19 @@ final class ScheduleStore {
             await load()
         } catch {
             lastWriteError = error.localizedDescription
+        }
+    }
+
+    /// Deletes the whole recurring series from today on (past occurrences stay
+    /// as history), then reloads so the cleared occurrences disappear.
+    func deleteRecurring(ruleId: String) {
+        Task {
+            do {
+                try await repository.deleteRule(id: ruleId)
+                await load()
+            } catch {
+                lastWriteError = error.localizedDescription
+            }
         }
     }
 
