@@ -85,6 +85,10 @@ struct TodoResponseDTO: Decodable {
     let status: String
     let version: Int
     let scheduleRuleId: String?
+    let color: String?
+    let emoji: String?
+    let estimatedMinutes: Int?
+    let meetingUrl: String?
     // Optional (defaults false at the mapping site below) so a build that
     // ships before the backend deploys the field doesn't hard-fail decoding
     // the entire todos list over one missing key.
@@ -108,6 +112,10 @@ struct TodoCreateRequestDTO: Encodable {
     let version: Int?
     let status: String?
     let scheduleRuleId: String?
+    let color: String?
+    let emoji: String?
+    let estimatedMinutes: Int?
+    let meetingUrl: String?
 
     init(schedule: ScheduleDetail, includeVersion: Bool = false) throws {
         guard UUID(uuidString: schedule.calendar.id) != nil else {
@@ -142,6 +150,10 @@ struct TodoCreateRequestDTO: Encodable {
         version = includeVersion ? schedule.version : nil
         status = includeVersion ? schedule.status.rawValue : nil
         scheduleRuleId = schedule.scheduleRuleId
+        color = schedule.color?.rawValue
+        emoji = schedule.emoji.flatMap { $0.isEmpty ? nil : $0 }
+        estimatedMinutes = schedule.kind == .task ? schedule.estimatedMinutes : nil
+        meetingUrl = schedule.meetingURLString.flatMap { $0.isEmpty ? nil : $0 }
     }
 }
 
@@ -232,6 +244,10 @@ struct ScheduleRuleRequestDTO: Encodable {
 
 private struct ScheduleRuleResponseDTO: Decodable {
     let occurrenceCount: Int
+}
+
+private struct ScheduleRuleDeleteResponseDTO: Decodable {
+    let id: String
 }
 
 enum ScheduleAPIError: Error, LocalizedError {
@@ -401,6 +417,17 @@ actor MemdoAPIClient {
             path: "rules",
             method: "POST",
             body: encoder.encode(input),
+            accessToken: accessToken
+        )
+    }
+
+    // The server drops future, non-edited occurrences from localDate on and
+    // keeps past ones as history, then removes the rule itself.
+    func deleteRule(id: String, localDate: String, accessToken: String) async throws {
+        let _: ScheduleRuleDeleteResponseDTO = try await send(
+            path: "rules/\(id)",
+            method: "DELETE",
+            queryItems: [URLQueryItem(name: "localDate", value: localDate)],
             accessToken: accessToken
         )
     }
@@ -577,6 +604,10 @@ actor ScheduleRepository {
         try await api.createRule(ScheduleRuleRequestDTO(schedule: schedule), accessToken: accessToken())
     }
 
+    func deleteRule(id: String) async throws {
+        try await api.deleteRule(id: id, localDate: APIDate.day(.now), accessToken: accessToken())
+    }
+
     func googleCalendarStart() async throws -> URL {
         let response = try await api.googleCalendarStart(accessToken: accessToken())
         guard let url = URL(string: response.authorizationUrl) else {
@@ -661,6 +692,10 @@ extension ScheduleDetail {
         sortOrder = dto.sortOrder
         version = dto.version
         scheduleRuleId = dto.scheduleRuleId
+        color = dto.color.flatMap(ScheduleColor.init(rawValue:))
+        emoji = dto.emoji
+        estimatedMinutes = dto.estimatedMinutes
+        meetingURLString = dto.meetingUrl.flatMap { $0.isEmpty ? nil : $0 }
         isVirtual = dto.isVirtual ?? false
     }
 }
