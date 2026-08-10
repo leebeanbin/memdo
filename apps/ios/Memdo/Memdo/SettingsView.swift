@@ -249,7 +249,16 @@ struct SettingsView: View {
         }
         .onChange(of: notifications) { _, value in
             guard session.preferencesStore?.preferences?.notificationsEnabled != value else { return }
+            if value {
+                Task { await NotificationScheduler.requestPermission() }
+            } else {
+                Task { await NotificationScheduler.cancelAll() }
+            }
             push { $0.notificationsEnabled = value }
+        }
+        .task(id: session.preferencesStore?.preferences) {
+            guard let prefs = session.preferencesStore?.preferences else { return }
+            await NotificationScheduler.schedule(for: prefs)
         }
     }
 
