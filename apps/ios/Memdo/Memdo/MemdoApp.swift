@@ -3,6 +3,7 @@ import CryptoKit
 import Observation
 import Supabase
 import SwiftUI
+import UserNotifications
 
 @main
 struct MemdoApp: App {
@@ -15,6 +16,9 @@ struct MemdoApp: App {
                 .dynamicTypeSize(.xSmall ... .accessibility3)
                 .onOpenURL { session.handle($0) }
                 .task { await session.observe() }
+                .task {
+                    UNUserNotificationCenter.current().delegate = MemdoNotificationDelegate.shared
+                }
         }
     }
 }

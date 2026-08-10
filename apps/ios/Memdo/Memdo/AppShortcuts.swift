@@ -30,5 +30,14 @@ struct MemdoShortcuts: AppShortcutsProvider {
             shortTitle: "일정 추가",
             systemImageName: "wand.and.stars"
         )
+        AppShortcut(
+            intent: GenerateWallpaperIntent(),
+            phrases: [
+                "\(.applicationName) 달력 배경화면 만들기",
+                "Make a calendar wallpaper with \(.applicationName)"
+            ],
+            shortTitle: "달력 배경화면",
+            systemImageName: "photo.on.rectangle"
+        )
     }
 }

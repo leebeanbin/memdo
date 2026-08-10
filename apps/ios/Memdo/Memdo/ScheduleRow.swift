@@ -43,11 +43,12 @@ struct ScheduleRow: View {
     @ViewBuilder
     private var leadingMarker: some View {
         if schedule.kind == .task {
+            let activeColor = schedule.color?.swiftUIColor ?? MemdoTheme.brand
             if let onToggleDone {
                 Button(action: onToggleDone) {
                     Image(systemName: schedule.isDone ? "checkmark.circle.fill" : "circle")
                         .font(.title3)
-                        .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : MemdoTheme.brand)
+                        .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : activeColor)
                         .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                 }
                 .buttonStyle(.plain)
@@ -55,18 +56,26 @@ struct ScheduleRow: View {
             } else {
                 Image(systemName: schedule.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
-                    .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : MemdoTheme.brand)
+                    .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : activeColor)
                     .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                     .accessibilityHidden(true)
             }
         } else if context == .timeline && !dynamicTypeSize.isAccessibilitySize {
-            EventTimeMarker(schedule: schedule)
+            EventTimeMarker(schedule: schedule, accentColor: schedule.color?.swiftUIColor)
         } else {
-            Image(systemName: schedule.isExternal ? "calendar" : "clock")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(MemdoTheme.secondaryInk)
-                .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
-                .accessibilityHidden(true)
+            ZStack {
+                Image(systemName: schedule.isExternal ? "calendar" : "clock")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+                if let c = schedule.color {
+                    Circle()
+                        .fill(c.swiftUIColor)
+                        .frame(width: 7, height: 7)
+                        .offset(x: 8, y: -8)
+                }
+            }
+            .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
+            .accessibilityHidden(true)
         }
     }
 
@@ -91,6 +100,11 @@ struct ScheduleRow: View {
                             .font(.caption2)
                             .foregroundStyle(MemdoTheme.secondaryInk)
                             .accessibilityLabel("반복 일정")
+                    }
+                    if let emoji = schedule.emoji, !emoji.isEmpty {
+                        Text(emoji)
+                            .font(.subheadline)
+                            .accessibilityHidden(true)
                     }
                     Text(schedule.title)
                         .font(.subheadline.weight(.semibold))
@@ -134,6 +148,7 @@ struct ScheduleRow: View {
 
 private struct EventTimeMarker: View {
     let schedule: ScheduleDetail
+    var accentColor: Color?
 
     var body: some View {
         Group {
@@ -144,7 +159,7 @@ private struct EventTimeMarker: View {
                 VStack(spacing: 4) {
                     Text(schedule.startTimeText)
                     Capsule()
-                        .fill(MemdoTheme.controlOutline)
+                        .fill(accentColor ?? MemdoTheme.controlOutline)
                         .frame(width: 1, height: 8)
                     Text(schedule.endTimeText)
                 }

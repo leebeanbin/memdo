@@ -9,6 +9,8 @@ private struct TodayScrollOffsetKey: PreferenceKey {
 }
 
 struct TodayView: View {
+    let coachMarkTarget: CoachMarkTarget?
+    let onOpenGuide: () -> Void
     @Environment(ScheduleStore.self) private var scheduleStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -16,6 +18,14 @@ struct TodayView: View {
     @State private var selectedDate = Calendar.current.startOfDay(for: .now)
     @State private var showAllSchedules = false
     @State private var autoExpandArmed = true
+
+    init(
+        coachMarkTarget: CoachMarkTarget? = nil,
+        onOpenGuide: @escaping () -> Void = {}
+    ) {
+        self.coachMarkTarget = coachMarkTarget
+        self.onOpenGuide = onOpenGuide
+    }
 
     private var schedules: [ScheduleDetail] {
         scheduleStore.items(for: selectedDate)
@@ -54,8 +64,9 @@ struct TodayView: View {
         NavigationStack {
             ZStack {
                 MemdoPageBackground()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
                         GeometryReader { proxy in
                             Color.clear.preference(
                                 key: TodayScrollOffsetKey.self,
@@ -70,8 +81,11 @@ struct TodayView: View {
                             subtitle: dateSubtitle,
                             completedCount: completedCount,
                             totalCount: taskCount,
-                            onOpenSummary: openSummary
+                            onOpenSummary: openSummary,
+                            onOpenGuide: onOpenGuide
                         )
+                        .id(CoachMarkTarget.todayOverview)
+                        .coachMarkTarget(.todayOverview)
                         TodayWeekIndex(
                             dates: weekDates,
                             selectedDate: selectedDate,
@@ -79,39 +93,62 @@ struct TodayView: View {
                             onSelect: selectDate,
                             onAdd: openAddSchedule
                         )
+                            .id(CoachMarkTarget.todayDates)
+                            .coachMarkTarget(.todayDates)
                             .highPriorityGesture(
                                 dateSwipeGesture,
                                 including: dynamicTypeSize.isAccessibilitySize ? .subviews : .all
                             )
 
-                        if schedules.isEmpty {
-                            TodayIntentionPrompt(isToday: isToday, onAdd: openAddSchedule)
-                        } else {
-                            TodayScheduleSection(
-                                schedules: schedules,
-                                isExpanded: showAllSchedules,
-                                onAdd: { openAddSchedule(selectedDate) },
-                                onToggleExpanded: toggleSchedules,
-                                onOpenSchedule: openSchedule,
-                                onToggleDone: toggleDone
-                            )
+                        VStack(spacing: 0) {
+                            if schedules.isEmpty {
+                                TodayIntentionPrompt(isToday: isToday, onAdd: openAddSchedule)
+                            } else {
+                                TodayScheduleSection(
+                                    schedules: schedules,
+                                    isExpanded: showAllSchedules,
+                                    onAdd: { openAddSchedule(selectedDate) },
+                                    onToggleExpanded: toggleSchedules,
+                                    onOpenSchedule: openSchedule,
+                                    onToggleDone: toggleDone
+                                )
+                            }
                         }
+                        .id(CoachMarkTarget.todaySchedule)
+                        .coachMarkTarget(.todaySchedule)
 
                         TodayBriefingSection()
+                            .id(CoachMarkTarget.todayBriefing)
+                            .coachMarkTarget(.todayBriefing)
+                        }
+                        .padding(.horizontal, MemdoMetrics.pagePadding)
+                        .padding(
+                            .bottom,
+                            coachMarkTarget?.isTodayContent == true
+                                ? MemdoMetrics.tabBarClearance + 280
+                                : MemdoMetrics.tabBarClearance
+                        )
                     }
-                    .padding(.horizontal, MemdoMetrics.pagePadding)
-                    .padding(.bottom, MemdoMetrics.tabBarClearance)
-                }
-                .coordinateSpace(name: "today-scroll")
-                .scrollIndicators(.hidden)
-                .onPreferenceChange(TodayScrollOffsetKey.self) { offset in
-                    if offset > -40 {
-                        autoExpandArmed = true
+                    .coordinateSpace(name: "today-scroll")
+                    .scrollIndicators(.hidden)
+                    .onChange(of: coachMarkTarget, initial: true) { _, target in
+                        guard let target, target.isTodayContent else { return }
+                        Task { @MainActor in
+                            await Task.yield()
+                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
+                                proxy.scrollTo(target, anchor: .top)
+                            }
+                        }
                     }
-                    guard autoExpandArmed, offset < -120, schedules.count > 3, !showAllSchedules else { return }
-                    autoExpandArmed = false
-                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
-                        showAllSchedules = true
+                    .onPreferenceChange(TodayScrollOffsetKey.self) { offset in
+                        if offset > -40 {
+                            autoExpandArmed = true
+                        }
+                        guard autoExpandArmed, offset < -120, schedules.count > 3, !showAllSchedules else { return }
+                        autoExpandArmed = false
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                            showAllSchedules = true
+                        }
                     }
                 }
             }
@@ -186,6 +223,15 @@ struct TodayView: View {
         }
     }
 
+}
+
+private extension CoachMarkTarget {
+    var isTodayContent: Bool {
+        switch self {
+        case .todayOverview, .todayDates, .todaySchedule, .todayBriefing: true
+        default: false
+        }
+    }
 }
 
 enum TodaySheetDestination: Identifiable {

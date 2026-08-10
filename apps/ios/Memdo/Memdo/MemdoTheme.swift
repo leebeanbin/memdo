@@ -32,6 +32,19 @@ enum MemdoTheme {
     static let peachSoft = brandSoft
 }
 
+extension ScheduleColor {
+    var swiftUIColor: Color {
+        switch self {
+        case .coral:  Color(uiColor: UIColor { t in t.userInterfaceStyle == .dark ? UIColor(red: 1, green: 0.60, blue: 0.55, alpha: 1) : UIColor(red: 0.95, green: 0.36, blue: 0.29, alpha: 1) })
+        case .amber:  Color(uiColor: UIColor { t in t.userInterfaceStyle == .dark ? UIColor(red: 1, green: 0.82, blue: 0.45, alpha: 1) : UIColor(red: 0.95, green: 0.65, blue: 0.14, alpha: 1) })
+        case .sage:   Color(uiColor: UIColor { t in t.userInterfaceStyle == .dark ? UIColor(red: 0.62, green: 0.86, blue: 0.65, alpha: 1) : UIColor(red: 0.31, green: 0.67, blue: 0.35, alpha: 1) })
+        case .sky:    Color(uiColor: UIColor { t in t.userInterfaceStyle == .dark ? UIColor(red: 0.55, green: 0.80, blue: 1, alpha: 1) : UIColor(red: 0.19, green: 0.61, blue: 0.92, alpha: 1) })
+        case .indigo: Color(uiColor: UIColor { t in t.userInterfaceStyle == .dark ? UIColor(red: 0.72, green: 0.67, blue: 1, alpha: 1) : UIColor(red: 0.36, green: 0.30, blue: 0.72, alpha: 1) })
+        case .violet: Color(uiColor: UIColor { t in t.userInterfaceStyle == .dark ? UIColor(red: 0.90, green: 0.65, blue: 1, alpha: 1) : UIColor(red: 0.64, green: 0.28, blue: 0.84, alpha: 1) })
+        }
+    }
+}
+
 enum MemdoMetrics {
     static let pagePadding: CGFloat = 18
     static let rowInset: CGFloat = 12

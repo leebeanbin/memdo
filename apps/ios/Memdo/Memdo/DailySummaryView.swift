@@ -222,7 +222,7 @@ private struct SummaryAgentDigest: View {
     private var evidence: String {
         if scope == .today {
             guard let next = incomplete.first else {
-                return completed.isEmpty ? "계획이 필요하면 Agent와 내일의 첫 일정을 정해보세요." : "완료한 흐름을 내일 계획으로 이어갈 수 있어요."
+                return completed.isEmpty ? "빈 시간에 새 일정을 추가해보세요." : "완료한 흐름을 내일 계획으로 이어갈 수 있어요."
             }
             return "먼저 확인할 작업은 ‘\(next.title)’이에요. 아래에서 완료하거나 날짜를 다시 정할 수 있어요."
         }
@@ -239,7 +239,7 @@ private struct SummaryAgentDigest: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Agent 분석", systemImage: "sparkles")
+            Label("일정 분석", systemImage: "chart.bar.fill")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(MemdoTheme.brand)
             Text(headline)
@@ -251,7 +251,7 @@ private struct SummaryAgentDigest: View {
                 .fixedSize(horizontal: false, vertical: true)
             Button(action: onOpenAgent) {
                 HStack(spacing: 8) {
-                    Text("Agent와 함께 정리")
+                    Text("더 살펴보기")
                     Spacer(minLength: 0)
                     Image(systemName: "arrow.up.right")
                         .accessibilityHidden(true)

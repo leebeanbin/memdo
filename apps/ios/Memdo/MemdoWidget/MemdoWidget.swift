@@ -66,6 +66,7 @@ private struct MemdoTodayWidgetView: View {
         switch family {
         case .accessoryInline:
             Label(inlineText, systemImage: entry.today.items.first?.systemImage ?? "calendar")
+                .privacySensitive()
         case .accessoryCircular:
             circular
         case .accessoryRectangular:
@@ -87,14 +88,18 @@ private struct MemdoTodayWidgetView: View {
     }
 
     private var circular: some View {
-        VStack(spacing: -2) {
-            Text(entry.date.memdoMonth)
-                .font(.caption2)
-            Text(entry.date.memdoDay)
-                .font(.title2.bold())
+        ZStack {
+            AccessoryWidgetBackground()
+            VStack(spacing: -2) {
+                Text(entry.date.memdoMonth)
+                    .font(.caption2)
+                Text(entry.date.memdoDay)
+                    .font(.title2.bold())
+            }
         }
+        .widgetAccentable()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(entry.date.memdoMonth) \(entry.date.memdoDay)일")
+        .accessibilityLabel("\(entry.date.memdoMonth) \(entry.date.memdoDay)일, 남은 일정 \(entry.today.remainingCount)개")
     }
 
     private var rectangular: some View {
@@ -160,7 +165,7 @@ private struct WidgetCountBadge: View {
     let count: Int
 
     var body: some View {
-        Label("\(count)개", systemImage: "calendar")
+        Text("\(count)개 남음")
             .font(.caption2.weight(.semibold))
             .foregroundStyle(MemdoWidgetTheme.secondary)
             .fixedSize()
@@ -184,6 +189,7 @@ private struct WidgetTaskRow: View {
             Text(hidesPrivateContent ? "비공개 일정" : item.title)
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
+                .privacySensitive()
         }
         .accessibilityElement(children: .combine)
     }
@@ -199,13 +205,26 @@ private struct WidgetCompactAgenda: View {
             Text(day.completedCount > 0 ? "오늘 일정 완료" : "일정 없음")
                 .foregroundStyle(.secondary)
         } else {
-            ForEach(day.items.prefix(limit), id: \.id) { item in
-                Text("\(item.time)  \(hidesPrivateContent ? "비공개 일정" : item.title)")
-                    .lineLimit(1)
-            }
-            if day.remainingCount > limit {
-                Text("+\(day.remainingCount - limit)개 더")
-                    .foregroundStyle(.secondary)
+            let visibleItems = Array(day.items.prefix(limit))
+            ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
+                HStack(spacing: 4) {
+                    Image(systemName: item.systemImage)
+                        .font(.caption2)
+                        .frame(width: 11)
+                    Text(item.time)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    Text(hidesPrivateContent ? "비공개 일정" : item.title)
+                        .lineLimit(1)
+                        .privacySensitive()
+                    Spacer(minLength: 2)
+                    if index == visibleItems.count - 1, day.remainingCount > limit {
+                        Text("+\(day.remainingCount - limit)")
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityElement(children: .combine)
             }
         }
     }

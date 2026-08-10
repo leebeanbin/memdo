@@ -46,11 +46,26 @@ struct ScheduleDetailSheet: View {
                                 set: { isDone in updateCompletion(isDone) }
                             ))
                             .memdoToggle()
+                            if let mins = draft.estimatedMinutes {
+                                LabeledContent("소요 시간", value: ScheduleDuration.label(for: mins))
+                            }
                         }
                     }
 
                     Section("일정 정보") {
-                        if let meetingURL = draft.meetingURL, let provider = draft.meetingProvider {
+                        if let url = draft.linkURL {
+                            Link(destination: url) {
+                                if let provider = MeetingProvider.recognized(url) {
+                                    Label("\(provider.label) 참여", systemImage: provider.systemImage)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(MemdoTheme.accent)
+                                } else {
+                                    Label("링크 열기", systemImage: "link")
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(MemdoTheme.accent)
+                                }
+                            }
+                        } else if let meetingURL = draft.meetingURL, let provider = draft.meetingProvider {
                             Link(destination: meetingURL) {
                                 Label("\(provider.label) 참여", systemImage: provider.systemImage)
                                     .fontWeight(.semibold)
@@ -62,12 +77,13 @@ struct ScheduleDetailSheet: View {
                         if let dueAt = draft.dueAt {
                             LabeledContent("마감", value: dueAt.formatted(date: .abbreviated, time: .shortened))
                         }
-                        if let mapURL = draft.googleMapsURL {
+                        if let mapURL = draft.appleMapsURL {
                             Link(destination: mapURL) {
                                 LabeledContent("장소", value: draft.location)
+                                    .foregroundStyle(MemdoTheme.accent)
                             }
                         } else {
-                            LabeledContent("장소", value: "없음")
+                            LabeledContent("장소", value: draft.location.isEmpty ? "없음" : draft.location)
                         }
                         if draft.isExternal {
                             LabeledContent("출처", value: draft.calendar.title)
@@ -129,13 +145,23 @@ struct ScheduleDetailSheet: View {
             isPresented: $showsDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("삭제", role: .destructive) {
+            Button(draft.scheduleRuleId == nil ? "삭제" : "이 일정만 삭제", role: .destructive) {
                 scheduleStore.delete(id: draft.id)
                 dismiss()
             }
+            if let ruleId = draft.scheduleRuleId {
+                Button("이후 반복 모두 삭제", role: .destructive) {
+                    scheduleStore.deleteRecurring(ruleId: ruleId)
+                    dismiss()
+                }
+            }
             Button("취소", role: .cancel) {}
         } message: {
-            Text("일정이 목록에서 삭제됩니다.")
+            Text(
+                draft.scheduleRuleId == nil
+                    ? "일정이 목록에서 삭제됩니다."
+                    : "반복 전체 삭제는 오늘 이후의 반복 일정을 모두 정리하고, 지난 기록은 남겨둡니다."
+            )
         }
     }
 
@@ -192,12 +218,24 @@ private struct ScheduleDetailHeader: View {
                 ScheduleSourceIcon(schedule: schedule)
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text(schedule.source)
-                    .font(.caption.bold())
-                    .foregroundStyle(MemdoTheme.secondaryInk)
-                Text(schedule.title)
-                    .font(.headline)
-                    .foregroundStyle(MemdoTheme.ink)
+                HStack(spacing: 6) {
+                    Text(schedule.source)
+                        .font(.caption.bold())
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                    if let c = schedule.color {
+                        Circle()
+                            .fill(c.swiftUIColor)
+                            .frame(width: 8, height: 8)
+                    }
+                }
+                HStack(spacing: 4) {
+                    if let emoji = schedule.emoji, !emoji.isEmpty {
+                        Text(emoji).font(.headline)
+                    }
+                    Text(schedule.title)
+                        .font(.headline)
+                        .foregroundStyle(MemdoTheme.ink)
+                }
                 Text("\(schedule.dateText) · \(schedule.displayTime)")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(MemdoTheme.accent)
@@ -285,6 +323,29 @@ struct ScheduleEditorFields: View {
             }
 
             Section("선택 정보") {
+                HStack(spacing: 8) {
+                    if let url = schedule.linkURL {
+                        Image(systemName: MeetingProvider.recognized(url) != nil ? "video.fill" : "link")
+                            .foregroundStyle(MemdoTheme.brand)
+                            .frame(width: 20)
+                    }
+                    TextField("링크 (Zoom, Meet, Docs 등)", text: meetingLinkBinding)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.subheadline)
+                        .foregroundStyle(MemdoTheme.ink)
+                    if schedule.meetingURLString != nil {
+                        Button {
+                            schedule.meetingURLString = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("링크 제거")
+                    }
+                }
                 NavigationLink {
                     LocationPickerView(currentLocation: schedule.locationValue) {
                         schedule.locationValue = $0
@@ -298,6 +359,15 @@ struct ScheduleEditorFields: View {
                     }
                 }
                 .pickerStyle(.menu)
+                if schedule.kind == .task {
+                    Picker("소요 시간", selection: $schedule.estimatedMinutes) {
+                        Text("없음").tag(nil as Int?)
+                        ForEach(ScheduleDuration.allCases) { d in
+                            Text(d.label).tag(d.rawValue as Int?)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
                 // 반복은 생성 시에만 규칙(schedule_rules)으로 만든다. 기존 일정의
                 // 반복 편집은 아직 미지원이라 값만 표시한다.
                 if allowsRecurrence {
@@ -312,6 +382,32 @@ struct ScheduleEditorFields: View {
                 }
             }
 
+            Section("서식") {
+                HStack(spacing: 12) {
+                    TextField("이모지", text: emojiBinding)
+                        .frame(width: 36)
+                        .multilineTextAlignment(.center)
+                        .font(.title3)
+                    Spacer()
+                    ForEach(ScheduleColor.allCases) { c in
+                        let selected = schedule.color == c
+                        Circle()
+                            .fill(c.swiftUIColor)
+                            .frame(width: 26, height: 26)
+                            .overlay(
+                                Circle().stroke(.primary, lineWidth: selected ? 2 : 0)
+                                    .padding(2)
+                            )
+                            .scaleEffect(selected ? 1.15 : 1)
+                            .animation(.easeInOut(duration: 0.15), value: selected)
+                            .onTapGesture { schedule.color = selected ? nil : c }
+                            .accessibilityLabel(c.label)
+                            .accessibilityAddTraits(selected ? .isSelected : [])
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
             Section {
                 TextField("메모 없음", text: $schedule.memo, axis: .vertical)
                     .lineLimit(3...6)
@@ -322,15 +418,13 @@ struct ScheduleEditorFields: View {
                     Menu {
                         Button("문장 정리", systemImage: "text.alignleft", action: tidyNote)
                         Button("할 일로 나누기", systemImage: "checklist", action: splitNote)
-                        Button("준비물 제안", systemImage: "sparkles", action: suggestPreparation)
+                        Button("준비물 제안", systemImage: "list.bullet", action: suggestPreparation)
                     } label: {
-                        Label("Agent", systemImage: "sparkles")
+                        Label("빠른 서식", systemImage: "text.badge.checkmark")
                             .font(.caption.weight(.semibold))
                     }
-                    .accessibilityLabel("Agent 노트 도구")
+                    .accessibilityLabel("빠른 서식 도구")
                 }
-            } footer: {
-                Text("Agent는 저장 전에 변경 내용을 항상 보여줘요.")
             }
         }
         .onAppear {
@@ -375,8 +469,37 @@ struct ScheduleEditorFields: View {
     }
 
     private var defaultStart: Date {
-        Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: schedule.scheduledDate)
+        let cal = Calendar.current
+        guard cal.isDateInToday(schedule.scheduledDate) else {
+            return cal.date(bySettingHour: 9, minute: 0, second: 0, of: schedule.scheduledDate)
+                ?? schedule.scheduledDate
+        }
+        let now = Date.now
+        let hour = cal.component(.hour, from: now)
+        let minute = cal.component(.minute, from: now)
+        let nextHour = minute == 0 ? hour : hour + 1
+        return cal.date(bySettingHour: min(nextHour, 23), minute: 0, second: 0, of: schedule.scheduledDate)
             ?? schedule.scheduledDate
+    }
+
+    private var emojiBinding: Binding<String> {
+        Binding(
+            get: { schedule.emoji ?? "" },
+            set: { new in
+                let single = new.unicodeScalars.first { $0.properties.isEmojiPresentation }
+                schedule.emoji = single.map(String.init) ?? (new.isEmpty ? nil : schedule.emoji)
+            }
+        )
+    }
+
+    private var meetingLinkBinding: Binding<String> {
+        Binding(
+            get: { schedule.meetingURLString ?? "" },
+            set: { new in
+                let trimmed = new.trimmingCharacters(in: .whitespacesAndNewlines)
+                schedule.meetingURLString = trimmed.isEmpty ? nil : trimmed
+            }
+        )
     }
 
     private var dueBinding: Binding<Date> {
@@ -490,6 +613,7 @@ struct AddScheduleSheet: View {
             draft.scheduledDate = Calendar.current.startOfDay(for: start)
             draft.timeBucket = .inferred(from: start)
         }
+        if let url = event.meetingURL { draft.meetingURLString = url.absoluteString }
         if !event.notes.isEmpty { draft.memo = event.notes }
     }
 
@@ -504,12 +628,21 @@ struct AddScheduleSheet: View {
     }
 
     private static func makeDraft(for date: Date) -> ScheduleDetail {
-        let calendar = Calendar.current
-        let startAt = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+        let cal = Calendar.current
+        let startAt: Date
+        if cal.isDateInToday(date) {
+            let now = Date.now
+            let hour = cal.component(.hour, from: now)
+            let minute = cal.component(.minute, from: now)
+            let nextHour = minute == 0 ? hour : hour + 1
+            startAt = cal.date(bySettingHour: min(nextHour, 23), minute: 0, second: 0, of: date) ?? date
+        } else {
+            startAt = cal.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+        }
         return ScheduleDetail(
             scheduledDate: date,
             startAt: startAt,
-            endAt: calendar.date(byAdding: .hour, value: 1, to: startAt) ?? startAt,
+            endAt: cal.date(byAdding: .hour, value: 1, to: startAt) ?? startAt,
             title: "",
             calendar: .unassigned,
             timeBucket: .inferred(from: startAt)
@@ -526,61 +659,140 @@ private struct LocationPickerView: View {
     @State private var query = ""
     @State private var results: [MKMapItem] = []
     @State private var isSearching = false
+    @State private var selectedIndex: Int?
+    @State private var cameraPosition: MapCameraPosition = .automatic
 
     let currentLocation: ScheduleLocation?
     let onSelect: (ScheduleLocation?) -> Void
 
+    private var selectedItem: MKMapItem? {
+        selectedIndex.flatMap { results.indices.contains($0) ? results[$0] : nil }
+    }
+
     var body: some View {
-        List {
-            if let currentLocation {
-                Section("현재 장소") {
-                    Button(currentLocation.displayText) {
-                        onSelect(currentLocation)
-                        dismiss()
-                    }
+        VStack(spacing: 0) {
+            Map(position: $cameraPosition) {
+                ForEach(Array(results.enumerated()), id: \.offset) { index, item in
+                    Marker(item.name ?? "장소", coordinate: item.placemark.coordinate)
+                        .tint(index == selectedIndex ? MemdoTheme.brand : MemdoTheme.controlOutline)
                 }
             }
+            .mapStyle(.standard)
+            .frame(height: 220)
 
-            Section("검색 결과") {
-                if isSearching {
-                    ProgressView("장소를 찾는 중")
-                } else if results.isEmpty {
-                    ContentUnavailableView(
-                        "장소를 검색해 보세요",
-                        systemImage: "map",
-                        description: Text("건물명, 상호 또는 주소를 입력하세요.")
-                    )
-                } else {
-                    ForEach(Array(results.enumerated()), id: \.offset) { _, item in
-                        Button { select(item) } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(item.name ?? "이름 없는 장소")
-                                    .foregroundStyle(MemdoTheme.ink)
-                                if let address = item.placemark.title {
-                                    Text(address)
-                                        .font(.caption)
-                                        .foregroundStyle(MemdoTheme.secondaryInk)
+            List {
+                if let currentLocation {
+                    Section("저장된 장소") {
+                        Button(currentLocation.displayText) {
+                            onSelect(currentLocation)
+                            dismiss()
+                        }
+                        .foregroundStyle(MemdoTheme.ink)
+                    }
+                }
+
+                Section("검색 결과") {
+                    if isSearching {
+                        ProgressView("장소를 찾는 중")
+                    } else if results.isEmpty {
+                        ContentUnavailableView(
+                            "장소를 검색해 보세요",
+                            systemImage: "map",
+                            description: Text("건물명, 상호 또는 주소를 입력하세요.")
+                        )
+                    } else {
+                        ForEach(Array(results.enumerated()), id: \.offset) { index, item in
+                            Button { select(at: index) } label: {
+                                HStack(spacing: 10) {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(item.name ?? "이름 없는 장소")
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundStyle(MemdoTheme.ink)
+                                        if let address = item.placemark.title {
+                                            Text(address)
+                                                .font(.caption)
+                                                .foregroundStyle(MemdoTheme.secondaryInk)
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                    Spacer(minLength: 4)
+                                    if index == selectedIndex {
+                                        Image(systemName: "checkmark")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(MemdoTheme.brand)
+                                    }
                                 }
                             }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                if currentLocation != nil {
+                    Section {
+                        Button("장소 지우기", role: .destructive) {
+                            onSelect(nil)
+                            dismiss()
                         }
                     }
                 }
             }
-
-            if currentLocation != nil {
-                Section {
-                    Button("장소 지우기", role: .destructive) {
-                        onSelect(nil)
-                        dismiss()
-                    }
-                }
-            }
+            .memdoSystemList()
         }
-        .memdoSystemList()
         .searchable(text: $query, prompt: "건물, 상호, 주소")
         .onSubmit(of: .search, search)
         .navigationTitle("장소")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let item = selectedItem {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("선택") { confirm(item) }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+        .onChange(of: selectedIndex) { _, index in
+            guard let index, results.indices.contains(index) else { return }
+            let coord = results[index].placemark.coordinate
+            withAnimation(.easeInOut(duration: 0.35)) {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: coord,
+                    span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
+                ))
+            }
+        }
+        .onChange(of: results) { _, newResults in
+            selectedIndex = nil
+            guard !newResults.isEmpty else { return }
+            if newResults.count == 1 {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: newResults[0].placemark.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
+                ))
+            } else {
+                cameraPosition = .automatic
+            }
+        }
+    }
+
+    private func select(at index: Int) {
+        if selectedIndex == index {
+            // double-tap = immediate confirm
+            if let item = selectedItem { confirm(item) }
+        } else {
+            selectedIndex = index
+        }
+    }
+
+    private func confirm(_ item: MKMapItem) {
+        onSelect(ScheduleLocation(
+            name: item.name ?? "장소",
+            address: item.placemark.title,
+            latitude: item.placemark.coordinate.latitude,
+            longitude: item.placemark.coordinate.longitude,
+            provider: .appleMaps
+        ))
+        dismiss()
     }
 
     private func search() {
@@ -595,26 +807,51 @@ private struct LocationPickerView: View {
             isSearching = false
         }
     }
-
-    private func select(_ item: MKMapItem) {
-        onSelect(ScheduleLocation(
-            name: item.name ?? "장소",
-            address: item.placemark.title,
-            latitude: item.placemark.coordinate.latitude,
-            longitude: item.placemark.coordinate.longitude,
-            provider: .appleMaps
-        ))
-        dismiss()
-    }
 }
 
 private extension ScheduleDetail {
-    var googleMapsURL: URL? {
+    var appleMapsURL: URL? {
         guard let locationValue else { return nil }
-        if let latitude = locationValue.latitude, let longitude = locationValue.longitude {
-            return URL(string: "https://www.google.com/maps/search/?api=1&query=\(latitude),\(longitude)")
+        if let lat = locationValue.latitude, let lng = locationValue.longitude {
+            let q = (locationValue.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")
+            return URL(string: "maps://?ll=\(lat),\(lng)&q=\(q)")
         }
-        guard let query = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
-        return URL(string: "https://www.google.com/maps/search/?api=1&query=\(query)")
+        guard let q = locationValue.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
+        return URL(string: "maps://?q=\(q)")
+    }
+}
+
+private enum ScheduleDuration: Int, CaseIterable, Identifiable {
+    case min15 = 15
+    case min30 = 30
+    case min45 = 45
+    case hour1 = 60
+    case hour90 = 90
+    case hour2 = 120
+    case hour3 = 180
+    case hour4 = 240
+    case hour6 = 360
+    case hour8 = 480
+
+    var id: Int { rawValue }
+
+    var label: String {
+        switch self {
+        case .min15:  "15분"
+        case .min30:  "30분"
+        case .min45:  "45분"
+        case .hour1:  "1시간"
+        case .hour90: "1시간 30분"
+        case .hour2:  "2시간"
+        case .hour3:  "3시간"
+        case .hour4:  "4시간"
+        case .hour6:  "6시간"
+        case .hour8:  "8시간"
+        }
+    }
+
+    static func label(for minutes: Int) -> String {
+        allCases.first { $0.rawValue == minutes }?.label
+            ?? (minutes < 60 ? "\(minutes)분" : "\(minutes / 60)시간 \(minutes % 60 == 0 ? "" : "\(minutes % 60)분")".trimmingCharacters(in: .whitespaces))
     }
 }
