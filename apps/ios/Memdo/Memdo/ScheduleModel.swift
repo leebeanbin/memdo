@@ -547,6 +547,10 @@ final class ScheduleStore {
             // this: its first callback can fire before `state` becomes
             // `.loaded`, at which point drainOutbox() is a deliberate no-op.
             await drainOutbox()
+            // UNCalendarNotificationTrigger with repeats:false is one-shot.
+            // Rebuild all upcoming per-schedule reminders after every full load
+            // so app restarts don't silently drop pending reminders.
+            await refreshUpcomingReminders()
         } catch {
             state = .failed(error.localizedDescription)
         }
@@ -722,6 +726,7 @@ final class ScheduleStore {
     func save(_ schedule: ScheduleDetail) {
         guard !pendingWriteIDs.contains(schedule.id) else { return }
         pendingWriteIDs.insert(schedule.id)
+        Task { await NotificationScheduler.scheduleReminder(for: schedule) }
         // A virtual occurrence (event-mode rule, computed but never written to the
         // DB) has no real row to PATCH -- regardless of whether it's already in
         // `schedules` locally (it got there via the same GET that computed it).
@@ -926,6 +931,10 @@ final class ScheduleStore {
             schedules.append(result.original)
             schedules.append(result.replacement)
             updateWidgetSnapshot()
+            // Original is now "rescheduled" status — cancel its reminder.
+            // Replacement is a new entry on the new date — schedule its reminder.
+            NotificationScheduler.cancelReminder(for: original.id)
+            await NotificationScheduler.scheduleReminder(for: result.replacement)
         } catch ScheduleAPIError.offline {
             // `schedules` already shows `moved` optimistically -- leave it and
             // queue replay. If materialize landed before the drop, replay just
@@ -953,6 +962,7 @@ final class ScheduleStore {
         guard let index = schedules.firstIndex(where: { $0.id == id }) else { return }
         let schedule = schedules.remove(at: index)
         updateWidgetSnapshot()
+        NotificationScheduler.cancelReminder(for: id)
         pendingWriteIDs.insert(id)
         Task {
             await delete(schedule)
@@ -995,6 +1005,17 @@ final class ScheduleStore {
             }
             updateWidgetSnapshot()
             lastWriteError = error.localizedDescription
+        }
+    }
+
+    private func refreshUpcomingReminders() async {
+        let now = Date.now
+        let upcoming = schedules.filter { s in
+            s.isActive && s.reminderOffsetMinutes != nil
+                && s.startAt.map { $0 > now } == true
+        }
+        for schedule in upcoming {
+            await NotificationScheduler.scheduleReminder(for: schedule)
         }
     }
 
