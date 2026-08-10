@@ -289,13 +289,14 @@ struct ScheduleEditorFields: View {
                         Button {
                             startBinding.wrappedValue = .now
                         } label: {
-                            Label("지금으로", systemImage: "clock.badge.fill")
+                            Text("지금으로")
                                 .font(.caption.weight(.semibold))
+                                .foregroundStyle(MemdoTheme.brand)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(MemdoTheme.brandSoft, in: Capsule())
                         }
-                        .buttonStyle(.bordered)
-                        .buttonBorderShape(.capsule)
-                        .controlSize(.mini)
-                        .foregroundStyle(MemdoTheme.brand)
+                        .buttonStyle(.plain)
 
                         Spacer(minLength: 0)
 
@@ -304,12 +305,15 @@ struct ScheduleEditorFields: View {
                                 endBinding.wrappedValue = (schedule.startAt ?? .now)
                                     .addingTimeInterval(Double(mins * 60))
                             }
-                            .buttonStyle(.bordered)
-                            .buttonBorderShape(.capsule)
-                            .controlSize(.mini)
+                            .font(.caption.weight(.medium))
                             .foregroundStyle(MemdoTheme.secondaryInk)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(MemdoTheme.accentSoft, in: Capsule())
+                            .buttonStyle(.plain)
                         }
                     }
+                    .padding(.vertical, 2)
 
                     DatePicker(
                         "종료",
