@@ -41,6 +41,7 @@ struct AppShellView: View {
     @State private var coachMarkTour: CoachMarkTour?
     @State private var coachMarkIndex = 0
     @State private var agentTabFrame = CGRect.zero
+    @State private var scheduleSheet: ScheduleDetail?
     @AppStorage("has-seen-guide") private var hasSeenGuide = false
 
     var body: some View {
@@ -185,6 +186,9 @@ struct AppShellView: View {
         .tint(MemdoTheme.accent)
         .sensoryFeedback(.selection, trigger: selectedTab)
         .onOpenURL(perform: openDeepLink)
+        .sheet(item: $scheduleSheet) { schedule in
+            ScheduleDetailSheet(schedule: schedule) { scheduleStore.save($0) }
+        }
     }
 
     private var tabSelection: Binding<AppTab> {
@@ -213,6 +217,16 @@ struct AppShellView: View {
         case "assistant": openAgent()
         case "settings": select(.settings)
         case "summary": presentedSheet = .summary
+        case "schedule":
+            // memdo://schedule/{uuid} — tap on a per-schedule reminder
+            if let idString = url.pathComponents.dropFirst().first,
+               let id = UUID(uuidString: idString),
+               let schedule = scheduleStore.schedules.first(where: { $0.id == id }) {
+                select(.today)
+                scheduleSheet = schedule
+            } else {
+                select(.today)
+            }
         default: select(.today)
         }
     }
