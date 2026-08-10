@@ -627,12 +627,21 @@ struct AddScheduleSheet: View {
     }
 
     private static func makeDraft(for date: Date) -> ScheduleDetail {
-        let calendar = Calendar.current
-        let startAt = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+        let cal = Calendar.current
+        let startAt: Date
+        if cal.isDateInToday(date) {
+            let now = Date.now
+            let hour = cal.component(.hour, from: now)
+            let minute = cal.component(.minute, from: now)
+            let nextHour = minute == 0 ? hour : hour + 1
+            startAt = cal.date(bySettingHour: min(nextHour, 23), minute: 0, second: 0, of: date) ?? date
+        } else {
+            startAt = cal.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+        }
         return ScheduleDetail(
             scheduledDate: date,
             startAt: startAt,
-            endAt: calendar.date(byAdding: .hour, value: 1, to: startAt) ?? startAt,
+            endAt: cal.date(byAdding: .hour, value: 1, to: startAt) ?? startAt,
             title: "",
             calendar: .unassigned,
             timeBucket: .inferred(from: startAt)
