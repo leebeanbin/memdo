@@ -136,7 +136,7 @@ enum NotificationScheduler {
         content.title = schedule.emoji.map { "\($0) \(schedule.title)" } ?? schedule.title
         content.body = reminderBody(offset: offsetMinutes)
         content.sound = .default
-        content.userInfo = ["memdo_link": "today"]
+        content.userInfo = ["memdo_link": "schedule/\(schedule.id.uuidString.lowercased())"]
 
         let components = Calendar.current.dateComponents(
             [.year, .month, .day, .hour, .minute],
