@@ -2,13 +2,13 @@ import SwiftUI
 
 struct TodayHeader: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @ScaledMetric(relativeTo: .title2) private var titleSize: CGFloat = 26
     let eyebrow: String
     let title: String
     let subtitle: String
     let completedCount: Int
     let totalCount: Int
     let onOpenSummary: () -> Void
+    let onOpenGuide: () -> Void
 
     var body: some View {
         Group {
@@ -17,6 +17,7 @@ struct TodayHeader: View {
                     titleGroup
                     HStack {
                         Spacer()
+                        guideButton
                         progressButton
                     }
                 }
@@ -24,10 +25,23 @@ struct TodayHeader: View {
                 HStack(alignment: .top) {
                     titleGroup
                     Spacer()
+                    guideButton
                     progressButton
                 }
             }
         }
+    }
+
+    private var guideButton: some View {
+        Button(action: onOpenGuide) {
+            Image(systemName: "questionmark.circle")
+                .font(.title3)
+                .foregroundStyle(MemdoTheme.secondaryInk)
+                .frame(width: 40, height: 48)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Memdo 시작 가이드")
     }
 
     private var titleGroup: some View {
@@ -36,7 +50,7 @@ struct TodayHeader: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(MemdoTheme.brand)
                 Text(title)
-                    .font(.system(size: titleSize, weight: .bold, design: .rounded))
+                    .font(.system(.title2, design: .rounded, weight: .bold))
                     .foregroundStyle(MemdoTheme.ink)
                 Text(subtitle)
                     .font(.subheadline.weight(.medium))

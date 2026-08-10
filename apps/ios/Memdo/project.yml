@@ -10,20 +10,32 @@ settings:
     INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
     INFOPLIST_KEY_UILaunchScreen_Generation: YES
     TARGETED_DEVICE_FAMILY: "1"
+packages:
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    from: 2.46.0
 targets:
   Memdo:
     type: application
     platform: iOS
     sources:
-      - Memdo
+      - path: Memdo
+        excludes:
+          - Config.xcconfig
+          - Config.xcconfig.local
+    configFiles:
+      Debug: Memdo/Config.xcconfig
+      Release: Memdo/Config.xcconfig
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memdo.ios
         PRODUCT_NAME: Memdo
+        CODE_SIGN_ENTITLEMENTS: Memdo/Memdo.entitlements
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Memdo/Info.plist
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
+      - package: Supabase
       - target: MemdoWidget
         embed: true
   MemdoWidget:
@@ -31,13 +43,25 @@ targets:
     platform: iOS
     sources:
       - MemdoWidget
+      - Memdo/MemdoWidgetSchedule.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memdo.ios.widget
         PRODUCT_NAME: MemdoWidget
+        CODE_SIGN_ENTITLEMENTS: MemdoWidget/MemdoWidget.entitlements
         SKIP_INSTALL: YES
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: MemdoWidget/Info.plist
+  MemdoTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - MemdoTests
+    dependencies:
+      - target: Memdo
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.memdo.ios.tests
 schemes:
   Memdo:
     build:
@@ -47,6 +71,8 @@ schemes:
       config: Debug
     test:
       config: Debug
+      targets:
+        - MemdoTests
     profile:
       config: Release
     analyze:

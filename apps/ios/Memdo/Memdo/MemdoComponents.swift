@@ -15,6 +15,7 @@ struct MemdoBrandMark: View {
 }
 
 struct MemdoPage<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     let subtitle: String
     let eyebrow: String
@@ -22,6 +23,7 @@ struct MemdoPage<Content: View>: View {
     let headerActionLabel: String
     let headerAction: () -> Void
     let bottomClearance: CGFloat
+    let scrollTarget: CoachMarkTarget?
     @ViewBuilder let content: Content
 
     init(
@@ -32,6 +34,7 @@ struct MemdoPage<Content: View>: View {
         headerActionLabel: String = "",
         headerAction: @escaping () -> Void = {},
         bottomClearance: CGFloat = MemdoMetrics.tabBarClearance,
+        scrollTarget: CoachMarkTarget? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
@@ -41,6 +44,7 @@ struct MemdoPage<Content: View>: View {
         self.headerActionLabel = headerActionLabel
         self.headerAction = headerAction
         self.bottomClearance = bottomClearance
+        self.scrollTarget = scrollTarget
         self.content = content()
     }
 
@@ -48,22 +52,33 @@ struct MemdoPage<Content: View>: View {
         NavigationStack {
             ZStack {
                 MemdoPageBackground()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
-                        MemdoPageHeader(
-                            title: title,
-                            subtitle: subtitle,
-                            eyebrow: eyebrow,
-                            actionIcon: headerActionIcon,
-                            actionLabel: headerActionLabel,
-                            action: headerAction
-                        )
-                        content
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
+                            MemdoPageHeader(
+                                title: title,
+                                subtitle: subtitle,
+                                eyebrow: eyebrow,
+                                actionIcon: headerActionIcon,
+                                actionLabel: headerActionLabel,
+                                action: headerAction
+                            )
+                            content
+                        }
+                        .padding(MemdoMetrics.pagePadding)
+                        .padding(.bottom, bottomClearance)
                     }
-                    .padding(MemdoMetrics.pagePadding)
-                    .padding(.bottom, bottomClearance)
+                    .scrollIndicators(.hidden)
+                    .onChange(of: scrollTarget, initial: true) { _, target in
+                        guard let target else { return }
+                        Task { @MainActor in
+                            await Task.yield()
+                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
+                                proxy.scrollTo(target, anchor: .top)
+                            }
+                        }
+                    }
                 }
-                .scrollIndicators(.hidden)
             }
             .toolbar(.hidden, for: .navigationBar)
             .toolbarBackground(.hidden, for: .navigationBar)
@@ -74,7 +89,6 @@ struct MemdoPage<Content: View>: View {
 
 struct MemdoPageHeader: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @ScaledMetric(relativeTo: .title2) private var titleSize: CGFloat = 26
     let title: String
     let subtitle: String
     let eyebrow: String
@@ -108,7 +122,7 @@ struct MemdoPageHeader: View {
                 .font(.caption.weight(.bold))
                 .foregroundStyle(MemdoTheme.brand)
             Text(title)
-                .font(.system(size: titleSize, weight: .bold, design: .rounded))
+                .font(.system(.title2, design: .rounded, weight: .bold))
                 .foregroundStyle(MemdoTheme.ink)
             Text(subtitle)
                 .font(.subheadline)
@@ -119,14 +133,23 @@ struct MemdoPageHeader: View {
     @ViewBuilder
     private var actionButton: some View {
         if let actionIcon {
-            Button(action: action) {
-                MemdoIconButtonLabel(systemImage: actionIcon)
+            if #available(iOS 26.0, *) {
+                Button(action: action) {
+                    MemdoIconButtonLabel(systemImage: actionIcon)
+                }
+                .buttonStyle(.glass)
+                .accessibilityLabel(actionLabel)
+            } else {
+                Button(action: action) {
+                    MemdoIconButtonLabel(systemImage: actionIcon)
+                }
+                .buttonStyle(.plain)
+                .memdoFloatingSurface(cornerRadius: MemdoMetrics.groupRadius)
+                .accessibilityLabel(actionLabel)
             }
-            .buttonStyle(.plain)
-            .memdoFloatingSurface(cornerRadius: MemdoMetrics.groupRadius)
-            .accessibilityLabel(actionLabel)
         }
     }
+
 }
 
 struct MemdoSection<Content: View>: View {

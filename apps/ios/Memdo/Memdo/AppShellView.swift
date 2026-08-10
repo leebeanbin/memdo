@@ -38,18 +38,38 @@ struct AppShellView: View {
     @State private var presentedSheet: AppSheetDestination?
     @State private var agentComposer = ""
     @State private var agentResponse = ""
+    @State private var coachMarkTour: CoachMarkTour?
+    @State private var coachMarkIndex = 0
+    @State private var agentTabFrame = CGRect.zero
+    @AppStorage("has-seen-guide") private var hasSeenGuide = false
 
     var body: some View {
         appTabs
+            .coachMarkOverlay(
+                step: coachMarkStep,
+                index: coachMarkIndex,
+                count: coachMarkTour?.steps.count ?? 0,
+                onPrevious: previousCoachMark,
+                onNext: nextCoachMark,
+                onSkip: finishCoachMarks
+            )
             .modifier(
                 AppShellBehavior(
                     presentedSheet: $presentedSheet,
                     agentComposer: $agentComposer,
-                    agentResponse: $agentResponse
+                    agentResponse: $agentResponse,
+                    onStartCoachMarkTour: startCoachMarks
                 )
             )
             .environment(scheduleStore)
             .task { await scheduleStore.load() }
+            .task {
+                guard !hasSeenGuide else { return }
+                // Let the launch-brand crossfade settle before presenting.
+                try? await Task.sleep(for: .milliseconds(600))
+                hasSeenGuide = true
+                presentedSheet = .guide
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     Task { await scheduleStore.refresh() }
@@ -125,21 +145,41 @@ struct AppShellView: View {
 
     private var appTabs: some View {
         TabView(selection: tabSelection) {
-            TodayView()
+            TodayView(
+                coachMarkTarget: coachMarkStep?.target,
+                onOpenGuide: { presentedSheet = .guide }
+            )
                 .tabItem { Label(AppTab.today.title, systemImage: AppTab.today.icon) }
                 .tag(AppTab.today)
             CalendarView(
+                coachMarkTarget: coachMarkStep?.target,
                 isSearchPresented: $showCalendarSearch,
                 targetDate: $calendarTargetDate
             )
                 .tabItem { Label(AppTab.calendar.title, systemImage: AppTab.calendar.icon) }
                 .tag(AppTab.calendar)
-            SettingsView()
+            SettingsView(coachMarkTarget: coachMarkStep?.target)
                 .tabItem { Label(AppTab.settings.title, systemImage: AppTab.settings.icon) }
                 .tag(AppTab.settings)
             Color.clear
                 .tabItem { Label(AppTab.agent.title, systemImage: AppTab.agent.icon) }
                 .tag(AppTab.agent)
+        }
+        .overlay {
+            AgentTabBridge(targetFrame: $agentTabFrame, onTap: openAgent)
+                .allowsHitTesting(false)
+        }
+        .overlay {
+            if !agentTabFrame.isEmpty {
+                // coachMarkTarget must come before position: position wraps the
+                // view in a container that fills the proposal, so anchoring after
+                // it would register the whole screen instead of the tab slice.
+                Color.clear
+                    .frame(width: agentTabFrame.width, height: agentTabFrame.height)
+                    .coachMarkTarget(.agentTab)
+                    .position(x: agentTabFrame.midX, y: agentTabFrame.midY)
+                    .allowsHitTesting(false)
+            }
         }
         .modifier(NativeTabBarBehavior())
         .tint(MemdoTheme.accent)
@@ -203,6 +243,7 @@ struct AppShellView: View {
                 timeBucket: event.startAt.map(ScheduleTimeBucket.inferred(from:)) ?? .anytime
             )
             schedule.memo = event.notes
+            if let url = event.meetingURL { schedule.meetingURLString = url.absoluteString }
             scheduleStore.save(schedule)
         }
     }
@@ -210,6 +251,42 @@ struct AppShellView: View {
     private func select(_ tab: AppTab) {
         selectedTab = tab
         lastContentTab = tab
+    }
+
+    private var coachMarkStep: CoachMarkStep? {
+        guard let steps = coachMarkTour?.steps, steps.indices.contains(coachMarkIndex) else { return nil }
+        return steps[coachMarkIndex]
+    }
+
+    private func startCoachMarks(_ tour: CoachMarkTour) {
+        coachMarkTour = tour
+        coachMarkIndex = 0
+        select(tour.steps[0].tab)
+    }
+
+    private func previousCoachMark(from displayedIndex: Int) {
+        guard displayedIndex == coachMarkIndex,
+              let tour = coachMarkTour,
+              coachMarkIndex > 0
+        else { return }
+        coachMarkIndex -= 1
+        select(tour.steps[coachMarkIndex].tab)
+    }
+
+    private func nextCoachMark(from displayedIndex: Int) {
+        guard displayedIndex == coachMarkIndex, let tour = coachMarkTour else { return }
+        let next = coachMarkIndex + 1
+        guard tour.steps.indices.contains(next) else {
+            finishCoachMarks()
+            return
+        }
+        coachMarkIndex = next
+        select(tour.steps[next].tab)
+    }
+
+    private func finishCoachMarks() {
+        coachMarkTour = nil
+        coachMarkIndex = 0
     }
 }
 
@@ -228,11 +305,13 @@ private extension URL {
 
 private enum AppSheetDestination: Identifiable {
     case agent(String)
+    case guide
     case summary
 
     var id: String {
         switch self {
         case .agent: "agent"
+        case .guide: "guide"
         case .summary: "summary"
         }
     }
@@ -242,6 +321,7 @@ private struct AppShellBehavior: ViewModifier {
     @Binding var presentedSheet: AppSheetDestination?
     @Binding var agentComposer: String
     @Binding var agentResponse: String
+    let onStartCoachMarkTour: (CoachMarkTour) -> Void
 
     func body(content: Content) -> some View {
         content.sheet(item: $presentedSheet) { destination in
@@ -252,6 +332,8 @@ private struct AppShellBehavior: ViewModifier {
                     response: $agentResponse,
                     context: context
                 )
+            case .guide:
+                MemdoGuideSheet(onStartCoachMarkTour: onStartCoachMarkTour)
             case .summary:
                 DailySummaryView()
             }
