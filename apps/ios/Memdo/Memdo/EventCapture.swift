@@ -18,6 +18,8 @@ struct EventDraft {
     var startAt: Date?
     var endAt: Date?
     var notes: String
+    /// Extracted meeting link (Zoom/Meet/Teams), ready to write to `meetingURLString`.
+    var meetingURL: URL?
     /// A short "transcript" of what was inferred and how, for transparency.
     var provenance: [String]
 }
@@ -50,8 +52,16 @@ struct HeuristicEventExtractor: EventExtractor {
             }
         }
 
-        if hasMeetingLink(in: text) {
-            provenance.append("회의 링크 감지")
+        var meetingURL: URL? = nil
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+            let range = NSRange(text.startIndex..., in: text)
+            for match in detector.matches(in: text, range: range) {
+                if let url = match.url, MeetingProvider.recognized(url) != nil {
+                    meetingURL = url
+                    provenance.append("회의 링크 감지")
+                    break
+                }
+            }
         }
 
         return EventDraft(
@@ -59,6 +69,7 @@ struct HeuristicEventExtractor: EventExtractor {
             startAt: startAt,
             endAt: endAt,
             notes: text,
+            meetingURL: meetingURL,
             provenance: provenance
         )
     }
@@ -165,6 +176,9 @@ struct EventCaptureSheet: View {
                         LabeledContent("제목", value: draft.title.isEmpty ? "없음" : draft.title)
                         if let start = draft.startAt {
                             LabeledContent("시간", value: start.formatted(date: .abbreviated, time: .shortened))
+                        }
+                        if let provider = draft.meetingURL.flatMap(MeetingProvider.recognized) {
+                            LabeledContent("회의", value: provider.label)
                         }
                         if !draft.provenance.isEmpty {
                             Label(draft.provenance.joined(separator: " · "), systemImage: "sparkles")
