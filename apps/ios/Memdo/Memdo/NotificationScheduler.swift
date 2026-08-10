@@ -109,6 +109,64 @@ enum NotificationScheduler {
         case "TH": 5; case "FR": 6; case "SA": 7; default: nil
         }
     }
+
+    // MARK: - Per-schedule reminders
+
+    /// Cancels any existing reminder for `schedule` and schedules a fresh one
+    /// when the schedule has a future start time and a reminder offset.
+    /// Idempotent — safe to call on every save.
+    static func scheduleReminder(for schedule: ScheduleDetail) async {
+        let center = UNUserNotificationCenter.current()
+        let id = reminderID(for: schedule.id)
+        center.removePendingNotificationRequests(withIdentifiers: [id])
+
+        guard let offsetMinutes = schedule.reminderOffsetMinutes,
+              let startAt = schedule.startAt,
+              schedule.isActive,
+              !schedule.isDone
+        else { return }
+
+        let fireAt = startAt.addingTimeInterval(-Double(offsetMinutes) * 60)
+        guard fireAt > .now else { return }
+
+        let status = await center.notificationSettings().authorizationStatus
+        guard status == .authorized || status == .provisional else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = schedule.emoji.map { "\($0) \(schedule.title)" } ?? schedule.title
+        content.body = reminderBody(offset: offsetMinutes)
+        content.sound = .default
+        content.userInfo = ["memdo_link": "today"]
+
+        let components = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: fireAt
+        )
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+    }
+
+    /// Removes the pending reminder for a specific schedule.
+    static func cancelReminder(for scheduleID: UUID) {
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: [reminderID(for: scheduleID)])
+    }
+
+    private static func reminderID(for id: UUID) -> String {
+        "memdo.reminder-\(id.uuidString.lowercased())"
+    }
+
+    private static func reminderBody(offset: Int) -> String {
+        switch offset {
+        case 0: return "지금 시작해요"
+        case 1..<60: return "\(offset)분 후 시작해요"
+        case 60: return "1시간 후 시작해요"
+        case 61..<1440:
+            let h = offset / 60, m = offset % 60
+            return m == 0 ? "\(h)시간 후 시작해요" : "\(h)시간 \(m)분 후 시작해요"
+        default: return "내일 시작해요"
+        }
+    }
 }
 
 // MARK: - Delegate
