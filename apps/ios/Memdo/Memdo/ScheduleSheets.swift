@@ -77,12 +77,13 @@ struct ScheduleDetailSheet: View {
                         if let dueAt = draft.dueAt {
                             LabeledContent("마감", value: dueAt.formatted(date: .abbreviated, time: .shortened))
                         }
-                        if let mapURL = draft.googleMapsURL {
+                        if let mapURL = draft.appleMapsURL {
                             Link(destination: mapURL) {
                                 LabeledContent("장소", value: draft.location)
+                                    .foregroundStyle(MemdoTheme.accent)
                             }
                         } else {
-                            LabeledContent("장소", value: "없음")
+                            LabeledContent("장소", value: draft.location.isEmpty ? "없음" : draft.location)
                         }
                         if draft.isExternal {
                             LabeledContent("출처", value: draft.calendar.title)
@@ -658,61 +659,140 @@ private struct LocationPickerView: View {
     @State private var query = ""
     @State private var results: [MKMapItem] = []
     @State private var isSearching = false
+    @State private var selectedIndex: Int?
+    @State private var cameraPosition: MapCameraPosition = .automatic
 
     let currentLocation: ScheduleLocation?
     let onSelect: (ScheduleLocation?) -> Void
 
+    private var selectedItem: MKMapItem? {
+        selectedIndex.flatMap { results.indices.contains($0) ? results[$0] : nil }
+    }
+
     var body: some View {
-        List {
-            if let currentLocation {
-                Section("현재 장소") {
-                    Button(currentLocation.displayText) {
-                        onSelect(currentLocation)
-                        dismiss()
-                    }
+        VStack(spacing: 0) {
+            Map(position: $cameraPosition) {
+                ForEach(Array(results.enumerated()), id: \.offset) { index, item in
+                    Marker(item.name ?? "장소", coordinate: item.placemark.coordinate)
+                        .tint(index == selectedIndex ? MemdoTheme.brand : MemdoTheme.controlOutline)
                 }
             }
+            .mapStyle(.standard)
+            .frame(height: 220)
 
-            Section("검색 결과") {
-                if isSearching {
-                    ProgressView("장소를 찾는 중")
-                } else if results.isEmpty {
-                    ContentUnavailableView(
-                        "장소를 검색해 보세요",
-                        systemImage: "map",
-                        description: Text("건물명, 상호 또는 주소를 입력하세요.")
-                    )
-                } else {
-                    ForEach(Array(results.enumerated()), id: \.offset) { _, item in
-                        Button { select(item) } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(item.name ?? "이름 없는 장소")
-                                    .foregroundStyle(MemdoTheme.ink)
-                                if let address = item.placemark.title {
-                                    Text(address)
-                                        .font(.caption)
-                                        .foregroundStyle(MemdoTheme.secondaryInk)
+            List {
+                if let currentLocation {
+                    Section("저장된 장소") {
+                        Button(currentLocation.displayText) {
+                            onSelect(currentLocation)
+                            dismiss()
+                        }
+                        .foregroundStyle(MemdoTheme.ink)
+                    }
+                }
+
+                Section("검색 결과") {
+                    if isSearching {
+                        ProgressView("장소를 찾는 중")
+                    } else if results.isEmpty {
+                        ContentUnavailableView(
+                            "장소를 검색해 보세요",
+                            systemImage: "map",
+                            description: Text("건물명, 상호 또는 주소를 입력하세요.")
+                        )
+                    } else {
+                        ForEach(Array(results.enumerated()), id: \.offset) { index, item in
+                            Button { select(at: index) } label: {
+                                HStack(spacing: 10) {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(item.name ?? "이름 없는 장소")
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundStyle(MemdoTheme.ink)
+                                        if let address = item.placemark.title {
+                                            Text(address)
+                                                .font(.caption)
+                                                .foregroundStyle(MemdoTheme.secondaryInk)
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                    Spacer(minLength: 4)
+                                    if index == selectedIndex {
+                                        Image(systemName: "checkmark")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(MemdoTheme.brand)
+                                    }
                                 }
                             }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                if currentLocation != nil {
+                    Section {
+                        Button("장소 지우기", role: .destructive) {
+                            onSelect(nil)
+                            dismiss()
                         }
                     }
                 }
             }
-
-            if currentLocation != nil {
-                Section {
-                    Button("장소 지우기", role: .destructive) {
-                        onSelect(nil)
-                        dismiss()
-                    }
-                }
-            }
+            .memdoSystemList()
         }
-        .memdoSystemList()
         .searchable(text: $query, prompt: "건물, 상호, 주소")
         .onSubmit(of: .search, search)
         .navigationTitle("장소")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let item = selectedItem {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("선택") { confirm(item) }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+        .onChange(of: selectedIndex) { _, index in
+            guard let index, results.indices.contains(index) else { return }
+            let coord = results[index].placemark.coordinate
+            withAnimation(.easeInOut(duration: 0.35)) {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: coord,
+                    span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
+                ))
+            }
+        }
+        .onChange(of: results) { _, newResults in
+            selectedIndex = nil
+            guard !newResults.isEmpty else { return }
+            if newResults.count == 1 {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: newResults[0].placemark.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
+                ))
+            } else {
+                cameraPosition = .automatic
+            }
+        }
+    }
+
+    private func select(at index: Int) {
+        if selectedIndex == index {
+            // double-tap = immediate confirm
+            if let item = selectedItem { confirm(item) }
+        } else {
+            selectedIndex = index
+        }
+    }
+
+    private func confirm(_ item: MKMapItem) {
+        onSelect(ScheduleLocation(
+            name: item.name ?? "장소",
+            address: item.placemark.title,
+            latitude: item.placemark.coordinate.latitude,
+            longitude: item.placemark.coordinate.longitude,
+            provider: .appleMaps
+        ))
+        dismiss()
     }
 
     private func search() {
@@ -727,27 +807,17 @@ private struct LocationPickerView: View {
             isSearching = false
         }
     }
-
-    private func select(_ item: MKMapItem) {
-        onSelect(ScheduleLocation(
-            name: item.name ?? "장소",
-            address: item.placemark.title,
-            latitude: item.placemark.coordinate.latitude,
-            longitude: item.placemark.coordinate.longitude,
-            provider: .appleMaps
-        ))
-        dismiss()
-    }
 }
 
 private extension ScheduleDetail {
-    var googleMapsURL: URL? {
+    var appleMapsURL: URL? {
         guard let locationValue else { return nil }
-        if let latitude = locationValue.latitude, let longitude = locationValue.longitude {
-            return URL(string: "https://www.google.com/maps/search/?api=1&query=\(latitude),\(longitude)")
+        if let lat = locationValue.latitude, let lng = locationValue.longitude {
+            let q = (locationValue.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")
+            return URL(string: "maps://?ll=\(lat),\(lng)&q=\(q)")
         }
-        guard let query = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
-        return URL(string: "https://www.google.com/maps/search/?api=1&query=\(query)")
+        guard let q = locationValue.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
+        return URL(string: "maps://?q=\(q)")
     }
 }
 
