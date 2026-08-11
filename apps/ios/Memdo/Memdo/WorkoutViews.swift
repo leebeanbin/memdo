@@ -78,24 +78,55 @@ struct TodayWorkoutSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // 섹션 헤더
             HStack {
                 Label("운동", systemImage: "figure.run")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(MemdoTheme.secondaryInk)
                 Spacer()
-                Button("추가", systemImage: "plus", action: onAdd)
+                Button(action: onAdd) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                        Text("추가")
+                    }
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(MemdoTheme.brand)
+                }
             }
             .padding(.horizontal, MemdoMetrics.pagePadding)
-            .padding(.bottom, 4)
+            .padding(.bottom, 6)
 
             if workouts.isEmpty {
-                Text("오늘 운동 기록이 없어요")
-                    .font(.subheadline)
-                    .foregroundStyle(MemdoTheme.secondaryInk)
+                // 빈 상태 — 유저가 선택할 수 있는 두 경로를 암시
+                Button(action: onAdd) {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(MemdoTheme.brand.opacity(0.1))
+                                .frame(width: 36, height: 36)
+                            Image(systemName: "figure.run.circle")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(MemdoTheme.brand)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("운동 기록 추가")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(MemdoTheme.ink)
+                            Text("Apple Watch · 운동 앱 · 직접 입력")
+                                .font(.caption)
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(MemdoTheme.secondaryInk.opacity(0.5))
+                    }
                     .padding(.horizontal, MemdoMetrics.pagePadding)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 10)
+                    .background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             } else {
                 VStack(spacing: 0) {
                     ForEach(workouts) { workout in
