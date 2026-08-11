@@ -38,6 +38,8 @@ targets:
       - package: Supabase
       - target: MemdoWidget
         embed: true
+      - target: MemdoShare
+        embed: true
   MemdoWidget:
     type: app-extension
     platform: iOS
@@ -53,6 +55,20 @@ targets:
         SKIP_INSTALL: YES
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: MemdoWidget/Info.plist
+  MemdoShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - MemdoShare
+      - Memdo/PendingWorkoutStore.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.memdo.ios.share
+        PRODUCT_NAME: MemdoShare
+        CODE_SIGN_ENTITLEMENTS: MemdoShare/MemdoShare.entitlements
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: MemdoShare/Info.plist
   MemdoTests:
     type: bundle.unit-test
     platform: iOS
