@@ -1,3 +1,4 @@
+import ActivityKit
 import AppIntents
 import SwiftUI
 import WidgetKit
@@ -682,11 +683,116 @@ private extension Date {
     }
 }
 
+// MARK: - Live Activity
+
+struct MemdoScheduleLiveActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: MemdoScheduleAttributes.self) { context in
+            LiveActivityBannerView(state: context.state)
+        } dynamicIsland: { context in
+            let state = context.state
+            let accent = MemdoWidgetTheme.scheduleColor(state.colorName ?? "") ?? MemdoWidgetTheme.brand
+            return DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    Image(systemName: state.kind == "task" ? "checkmark.square.fill" : "clock.fill")
+                        .foregroundStyle(accent)
+                        .font(.title3)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    if state.phase == .upcoming, state.startAt > .now {
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text("시작까지")
+                                .font(.caption2)
+                                .foregroundStyle(MemdoWidgetTheme.secondary)
+                            Text(timerInterval: Date.now...state.startAt, countsDown: true)
+                                .font(.caption2.monospacedDigit().bold())
+                                .multilineTextAlignment(.trailing)
+                        }
+                    } else {
+                        Text("진행 중")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(accent)
+                    }
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    HStack {
+                        Circle().fill(accent).frame(width: 8, height: 8)
+                        Text(state.title).font(.headline).lineLimit(1)
+                        Spacer()
+                        Text(liveActivityTimeRange(state))
+                            .font(.caption)
+                            .foregroundStyle(MemdoWidgetTheme.secondary)
+                    }
+                    .padding(.top, 4)
+                }
+            } compactLeading: {
+                Circle().fill(accent).frame(width: 10, height: 10).padding(.leading, 4)
+            } compactTrailing: {
+                if state.phase == .upcoming, state.startAt > .now {
+                    Text(timerInterval: Date.now...state.startAt, countsDown: true)
+                        .font(.caption2.monospacedDigit())
+                        .frame(maxWidth: 44)
+                        .multilineTextAlignment(.trailing)
+                } else {
+                    Image(systemName: "clock.fill")
+                        .font(.caption2)
+                        .foregroundStyle(accent)
+                }
+            } minimal: {
+                Circle().fill(accent).frame(width: 10, height: 10)
+            }
+        }
+    }
+}
+
+private func liveActivityTimeRange(_ state: MemdoScheduleAttributes.ScheduleState) -> String {
+    let fmt = DateFormatter()
+    fmt.locale = Locale(identifier: "ko_KR")
+    fmt.dateFormat = "a h:mm"
+    var text = fmt.string(from: state.startAt)
+    if let end = state.endAt { text += " – " + fmt.string(from: end) }
+    return text
+}
+
+private struct LiveActivityBannerView: View {
+    let state: MemdoScheduleAttributes.ScheduleState
+
+    private var accent: Color {
+        MemdoWidgetTheme.scheduleColor(state.colorName ?? "") ?? MemdoWidgetTheme.brand
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle().fill(accent).frame(width: 12, height: 12)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(state.title).font(.headline).lineLimit(1)
+                Text(liveActivityTimeRange(state)).font(.caption).foregroundStyle(MemdoWidgetTheme.secondary)
+            }
+            Spacer()
+            if state.phase == .upcoming, state.startAt > .now {
+                Text(timerInterval: Date.now...state.startAt, countsDown: true)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(MemdoWidgetTheme.secondary)
+                    .multilineTextAlignment(.trailing)
+            } else {
+                Text("진행 중")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(accent)
+            }
+        }
+        .padding()
+        .foregroundStyle(MemdoWidgetTheme.accent)
+    }
+}
+
+// MARK: - Bundle
+
 @main
 struct MemdoWidgetBundle: WidgetBundle {
     var body: some Widget {
         MemdoTodayWidget()
         MemdoCalendarWidget()
+        MemdoScheduleLiveActivity()
     }
 }
 

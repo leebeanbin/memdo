@@ -8,6 +8,7 @@ import UserNotifications
 @main
 struct MemdoApp: App {
     @State private var session = MemdoSession()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -19,6 +20,11 @@ struct MemdoApp: App {
                 .task {
                     UNUserNotificationCenter.current().delegate = MemdoNotificationDelegate.shared
                     NotificationScheduler.registerCategories()
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active, let store = session.scheduleStore else { return }
+                    let today = Calendar.current.startOfDay(for: .now)
+                    LiveActivityScheduler.startUpcoming(from: store.items(for: today))
                 }
         }
     }

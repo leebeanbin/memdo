@@ -44,6 +44,7 @@ targets:
     sources:
       - MemdoWidget
       - Memdo/MemdoWidgetSchedule.swift
+      - Memdo/MemdoLiveActivity.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memdo.ios.widget
