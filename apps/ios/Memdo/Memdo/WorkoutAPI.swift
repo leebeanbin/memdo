@@ -165,7 +165,17 @@ extension MemdoAPIClient {
             accessToken: accessToken
         )
     }
+
+    func deleteWorkoutLog(id: UUID, accessToken: String) async throws {
+        let _: WorkoutDeleteResponseDTO = try await send(
+            path: "workout-logs/\(id.uuidString.lowercased())",
+            method: "DELETE",
+            accessToken: accessToken
+        )
+    }
 }
+
+private struct WorkoutDeleteResponseDTO: Decodable { let id: String }
 
 // MARK: - Workout Repository
 
@@ -212,6 +222,11 @@ actor WorkoutRepository {
         )
         let response = try await api.updateWorkoutLogDetails(id: log.id, dto, accessToken: accessToken)
         return response.toWorkoutLog() ?? log
+    }
+
+    func delete(id: UUID) async throws {
+        let token = try await accessToken()
+        try await api.deleteWorkoutLog(id: id, accessToken: token)
     }
 
     // MARK: Storage

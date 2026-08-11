@@ -239,6 +239,20 @@ final class WorkoutStore {
         return await importer.fetchNewWorkouts(excluding: known)
     }
 
+    func delete(_ workout: WorkoutLog) {
+        workouts.removeAll { $0.id == workout.id }
+        Task {
+            guard let repository else { return }
+            do {
+                try await repository.delete(id: workout.id)
+            } catch {
+                // Server rejected the delete — restore the item locally
+                upsertLocally(workout)
+                lastSyncError = error.localizedDescription
+            }
+        }
+    }
+
     func dismissSyncError() { lastSyncError = nil }
     func reset() { workouts = []; lastSyncError = nil }
 

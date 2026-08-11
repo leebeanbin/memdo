@@ -748,6 +748,7 @@ final class ScheduleStore {
         // Always reschedule the reminder, even when a concurrent write is already
         // in-flight. The guard below deduplicates network writes only.
         Task { await NotificationScheduler.scheduleReminder(for: schedule) }
+        Task { await NotificationScheduler.scheduleEndNotification(for: schedule) }
         guard !pendingWriteIDs.contains(schedule.id) else { return }
         pendingWriteIDs.insert(schedule.id)
         // A virtual occurrence (event-mode rule, computed but never written to the
@@ -957,7 +958,9 @@ final class ScheduleStore {
             // Original is now "rescheduled" status — cancel its reminder.
             // Replacement is a new entry on the new date — schedule its reminder.
             NotificationScheduler.cancelReminder(for: original.id)
+            NotificationScheduler.cancelEndNotification(for: original.id)
             await NotificationScheduler.scheduleReminder(for: result.replacement)
+            await NotificationScheduler.scheduleEndNotification(for: result.replacement)
         } catch ScheduleAPIError.offline {
             // `schedules` already shows `moved` optimistically -- leave it and
             // queue replay. If materialize landed before the drop, replay just
@@ -986,6 +989,7 @@ final class ScheduleStore {
         let schedule = schedules.remove(at: index)
         updateWidgetSnapshot()
         NotificationScheduler.cancelReminder(for: id)
+        NotificationScheduler.cancelEndNotification(for: id)
         pendingWriteIDs.insert(id)
         Task {
             await delete(schedule)
@@ -1034,11 +1038,13 @@ final class ScheduleStore {
     private func refreshUpcomingReminders() async {
         let now = Date.now
         let upcoming = schedules.filter { s in
-            s.isActive && s.reminderOffsetMinutes != nil
-                && s.startAt.map { $0 > now } == true
+            s.isActive && s.startAt.map { $0 > now } == true
         }
         for schedule in upcoming {
-            await NotificationScheduler.scheduleReminder(for: schedule)
+            if schedule.reminderOffsetMinutes != nil {
+                await NotificationScheduler.scheduleReminder(for: schedule)
+            }
+            await NotificationScheduler.scheduleEndNotification(for: schedule)
         }
     }
 

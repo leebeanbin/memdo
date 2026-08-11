@@ -176,6 +176,50 @@ enum NotificationScheduler {
             .removePendingNotificationRequests(withIdentifiers: [reminderID(for: scheduleID)])
     }
 
+    /// Schedules a completion notification at the schedule's endAt time.
+    /// Called alongside scheduleReminder — replaces the need for a Live Activity on regular schedules.
+    static func scheduleEndNotification(for schedule: ScheduleDetail) async {
+        let center = UNUserNotificationCenter.current()
+        let id = endNotificationID(for: schedule.id)
+        center.removePendingNotificationRequests(withIdentifiers: [id])
+
+        guard let endAt = schedule.endAt,
+              endAt > .now,
+              schedule.isActive,
+              !schedule.isDone
+        else { return }
+
+        let status = await center.notificationSettings().authorizationStatus
+        guard status == .authorized || status == .provisional else { return }
+
+        let content = UNMutableNotificationContent()
+        let prefix = schedule.emoji.map { "\($0) " } ?? ""
+        content.title = prefix + schedule.title
+        content.body = "일정이 종료됐어요"
+        content.sound = .default
+        content.userInfo = ["memdo_link": "schedule/\(schedule.id.uuidString.lowercased())"]
+        if let attachment = colorAttachment(for: schedule.color) {
+            content.attachments = [attachment]
+        }
+
+        let components = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: endAt
+        )
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+    }
+
+    /// Removes the pending end notification for a specific schedule.
+    static func cancelEndNotification(for scheduleID: UUID) {
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: [endNotificationID(for: scheduleID)])
+    }
+
+    private static func endNotificationID(for id: UUID) -> String {
+        "memdo.end-\(id.uuidString.lowercased())"
+    }
+
     private static func reminderID(for id: UUID) -> String {
         "memdo.reminder-\(id.uuidString.lowercased())"
     }

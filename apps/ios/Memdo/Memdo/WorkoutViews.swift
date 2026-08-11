@@ -146,25 +146,23 @@ struct TodayWorkoutSection: View {
 
 struct WorkoutDetailSheet: View {
     @Environment(WorkoutStore.self) private var workoutStore
+    @Environment(\.dismiss) private var dismiss
     @State private var editing = false
+    @State private var showDeleteConfirm = false
+    @State private var isTracking = false
     let workout: WorkoutLog
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // 경로 이미지 또는 첨부 사진
                     imageSection
-
-                    // 핵심 수치
                     statsGrid
 
-                    // 세트 기록 (근력 운동)
                     if let exercises = workout.exercises, !exercises.isEmpty {
                         exerciseSection(exercises)
                     }
 
-                    // 노트
                     if !workout.notes.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             Label("노트", systemImage: "note.text")
@@ -176,6 +174,11 @@ struct WorkoutDetailSheet: View {
                         }
                         .padding(MemdoMetrics.pagePadding)
                     }
+
+                    // Live 추적 버튼 — 현재 진행 중인 운동에만 표시
+                    if workout.startedAt <= .now && workout.endedAt >= .now {
+                        trackingSection
+                    }
                 }
                 .padding(.bottom, 40)
             }
@@ -186,9 +189,58 @@ struct WorkoutDetailSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("편집") { editing = true }
                 }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(role: .destructive) { showDeleteConfirm = true } label: {
+                        Image(systemName: "trash")
+                    }
+                }
             }
             .sheet(isPresented: $editing) {
                 WorkoutLogEditorSheet(workout: workout)
+            }
+            .confirmationDialog("운동 기록을 삭제할까요?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+                Button("삭제", role: .destructive) {
+                    WorkoutActivityTracker.cancel(workoutID: workout.id)
+                    workoutStore.delete(workout)
+                    dismiss()
+                }
+            }
+        }
+        .onAppear { isTracking = WorkoutActivityTracker.isTracking(workoutID: workout.id) }
+    }
+
+    private var trackingSection: some View {
+        VStack(spacing: 10) {
+            if isTracking {
+                Button {
+                    WorkoutActivityTracker.complete(workoutID: workout.id)
+                    isTracking = false
+                } label: {
+                    Label("운동 완료", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(.green, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, MemdoMetrics.pagePadding)
+            } else {
+                Button {
+                    WorkoutActivityTracker.start(
+                        workoutID: workout.id,
+                        activityType: workout.activityType.rawValue,
+                        startedAt: workout.startedAt
+                    )
+                    isTracking = true
+                } label: {
+                    Label("Dynamic Island 추적 시작", systemImage: "liveactivity")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(MemdoTheme.accent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .foregroundStyle(MemdoTheme.onAccent)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, MemdoMetrics.pagePadding)
             }
         }
     }
@@ -282,6 +334,7 @@ struct WorkoutLogEditorSheet: View {
     @State private var photoPicker: PhotosPickerItem?
     @State private var photoData: Data?
     @State private var isUploading = false
+    @State private var isTracking = false
 
     let isNew: Bool
 
@@ -392,13 +445,39 @@ struct WorkoutLogEditorSheet: View {
                         TextField("메모", text: $draft.notes, axis: .vertical)
                             .lineLimit(3...6)
                     }
+
+                    // Dynamic Island 추적 — 새 운동만
+                    if isNew {
+                        Section {
+                            Toggle(isOn: $isTracking) {
+                                Label("Dynamic Island 추적", systemImage: "liveactivity")
+                            }
+                            .onChange(of: isTracking) { _, tracking in
+                                if tracking {
+                                    draft.startedAt = .now
+                                    WorkoutActivityTracker.start(
+                                        workoutID: draft.id,
+                                        activityType: draft.activityType.rawValue,
+                                        startedAt: draft.startedAt
+                                    )
+                                } else {
+                                    WorkoutActivityTracker.cancel(workoutID: draft.id)
+                                }
+                            }
+                        } footer: {
+                            Text("켜면 Dynamic Island에 경과 시간이 표시돼요. 저장 시 자동 완료.")
+                        }
+                    }
                 }
             }
             .navigationTitle(isNew ? "운동 기록 추가" : "운동 편집")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("취소") { dismiss() }
+                    Button("취소") {
+                        if isTracking { WorkoutActivityTracker.cancel(workoutID: draft.id) }
+                        dismiss()
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("저장") { save() }
@@ -500,6 +579,9 @@ struct WorkoutLogEditorSheet: View {
 
     private func save() {
         draft.durationSeconds = max(1, Int(draft.endedAt.timeIntervalSince(draft.startedAt)))
+        if isTracking {
+            WorkoutActivityTracker.complete(workoutID: draft.id, endedAt: draft.endedAt)
+        }
         Task {
             isUploading = true
             defer { isUploading = false }

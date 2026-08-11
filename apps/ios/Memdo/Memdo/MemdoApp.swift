@@ -22,9 +22,20 @@ struct MemdoApp: App {
                     NotificationScheduler.registerCategories()
                 }
                 .onChange(of: scenePhase) { _, phase in
-                    guard phase == .active, let store = session.scheduleStore else { return }
-                    let today = Calendar.current.startOfDay(for: .now)
-                    LiveActivityScheduler.sync(from: store.items(for: today))
+                    guard phase == .active else { return }
+                    // Drain workouts queued from the Share Extension one at a time
+                    // so a crash between dequeue and save loses only one item, not all.
+                    while let pw = PendingWorkoutStore.dequeueOne() {
+                        let duration = max(1, Int(pw.endedAt.timeIntervalSince(pw.startedAt)))
+                        let log = WorkoutLog(
+                            activityType: WorkoutActivityType(rawValue: pw.activityType) ?? .other,
+                            startedAt: pw.startedAt,
+                            endedAt: pw.endedAt,
+                            durationSeconds: duration,
+                            notes: pw.notes
+                        )
+                        session.workoutStore.save(log)
+                    }
                 }
         }
     }
