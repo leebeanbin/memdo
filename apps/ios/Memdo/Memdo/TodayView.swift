@@ -12,9 +12,12 @@ struct TodayView: View {
     let coachMarkTarget: CoachMarkTarget?
     let onOpenGuide: () -> Void
     @Environment(ScheduleStore.self) private var scheduleStore
+    @Environment(WorkoutStore.self) private var workoutStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var presentedSheet: TodaySheetDestination?
+    @State private var selectedWorkout: WorkoutLog?
+    @State private var showAddWorkout = false
     @State private var selectedDate = Calendar.current.startOfDay(for: .now)
     @State private var showAllSchedules = false
     @State private var autoExpandArmed = true
@@ -117,6 +120,12 @@ struct TodayView: View {
                         .id(CoachMarkTarget.todaySchedule)
                         .coachMarkTarget(.todaySchedule)
 
+                        TodayWorkoutSection(
+                            workouts: workoutStore.workouts(on: selectedDate),
+                            onTap: { selectedWorkout = $0 },
+                            onAdd: { showAddWorkout = true }
+                        )
+
                         TodayBriefingSection()
                             .id(CoachMarkTarget.todayBriefing)
                             .coachMarkTarget(.todayBriefing)
@@ -161,6 +170,14 @@ struct TodayView: View {
                 case .detail(let schedule):
                     ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
                 }
+            }
+            .sheet(item: $selectedWorkout) { workout in
+                WorkoutDetailSheet(workout: workout)
+                    .environment(workoutStore)
+            }
+            .sheet(isPresented: $showAddWorkout) {
+                WorkoutLogEditorSheet()
+                    .environment(workoutStore)
             }
             .toolbar(.hidden, for: .navigationBar)
             .toolbarBackground(.hidden, for: .navigationBar)

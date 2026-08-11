@@ -27,6 +27,7 @@ enum AppTab: String, CaseIterable {
 
 struct AppShellView: View {
     let scheduleStore: ScheduleStore
+    @Environment(WorkoutStore.self) private var workoutStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = AppTab.today
@@ -64,6 +65,7 @@ struct AppShellView: View {
             )
             .environment(scheduleStore)
             .task { await scheduleStore.load() }
+            .task { await workoutStore.load() }
             .task {
                 guard !hasSeenGuide else { return }
                 // Let the launch-brand crossfade settle before presenting.
@@ -74,6 +76,7 @@ struct AppShellView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     Task { await scheduleStore.refresh() }
+                    Task { await workoutStore.syncHealthKit() }
                 }
             }
             .modifier(IntentCaptureBehavior { text in

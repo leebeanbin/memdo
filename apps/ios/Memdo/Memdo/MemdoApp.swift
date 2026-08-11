@@ -40,11 +40,13 @@ final class MemdoSession {
     private(set) var accountLabel = ""
     let scheduleStore: ScheduleStore?
     let preferencesStore: PreferencesStore?
+    let workoutStore: WorkoutStore
 
     private let client: SupabaseClient?
     private var activeUserID: UUID?
 
     init() {
+        var ws = WorkoutStore()
         do {
             let configuration = try MemdoConfiguration.current()
             let client = SupabaseClient(
@@ -76,12 +78,16 @@ final class MemdoSession {
             preferencesStore = PreferencesStore(
                 repository: PreferencesRepository(configuration: configuration, auth: client)
             )
+            ws = WorkoutStore(
+                repository: WorkoutRepository(configuration: configuration, auth: client)
+            )
         } catch {
             client = nil
             scheduleStore = nil
             preferencesStore = nil
             phase = .failed(error.localizedDescription)
         }
+        workoutStore = ws
     }
 
     func observe() async {
@@ -93,12 +99,14 @@ final class MemdoSession {
                     accountLabel = ""
                     scheduleStore?.reset()
                     preferencesStore?.reset()
+                    workoutStore.reset()
                     phase = .signedOut
                     continue
                 }
                 if activeUserID != session.user.id {
                     scheduleStore?.reset()
                     preferencesStore?.reset()
+                    workoutStore.reset()
                 }
                 activeUserID = session.user.id
                 accountLabel = session.user.email ?? "연결된 계정"
@@ -110,6 +118,7 @@ final class MemdoSession {
             accountLabel = ""
             scheduleStore?.reset()
             preferencesStore?.reset()
+            workoutStore.reset()
 
             switch event {
             case .initialSession, .signedOut:
@@ -208,6 +217,7 @@ private struct MemdoRootView: View {
         case .signedIn:
             if let scheduleStore = session.scheduleStore {
                 AppShellView(scheduleStore: scheduleStore)
+                    .environment(session.workoutStore)
             }
         case .failed(let message):
             ContentUnavailableView(

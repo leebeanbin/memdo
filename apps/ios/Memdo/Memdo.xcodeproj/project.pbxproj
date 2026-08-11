@@ -32,6 +32,10 @@
 		90F89ECA1FB60194F0A9A09C /* ScheduleAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA8A453029530AB440AFEB03 /* ScheduleAPI.swift */; };
 		98172737F1AC51B31154A93D /* ScheduleRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19BD21007334C06C0B2028F9 /* ScheduleRow.swift */; };
 		A09C21CAE62B67DF6753F375 /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C57EC467343059432D7D60D /* AssistantView.swift */; };
+		B91BF21B302AD508003636DD /* WorkoutModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91BF21A302AD508003636DD /* WorkoutModel.swift */; };
+		B91BF21D302AD701003636DD /* WorkoutAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91BF21C302AD701003636DD /* WorkoutAPI.swift */; };
+		B91BF21F302AD722003636DD /* HealthKitImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91BF21E302AD722003636DD /* HealthKitImporter.swift */; };
+		B91BF221302AD757003636DD /* WorkoutViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91BF220302AD757003636DD /* WorkoutViews.swift */; };
 		B9BE1E1D72E8D516A1E5022D /* MemdoWidgetSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7840EFE57EB95989FBC7696 /* MemdoWidgetSchedule.swift */; };
 		CA69FB6F6D5B184690B56D4A /* ScheduleModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3F01099D4577BD460F6C20F /* ScheduleModelTests.swift */; };
 		D51C8D4F2F01CBD92D0CFDB3 /* OutboxQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FC52CA73A8785841A1E45A0 /* OutboxQueue.swift */; };
@@ -87,7 +91,7 @@
 		3CB5605FC7B8059A8343A9D8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		42994A317F898780763B33D4 /* MemdoComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoComponents.swift; sourceTree = "<group>"; };
 		6561C352731005322618C740 /* DailySummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySummaryView.swift; sourceTree = "<group>"; };
-		7687EBCFF670FFE2F6CA37D2 /* Memdo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Memdo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7687EBCFF670FFE2F6CA37D2 /* Memdo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Memdo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		83EC68D64631B324F171F399 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8FD6B2D482673663626353C2 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
 		99214A59192502A52C8A73AD /* MemdoGuideSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoGuideSheet.swift; sourceTree = "<group>"; };
@@ -97,6 +101,10 @@
 		AE1B6FFACC369DADAFC99ADB /* MemdoWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MemdoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B159571A9900C21AA6BE4349 /* SecureSessionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureSessionStorage.swift; sourceTree = "<group>"; };
 		B4D119A0D929FA9AE7D47773 /* AppShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellView.swift; sourceTree = "<group>"; };
+		B91BF21A302AD508003636DD /* WorkoutModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutModel.swift; sourceTree = "<group>"; };
+		B91BF21C302AD701003636DD /* WorkoutAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutAPI.swift; sourceTree = "<group>"; };
+		B91BF21E302AD722003636DD /* HealthKitImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitImporter.swift; sourceTree = "<group>"; };
+		B91BF220302AD757003636DD /* WorkoutViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutViews.swift; sourceTree = "<group>"; };
 		BFB1F40579E7D5062404CC55 /* WallpaperIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperIntent.swift; sourceTree = "<group>"; };
 		C4EA7A02C55094DEBD06AF37 /* MemdoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoWidget.swift; sourceTree = "<group>"; };
 		CC29E0621A97339E19CDC2C1 /* Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preferences.swift; sourceTree = "<group>"; };
@@ -188,6 +196,10 @@
 				257B3BF059A0E5D9A80D8E50 /* TodayView.swift */,
 				BFB1F40579E7D5062404CC55 /* WallpaperIntent.swift */,
 				F2C12B14694C882524384138 /* WallpaperPreviewSheet.swift */,
+				B91BF21A302AD508003636DD /* WorkoutModel.swift */,
+				B91BF21C302AD701003636DD /* WorkoutAPI.swift */,
+				B91BF21E302AD722003636DD /* HealthKitImporter.swift */,
+				B91BF220302AD757003636DD /* WorkoutViews.swift */,
 			);
 			path = Memdo;
 			sourceTree = "<group>";
@@ -270,8 +282,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = 19005277C9F7D659B325E203 /* Build configuration list for PBXProject "Memdo" */;
 			developmentRegion = en;
@@ -333,6 +343,7 @@
 				190B58650DDB5E6EBE7AD2AC /* AgentTabBridge.swift in Sources */,
 				4CE9071DE9A5E1E5F3D45F0A /* AppShellView.swift in Sources */,
 				F8D4CF99953AB55A8AF78167 /* AppShortcuts.swift in Sources */,
+				B91BF21D302AD701003636DD /* WorkoutAPI.swift in Sources */,
 				A09C21CAE62B67DF6753F375 /* AssistantView.swift in Sources */,
 				8440D2E9F99B1C9848CF21ED /* CalendarView.swift in Sources */,
 				87E2689DFF3C0F8C22A74D06 /* CoachMarks.swift in Sources */,
@@ -347,15 +358,18 @@
 				D51C8D4F2F01CBD92D0CFDB3 /* OutboxQueue.swift in Sources */,
 				6330199617D23E6B9A705C4A /* Preferences.swift in Sources */,
 				90F89ECA1FB60194F0A9A09C /* ScheduleAPI.swift in Sources */,
+				B91BF21B302AD508003636DD /* WorkoutModel.swift in Sources */,
 				5AFEEBA9CD4F0FEBBA50F09B /* ScheduleModel.swift in Sources */,
 				98172737F1AC51B31154A93D /* ScheduleRow.swift in Sources */,
 				E117E6A55D78273E89DFAAC0 /* ScheduleSearchView.swift in Sources */,
+				B91BF221302AD757003636DD /* WorkoutViews.swift in Sources */,
 				480BC8CB74B2601AFEEF5DBD /* ScheduleSheets.swift in Sources */,
 				7E76ED8B0A95132D8C445E02 /* SecureSessionStorage.swift in Sources */,
 				F63E8DD2470DCBE30FA93063 /* SettingsView.swift in Sources */,
 				5C8DB08635A4922DF0808F7B /* TodayComponents.swift in Sources */,
 				E49AD453117D9B5AB53EA8CE /* TodayView.swift in Sources */,
 				27F704F7116840EA5D152218 /* WallpaperIntent.swift in Sources */,
+				B91BF21F302AD722003636DD /* HealthKitImporter.swift in Sources */,
 				84884B9604E82F5666617F18 /* WallpaperPreviewSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

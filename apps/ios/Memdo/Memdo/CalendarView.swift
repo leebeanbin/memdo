@@ -3,6 +3,7 @@ import SwiftUI
 struct CalendarView: View {
     let coachMarkTarget: CoachMarkTarget?
     @Environment(ScheduleStore.self) private var scheduleStore
+    @Environment(WorkoutStore.self) private var workoutStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isSearchPresented: Bool
     @Binding var targetDate: Date?
@@ -10,6 +11,8 @@ struct CalendarView: View {
     @State private var displayedMonth = Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
     @State private var showAll = false
     @State private var presentedSheet: CalendarSheetDestination?
+    @State private var selectedWorkout: WorkoutLog?
+    @State private var showAddWorkout = false
     @State private var searchQuery = ""
     @State private var searchScope = ScheduleSearchScope.all
     @State private var calendarFilter = CalendarDisplayFilter.all
@@ -32,6 +35,14 @@ struct CalendarView: View {
         filteredSchedules
             .filter { $0.occurs(on: selectedDate) }
             .sorted { $0.timeSortKey(on: selectedDate) < $1.timeSortKey(on: selectedDate) }
+    }
+
+    private var workoutDays: Set<Int> {
+        let cal = Calendar.current
+        guard let interval = cal.dateInterval(of: .month, for: displayedMonth) else { return [] }
+        return Set(workoutStore.workouts
+            .filter { $0.startedAt >= interval.start && $0.startedAt < interval.end }
+            .map { cal.component(.day, from: $0.startedAt) })
     }
 
     private var scheduleCounts: [Int: Int] {
@@ -83,6 +94,7 @@ struct CalendarView: View {
                     month: displayedMonth,
                     selectedDate: selectedDate,
                     scheduleCounts: scheduleCounts,
+                    workoutDays: workoutDays,
                     onSelect: select,
                     onOpen: openDay,
                     onGoToday: goToday,
@@ -98,6 +110,11 @@ struct CalendarView: View {
                     onToggleExpanded: toggleAgenda,
                     onOpenSchedule: { presentedSheet = .detail($0) }
                 )
+                TodayWorkoutSection(
+                    workouts: workoutStore.workouts(on: selectedDate),
+                    onTap: { selectedWorkout = $0 },
+                    onAdd: { showAddWorkout = true }
+                )
             }
         }
         .sheet(item: $presentedSheet) { sheet in
@@ -109,6 +126,14 @@ struct CalendarView: View {
             case .detail(let schedule):
                 ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
             }
+        }
+        .sheet(item: $selectedWorkout) { workout in
+            WorkoutDetailSheet(workout: workout)
+                .environment(workoutStore)
+        }
+        .sheet(isPresented: $showAddWorkout) {
+            WorkoutLogEditorSheet()
+                .environment(workoutStore)
         }
         .onChange(of: targetDate) { _, date in
             guard let date else { return }
@@ -218,6 +243,7 @@ private struct CalendarMonthCard: View {
     let month: Date
     let selectedDate: Date
     let scheduleCounts: [Int: Int]
+    let workoutDays: Set<Int>
     let onSelect: (Date) -> Void
     let onOpen: (Date) -> Void
     let onGoToday: () -> Void
@@ -352,6 +378,7 @@ private struct CalendarMonthCard: View {
         let day = Calendar.current.component(.day, from: date)
         let isSelected = Calendar.current.isDate(date, inSameDayAs: selectedDate)
         let count = scheduleCounts[day, default: 0]
+        let hasWorkout = workoutDays.contains(day)
 
         return Button { onSelect(date) } label: {
             Text("\(day)")
@@ -360,8 +387,17 @@ private struct CalendarMonthCard: View {
                 .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
                 .background(isSelected ? MemdoTheme.accent : .clear, in: Circle())
                 .overlay(alignment: .bottom) {
-                    MemdoScheduleCountDots(count: count, isEmphasized: isSelected)
-                        .padding(.bottom, 4)
+                    HStack(spacing: 3) {
+                        MemdoScheduleCountDots(count: count, isEmphasized: isSelected)
+                        if hasWorkout {
+                            Circle()
+                                .fill(isSelected ? MemdoTheme.onAccent.opacity(0.8) : Color.orange)
+                                .frame(width: 3, height: 3)
+                        }
+                    }
+                    .frame(height: 4)
+                    .padding(.bottom, 4)
+                    .accessibilityHidden(true)
                 }
         }
         .buttonStyle(.plain)
@@ -372,7 +408,7 @@ private struct CalendarMonthCard: View {
         .accessibilityHint("길게 누르면 하루 일정 메뉴가 열립니다")
         .accessibilityLabel(date.formatted(.dateTime.month().day().weekday(.wide)))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityValue("일정 \(count)개\(isSelected ? ", 선택됨" : "")")
+        .accessibilityValue("일정 \(count)개\(hasWorkout ? ", 운동 있음" : "")\(isSelected ? ", 선택됨" : "")")
         .accessibilityAction(named: "하루 일정 메뉴 열기") { onOpen(date) }
     }
 }
@@ -486,11 +522,18 @@ private enum CalendarSheetDestination: Identifiable {
 private struct DayAgendaSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScheduleStore.self) private var scheduleStore
+    @Environment(WorkoutStore.self) private var workoutStore
     let date: Date
     @State private var presentedSheet: DayAgendaDestination?
+    @State private var selectedWorkout: WorkoutLog?
+    @State private var showAddWorkout = false
 
     private var daySchedules: [ScheduleDetail] {
         scheduleStore.items(for: date)
+    }
+
+    private var dayWorkouts: [WorkoutLog] {
+        workoutStore.workouts(on: date)
     }
 
     var body: some View {
@@ -502,7 +545,7 @@ private struct DayAgendaSheet: View {
                         value: "\(daySchedules.count)개"
                     )
                 }
-                if daySchedules.isEmpty {
+                if daySchedules.isEmpty && dayWorkouts.isEmpty {
                     ContentUnavailableView(
                         "비어 있는 하루예요",
                         systemImage: "calendar.badge.plus",
@@ -510,14 +553,24 @@ private struct DayAgendaSheet: View {
                     )
                     .listRowBackground(Color.clear)
                 } else {
-                    Section("일정") {
-                        ForEach(daySchedules) { schedule in
-                            ScheduleRow(
-                                schedule: schedule,
-                                context: .timeline,
-                                onOpen: { presentedSheet = .detail(schedule) }
-                            )
-                                .listRowInsets(EdgeInsets())
+                    if !daySchedules.isEmpty {
+                        Section("일정") {
+                            ForEach(daySchedules) { schedule in
+                                ScheduleRow(
+                                    schedule: schedule,
+                                    context: .timeline,
+                                    onOpen: { presentedSheet = .detail(schedule) }
+                                )
+                                    .listRowInsets(EdgeInsets())
+                            }
+                        }
+                    }
+                    if !dayWorkouts.isEmpty {
+                        Section("운동") {
+                            ForEach(dayWorkouts) { workout in
+                                WorkoutLogRow(workout: workout) { selectedWorkout = workout }
+                                    .listRowInsets(EdgeInsets())
+                            }
                         }
                     }
                 }
@@ -548,6 +601,14 @@ private struct DayAgendaSheet: View {
             case .detail(let schedule):
                 ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
             }
+        }
+        .sheet(item: $selectedWorkout) { workout in
+            WorkoutDetailSheet(workout: workout)
+                .environment(workoutStore)
+        }
+        .sheet(isPresented: $showAddWorkout) {
+            WorkoutLogEditorSheet()
+                .environment(workoutStore)
         }
         .memdoSheetPresentation()
     }
