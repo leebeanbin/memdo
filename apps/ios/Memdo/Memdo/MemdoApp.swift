@@ -24,7 +24,7 @@ struct MemdoApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active, let store = session.scheduleStore else { return }
                     let today = Calendar.current.startOfDay(for: .now)
-                    LiveActivityScheduler.startUpcoming(from: store.items(for: today))
+                    LiveActivityScheduler.sync(from: store.items(for: today))
                 }
         }
     }

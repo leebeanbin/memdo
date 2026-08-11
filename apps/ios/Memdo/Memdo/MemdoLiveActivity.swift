@@ -8,7 +8,9 @@ struct MemdoScheduleAttributes: ActivityAttributes {
 
     struct ScheduleState: Codable, Hashable, Sendable {
         enum Phase: String, Codable, Hashable, Sendable {
-            case upcoming, ongoing
+            case upcoming   // 시작 전 — 카운트다운
+            case ongoing    // 진행 중 — 종료까지 카운트다운
+            case done       // 완료 — 잠깐 표시 후 사라짐
         }
 
         var title: String

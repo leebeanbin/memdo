@@ -694,25 +694,12 @@ struct MemdoScheduleLiveActivity: Widget {
             let accent = MemdoWidgetTheme.scheduleColor(state.colorName ?? "") ?? MemdoWidgetTheme.brand
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: state.kind == "task" ? "checkmark.square.fill" : "clock.fill")
-                        .foregroundStyle(accent)
+                    Image(systemName: liveActivityIcon(state))
+                        .foregroundStyle(liveActivityPhaseColor(state, accent: accent))
                         .font(.title3)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    if state.phase == .upcoming, state.startAt > .now {
-                        VStack(alignment: .trailing, spacing: 1) {
-                            Text("시작까지")
-                                .font(.caption2)
-                                .foregroundStyle(MemdoWidgetTheme.secondary)
-                            Text(timerInterval: Date.now...state.startAt, countsDown: true)
-                                .font(.caption2.monospacedDigit().bold())
-                                .multilineTextAlignment(.trailing)
-                        }
-                    } else {
-                        Text("진행 중")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(accent)
-                    }
+                    liveActivityExpandedTrailing(state, accent: accent)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack {
@@ -728,20 +715,93 @@ struct MemdoScheduleLiveActivity: Widget {
             } compactLeading: {
                 Circle().fill(accent).frame(width: 10, height: 10).padding(.leading, 4)
             } compactTrailing: {
-                if state.phase == .upcoming, state.startAt > .now {
-                    Text(timerInterval: Date.now...state.startAt, countsDown: true)
-                        .font(.caption2.monospacedDigit())
-                        .frame(maxWidth: 44)
-                        .multilineTextAlignment(.trailing)
-                } else {
-                    Image(systemName: "clock.fill")
-                        .font(.caption2)
-                        .foregroundStyle(accent)
-                }
+                liveActivityCompactTrailing(state, accent: accent)
             } minimal: {
-                Circle().fill(accent).frame(width: 10, height: 10)
+                if state.phase == .done {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.caption2)
+                } else {
+                    Circle().fill(accent).frame(width: 10, height: 10)
+                }
             }
         }
+    }
+}
+
+@ViewBuilder
+private func liveActivityExpandedTrailing(
+    _ state: MemdoScheduleAttributes.ScheduleState,
+    accent: Color
+) -> some View {
+    switch state.phase {
+    case .upcoming where state.startAt > .now:
+        VStack(alignment: .trailing, spacing: 1) {
+            Text("시작까지").font(.caption2).foregroundStyle(MemdoWidgetTheme.secondary)
+            Text(timerInterval: Date.now...state.startAt, countsDown: true)
+                .font(.caption2.monospacedDigit().bold())
+                .multilineTextAlignment(.trailing)
+        }
+    case .ongoing:
+        if let endAt = state.endAt, endAt > .now {
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("종료까지").font(.caption2).foregroundStyle(MemdoWidgetTheme.secondary)
+                Text(timerInterval: Date.now...endAt, countsDown: true)
+                    .font(.caption2.monospacedDigit().bold())
+                    .foregroundStyle(.green)
+                    .multilineTextAlignment(.trailing)
+            }
+        } else {
+            Text("진행 중").font(.caption2.weight(.semibold)).foregroundStyle(.green)
+        }
+    case .done, _:
+        Label("완료", systemImage: "checkmark.circle.fill")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.green)
+    }
+}
+
+@ViewBuilder
+private func liveActivityCompactTrailing(
+    _ state: MemdoScheduleAttributes.ScheduleState,
+    accent: Color
+) -> some View {
+    switch state.phase {
+    case .upcoming where state.startAt > .now:
+        Text(timerInterval: Date.now...state.startAt, countsDown: true)
+            .font(.caption2.monospacedDigit())
+            .frame(maxWidth: 44)
+            .multilineTextAlignment(.trailing)
+    case .ongoing:
+        if let endAt = state.endAt, endAt > .now {
+            Text(timerInterval: Date.now...endAt, countsDown: true)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.green)
+                .frame(maxWidth: 44)
+                .multilineTextAlignment(.trailing)
+        } else {
+            Image(systemName: "clock.fill").font(.caption2).foregroundStyle(.green)
+        }
+    case .done, _:
+        Image(systemName: "checkmark.circle.fill").font(.caption2).foregroundStyle(.green)
+    }
+}
+
+private func liveActivityIcon(_ state: MemdoScheduleAttributes.ScheduleState) -> String {
+    switch state.phase {
+    case .done: "checkmark.circle.fill"
+    default: state.kind == "task" ? "checkmark.square.fill" : "clock.fill"
+    }
+}
+
+private func liveActivityPhaseColor(
+    _ state: MemdoScheduleAttributes.ScheduleState,
+    accent: Color
+) -> Color {
+    switch state.phase {
+    case .upcoming: accent
+    case .ongoing: .green
+    case .done: .green
     }
 }
 
@@ -769,19 +829,37 @@ private struct LiveActivityBannerView: View {
                 Text(liveActivityTimeRange(state)).font(.caption).foregroundStyle(MemdoWidgetTheme.secondary)
             }
             Spacer()
-            if state.phase == .upcoming, state.startAt > .now {
-                Text(timerInterval: Date.now...state.startAt, countsDown: true)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(MemdoWidgetTheme.secondary)
-                    .multilineTextAlignment(.trailing)
-            } else {
-                Text("진행 중")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(accent)
-            }
+            bannerTrailing
         }
         .padding()
         .foregroundStyle(MemdoWidgetTheme.accent)
+    }
+
+    @ViewBuilder
+    private var bannerTrailing: some View {
+        switch state.phase {
+        case .upcoming where state.startAt > .now:
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("시작까지").font(.caption2).foregroundStyle(MemdoWidgetTheme.secondary)
+                Text(timerInterval: Date.now...state.startAt, countsDown: true)
+                    .font(.caption.monospacedDigit())
+            }
+        case .ongoing:
+            if let endAt = state.endAt, endAt > .now {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("종료까지").font(.caption2).foregroundStyle(MemdoWidgetTheme.secondary)
+                    Text(timerInterval: Date.now...endAt, countsDown: true)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.green)
+                }
+            } else {
+                Text("진행 중").font(.caption.weight(.semibold)).foregroundStyle(.green)
+            }
+        case .done, _:
+            Label("완료", systemImage: "checkmark.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.green)
+        }
     }
 }
 
