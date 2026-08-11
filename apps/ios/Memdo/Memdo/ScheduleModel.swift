@@ -105,6 +105,27 @@ enum ScheduleTimeBucket: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+struct ScheduleUserCategory: Identifiable, Codable, Equatable {
+    var id: UUID
+    var name: String
+    var emoji: String
+    var color: ScheduleColor
+    var isTaskKind: Bool
+
+    private static let storageKey = "memdo.v1.userCategories"
+
+    static func load() -> [ScheduleUserCategory] {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let cats = try? JSONDecoder().decode([ScheduleUserCategory].self, from: data)
+        else { return [] }
+        return cats
+    }
+
+    static func persist(_ cats: [ScheduleUserCategory]) {
+        UserDefaults.standard.set(try? JSONEncoder().encode(cats), forKey: storageKey)
+    }
+}
+
 enum ScheduleColor: String, CaseIterable, Identifiable, Codable {
     case coral
     case amber

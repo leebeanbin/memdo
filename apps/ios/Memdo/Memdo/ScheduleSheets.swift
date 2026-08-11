@@ -248,35 +248,38 @@ struct ScheduleEditorFields: View {
     @Environment(ScheduleStore.self) private var scheduleStore
     @Binding var schedule: ScheduleDetail
     var allowsRecurrence = false
+    var isEmbedded = false
 
     var body: some View {
         Group {
             Section("기본 정보") {
                 TextField("일정 제목", text: $schedule.title)
-                Menu {
-                    Section("유형") {
-                        ForEach(ScheduleKind.allCases) { kind in
-                            Button { select(kind) } label: {
-                                if schedule.kind == kind {
-                                    Label(kind.label, systemImage: "checkmark")
-                                } else {
-                                    Text(kind.label)
+                if !isEmbedded {
+                    Menu {
+                        Section("유형") {
+                            ForEach(ScheduleKind.allCases) { kind in
+                                Button { select(kind) } label: {
+                                    if schedule.kind == kind {
+                                        Label(kind.label, systemImage: "checkmark")
+                                    } else {
+                                        Text(kind.label)
+                                    }
                                 }
                             }
                         }
-                    }
-                    Section("캘린더") {
-                        ForEach(scheduleStore.calendars) { calendar in
-                            Button { schedule.calendar = calendar } label: {
-                                Label(
-                                    calendar.title,
-                                    systemImage: schedule.calendar == calendar ? "checkmark" : calendar.provider.systemImage
-                                )
+                        Section("캘린더") {
+                            ForEach(scheduleStore.calendars) { cal in
+                                Button { schedule.calendar = cal } label: {
+                                    Label(
+                                        cal.title,
+                                        systemImage: schedule.calendar == cal ? "checkmark" : cal.provider.systemImage
+                                    )
+                                }
                             }
                         }
+                    } label: {
+                        LabeledContent("분류", value: "\(schedule.kind.label) · \(schedule.calendar.title)")
                     }
-                } label: {
-                    LabeledContent("분류", value: "\(schedule.kind.label) · \(schedule.calendar.title)")
                 }
             }
 
@@ -383,7 +386,7 @@ struct ScheduleEditorFields: View {
                 }
             }
 
-            Section("서식") {
+            if !isEmbedded { Section("서식") {
                 HStack {
                     TextField("이모지", text: emojiBinding)
                         .frame(width: 36, alignment: .center)
@@ -410,7 +413,7 @@ struct ScheduleEditorFields: View {
                 }
                 .frame(minHeight: 36)
                 .padding(.vertical, 4)
-            }
+            } }  // if !isEmbedded
 
             Section {
                 TextField("메모 없음", text: $schedule.memo, axis: .vertical)
@@ -556,46 +559,191 @@ struct ScheduleEditorFields: View {
     }
 }
 
+// MARK: - Category type for new-entry picker
+
+private enum AddCategory: Equatable {
+    case task, event, workout
+    case custom(ScheduleUserCategory)
+
+    var label: String {
+        switch self {
+        case .task:          "할 일"
+        case .event:         "시간 일정"
+        case .workout:       "운동"
+        case .custom(let c): c.name
+        }
+    }
+    var emoji: String {
+        switch self {
+        case .task:          "✅"
+        case .event:         "📅"
+        case .workout:       "🏃"
+        case .custom(let c): c.emoji
+        }
+    }
+    var accentColor: Color {
+        switch self {
+        case .task:          MemdoTheme.accent
+        case .event:         .blue
+        case .workout:       .orange
+        case .custom(let c): c.color.swiftUIColor
+        }
+    }
+    var scheduleKind: ScheduleKind {
+        switch self {
+        case .task, .workout: .task
+        case .event:          .event
+        case .custom(let c):  c.isTaskKind ? .task : .event
+        }
+    }
+    var scheduleColor: ScheduleColor? {
+        switch self {
+        case .task:          nil
+        case .event:         .sky
+        case .workout:       .coral
+        case .custom(let c): c.color
+        }
+    }
+    var systemImage: String {
+        switch self {
+        case .task:          "checkmark.square.fill"
+        case .event:         "calendar"
+        case .workout:       "figure.run"
+        case .custom:        "tag.fill"
+        }
+    }
+    var isWorkout: Bool { self == .workout }
+}
+
+// MARK: - AddScheduleSheet
+
 struct AddScheduleSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScheduleStore.self) private var scheduleStore
+    @Environment(WorkoutStore.self) private var workoutStore
+
+    @State private var selectedCategory: AddCategory = .task
     @State private var draft: ScheduleDetail
     @State private var showCapture = false
+    @State private var userCategories: [ScheduleUserCategory] = []
+    @State private var showAddCategory = false
+
+    // Workout-specific state
+    @State private var workoutActivityType: WorkoutActivityType = .running
+    @State private var workoutStartAt: Date
+    @State private var workoutEndAt: Date
+    @State private var workoutDistanceText = ""
+    @State private var workoutCaloriesText = ""
+    @State private var workoutLocation = ""
+    @State private var workoutNotes = ""
 
     let onSave: (ScheduleDetail) -> Void
 
     private var canSave: Bool {
-        !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if selectedCategory.isWorkout {
+            return workoutStartAt < workoutEndAt
+        }
+        return !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && UUID(uuidString: draft.calendar.id) != nil
             && draft.isTimeRangeValid
     }
 
     init(date: Date, onSave: @escaping (ScheduleDetail) -> Void) {
-        _draft = State(initialValue: Self.makeDraft(for: date))
+        let d = Self.makeDraft(for: date)
+        _draft = State(initialValue: d)
+        _workoutStartAt = State(initialValue: d.startAt ?? date)
+        _workoutEndAt   = State(initialValue: d.endAt   ?? date.addingTimeInterval(3_600))
         self.onSave = onSave
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Button {
-                    showCapture = true
-                } label: {
-                    Label("붙여넣기로 채우기", systemImage: "wand.and.stars")
-                        .foregroundStyle(MemdoTheme.accent)
+                // ── 분류 (색상 아이콘 포함, 캘린더 통합) ─────
+                Section {
+                    Menu {
+                        Section("유형") {
+                            nativeCategoryButton(.task)
+                            nativeCategoryButton(.event)
+                            nativeCategoryButton(.workout)
+                        }
+                        if !userCategories.isEmpty {
+                            Section("내 카테고리") {
+                                ForEach(userCategories) { cat in
+                                    nativeCategoryButton(.custom(cat))
+                                }
+                            }
+                        }
+                        if !selectedCategory.isWorkout && !scheduleStore.calendars.isEmpty {
+                            Divider()
+                            Section("캘린더") {
+                                ForEach(scheduleStore.calendars) { cal in
+                                    Button { draft.calendar = cal } label: {
+                                        Label(
+                                            cal.title,
+                                            systemImage: draft.calendar == cal ? "checkmark" : cal.provider.systemImage
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Divider()
+                        Button("카테고리 추가", systemImage: "plus") { showAddCategory = true }
+                    } label: {
+                        HStack {
+                            Text("분류")
+                                .foregroundStyle(MemdoTheme.ink)
+                            Spacer()
+                            HStack(spacing: 6) {
+                                Image(systemName: selectedCategory.systemImage)
+                                    .foregroundStyle(selectedCategory.accentColor)
+                                    .imageScale(.small)
+                                let calSuffix = selectedCategory.isWorkout ? "" : " · \(draft.calendar.title)"
+                                Text(selectedCategory.label + calSuffix)
+                                    .foregroundStyle(MemdoTheme.secondaryInk)
+                            }
+                        }
+                    }
+
+                    if !selectedCategory.isWorkout {
+                        HStack(spacing: 10) {
+                            Text("색상")
+                                .foregroundStyle(MemdoTheme.ink)
+                            Spacer()
+                            ForEach(ScheduleColor.allCases) { c in
+                                let isSelected = draft.color == c
+                                Circle()
+                                    .fill(c.swiftUIColor)
+                                    .frame(width: 20, height: 20)
+                                    .overlay(Circle().stroke(.primary, lineWidth: isSelected ? 2 : 0).padding(2))
+                                    .scaleEffect(isSelected ? 1.15 : 1)
+                                    .animation(.easeInOut(duration: 0.12), value: isSelected)
+                                    .onTapGesture { draft.color = isSelected ? nil : c }
+                                    .accessibilityLabel(c.label)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
                 }
-                ScheduleEditorFields(schedule: $draft, allowsRecurrence: true)
+
+                if selectedCategory.isWorkout {
+                    workoutForm
+                } else {
+                    Section {
+                        Button { showCapture = true } label: {
+                            Label("붙여넣기로 채우기", systemImage: "wand.and.stars")
+                                .foregroundStyle(MemdoTheme.accent)
+                        }
+                    }
+                    ScheduleEditorFields(schedule: $draft, allowsRecurrence: true, isEmbedded: true)
+                }
             }
             .memdoSystemList()
-            .sheet(isPresented: $showCapture) {
-                EventCaptureSheet { event in applyCapture(event) }
-            }
             .navigationTitle("새 일정")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("취소") { dismiss() }
-                        .foregroundStyle(MemdoTheme.accent)
+                    Button("취소") { dismiss() }.foregroundStyle(MemdoTheme.accent)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("추가") { save() }
@@ -603,12 +751,125 @@ struct AddScheduleSheet: View {
                         .disabled(!canSave)
                 }
             }
+            .sheet(isPresented: $showCapture) {
+                EventCaptureSheet { applyCapture($0) }
+            }
+            .sheet(isPresented: $showAddCategory) {
+                AddCategorySheet { newCat in
+                    userCategories.append(newCat)
+                    ScheduleUserCategory.persist(userCategories)
+                }
+            }
         }
         .memdoSheetPresentation([.large])
+        .onAppear { userCategories = ScheduleUserCategory.load() }
     }
 
-    // Fills the draft from an extracted proposal. The editor itself is the
-    // approval gate — nothing is created until the user taps 추가.
+    @ViewBuilder
+    private func nativeCategoryButton(_ category: AddCategory) -> some View {
+        Button { selectCategory(category) } label: {
+            if selectedCategory == category {
+                Label(category.label, systemImage: "checkmark")
+            } else {
+                Text(category.label)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var workoutForm: some View {
+        Section {
+            Picker("활동 종류", selection: $workoutActivityType) {
+                ForEach(WorkoutActivityType.allCases) { type in
+                    Label(type.label, systemImage: type.systemImage).tag(type)
+                }
+            }
+            .pickerStyle(.menu)
+            .onChange(of: workoutActivityType) { _, type in
+                if !type.hasDistance { workoutDistanceText = "" }
+            }
+        }
+
+        Section("시간") {
+            DatePicker("시작", selection: $workoutStartAt, displayedComponents: [.date, .hourAndMinute])
+                .datePickerStyle(.compact)
+            DatePicker("종료", selection: $workoutEndAt, in: workoutStartAt..., displayedComponents: [.date, .hourAndMinute])
+                .datePickerStyle(.compact)
+            let secs = max(Int(workoutEndAt.timeIntervalSince(workoutStartAt)), 0)
+            LabeledContent("소요 시간", value: secs > 0 ? formatDuration(secs) : "--")
+        }
+
+        if workoutActivityType.hasDistance {
+            Section(workoutActivityType.distanceLabel) {
+                TextField("0.0", text: $workoutDistanceText)
+                    .keyboardType(.decimalPad)
+            }
+        }
+
+        Section("칼로리 (kcal)") {
+            TextField("0", text: $workoutCaloriesText)
+                .keyboardType(.numberPad)
+        }
+
+        Section("장소") {
+            TextField("장소 (선택)", text: $workoutLocation)
+        }
+
+        Section("노트") {
+            TextField("메모", text: $workoutNotes, axis: .vertical)
+                .lineLimit(3...6)
+        }
+    }
+
+    private func formatDuration(_ seconds: Int) -> String {
+        let h = seconds / 3600, m = (seconds % 3600) / 60
+        return h > 0 ? "\(h)시간 \(m)분" : "\(m)분"
+    }
+
+    private func selectCategory(_ category: AddCategory) {
+        selectedCategory = category
+        draft.kind = category.scheduleKind
+        draft.color = category.scheduleColor
+        if case .custom(let c) = category { draft.emoji = c.emoji }
+        else { draft.emoji = nil }
+        if category == .event && !draft.hasScheduledTime { addScheduledTime() }
+    }
+
+    private func addScheduledTime() {
+        draft.startAt = workoutStartAt
+        draft.endAt   = workoutEndAt
+        draft.timeBucket = .inferred(from: workoutStartAt)
+    }
+
+    private func save() {
+        if selectedCategory.isWorkout {
+            let duration = max(Int(workoutEndAt.timeIntervalSince(workoutStartAt)), 0)
+            var distanceMeters: Double? = nil
+            if workoutActivityType.hasDistance, let d = Double(workoutDistanceText), d > 0 {
+                distanceMeters = workoutActivityType == .swimming ? d : d * 1_000
+            }
+            let workout = WorkoutLog(
+                activityType: workoutActivityType,
+                startedAt: workoutStartAt,
+                endedAt: workoutEndAt,
+                durationSeconds: duration,
+                distanceMeters: distanceMeters,
+                calories: Double(workoutCaloriesText),
+                locationName: workoutLocation.isEmpty ? nil : workoutLocation,
+                notes: workoutNotes
+            )
+            workoutStore.save(workout)
+        } else {
+            if draft.repeatRule != .never {
+                let recurring = draft
+                Task { await scheduleStore.createRecurring(recurring) }
+            } else {
+                onSave(draft)
+            }
+        }
+        dismiss()
+    }
+
     private func applyCapture(_ event: EventDraft) {
         if !event.title.isEmpty { draft.title = event.title }
         if let start = event.startAt {
@@ -619,16 +880,6 @@ struct AddScheduleSheet: View {
         }
         if let url = event.meetingURL { draft.meetingURLString = url.absoluteString }
         if !event.notes.isEmpty { draft.memo = event.notes }
-    }
-
-    private func save() {
-        if draft.repeatRule != .never {
-            let recurring = draft
-            Task { await scheduleStore.createRecurring(recurring) }
-        } else {
-            onSave(draft)
-        }
-        dismiss()
     }
 
     private static func makeDraft(for date: Date) -> ScheduleDetail {
@@ -651,6 +902,74 @@ struct AddScheduleSheet: View {
             calendar: .unassigned,
             timeBucket: .inferred(from: startAt)
         )
+    }
+}
+
+// MARK: - Add custom category sheet
+
+private struct AddCategorySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var emoji = "⭐"
+    @State private var color: ScheduleColor = .amber
+    @State private var isTaskKind = true
+
+    let onAdd: (ScheduleUserCategory) -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("카테고리") {
+                    HStack(spacing: 12) {
+                        TextField("🏷", text: $emoji)
+                            .frame(width: 44)
+                            .multilineTextAlignment(.center)
+                            .font(.title2)
+                        TextField("이름 (예: 독서, 공부)", text: $name)
+                    }
+                }
+                Section("색상") {
+                    HStack(spacing: 12) {
+                        ForEach(ScheduleColor.allCases) { c in
+                            Circle()
+                                .fill(c.swiftUIColor)
+                                .frame(width: 30, height: 30)
+                                .overlay(
+                                    Circle().stroke(Color.primary, lineWidth: color == c ? 2.5 : 0).padding(2)
+                                )
+                                .onTapGesture { color = c }
+                                .accessibilityLabel(c.label)
+                                .accessibilityAddTraits(color == c ? .isSelected : [])
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                Section {
+                    Picker("기본 형식", selection: $isTaskKind) {
+                        Text("할 일").tag(true)
+                        Text("시간 일정").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                }
+            }
+            .memdoSystemList()
+            .navigationTitle("카테고리 추가")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("취소") { dismiss() }.foregroundStyle(MemdoTheme.accent)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("추가") {
+                        onAdd(ScheduleUserCategory(id: UUID(), name: name, emoji: emoji, color: color, isTaskKind: isTaskKind))
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .foregroundStyle(MemdoTheme.accent)
+                }
+            }
+        }
     }
 }
 
@@ -859,3 +1178,18 @@ private enum ScheduleDuration: Int, CaseIterable, Identifiable {
             ?? (minutes < 60 ? "\(minutes)분" : "\(minutes / 60)시간 \(minutes % 60 == 0 ? "" : "\(minutes % 60)분")".trimmingCharacters(in: .whitespaces))
     }
 }
+
+#if DEBUG
+#Preview("새 일정 — 라이트") {
+    AddScheduleSheet(date: .now, onSave: { _ in })
+        .environment(ScheduleStore.preview())
+        .environment(WorkoutStore())
+}
+
+#Preview("새 일정 — 다크") {
+    AddScheduleSheet(date: .now, onSave: { _ in })
+        .environment(ScheduleStore.preview())
+        .environment(WorkoutStore())
+        .preferredColorScheme(.dark)
+}
+#endif
