@@ -37,6 +37,17 @@ enum WorkoutActivityType: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    var hasDistance: Bool {
+        switch self {
+        case .running, .cycling, .swimming, .walking: true
+        default: false
+        }
+    }
+
+    var distanceLabel: String {
+        self == .swimming ? "거리 (m)" : "거리 (km)"
+    }
+
     init(hkType: HKWorkoutActivityType) {
         switch hkType {
         case .running:                                  self = .running

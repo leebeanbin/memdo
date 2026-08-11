@@ -210,14 +210,13 @@ struct WorkoutDetailSheet: View {
     }
 
     private var statsGrid: some View {
-        let stats: [(String, String, String)] = [
-            ("시간",   workout.durationFormatted, "timer"),
-            workout.distanceFormatted.map { ("거리", $0, "arrow.triangle.swap") },
-            workout.paceFormatted.map { ("페이스", $0, "speedometer") },
-            workout.calories.map { ("칼로리", "\(Int($0))kcal", "flame") },
-            workout.avgHeartRate.map { ("평균 심박수", "\(Int($0))bpm", "heart") },
-            workout.locationName.map { ("장소", $0, "mappin") }
-        ].compactMap { $0 }
+        // 타입 추론 부담 분산: 각 optional을 명시적으로 unwrap
+        var stats: [(String, String, String)] = [("시간", workout.durationFormatted, "timer")]
+        if let d = workout.distanceFormatted  { stats.append(("거리",      d,                   "arrow.triangle.swap")) }
+        if let p = workout.paceFormatted      { stats.append(("페이스",    p,                   "speedometer")) }
+        if let c = workout.calories           { stats.append(("칼로리",    "\(Int(c))kcal",     "flame")) }
+        if let h = workout.avgHeartRate       { stats.append(("평균 심박수", "\(Int(h))bpm",   "heart")) }
+        if let l = workout.locationName       { stats.append(("장소",      l,                   "mappin")) }
 
         return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             ForEach(stats, id: \.0) { stat in
@@ -300,79 +299,167 @@ struct WorkoutLogEditorSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("종류") {
-                    Picker("활동", selection: $draft.activityType) {
-                        ForEach(WorkoutActivityType.allCases) { type in
-                            Label(type.label, systemImage: type.systemImage).tag(type)
+            VStack(spacing: 0) {
+                // ── 상단: 활동 종류 선택 (분류) ──────────────────────────
+                activityTypePicker
+                    .padding(.vertical, 14)
+                    .background(Color(uiColor: .systemGroupedBackground))
+
+                // ── 하단: 분류에 맞는 서식 (Form) ────────────────────────
+                Form {
+                    // 시간 (항상 표시)
+                    Section("시간") {
+                        DatePicker("시작", selection: $draft.startedAt,
+                                   displayedComponents: [.date, .hourAndMinute])
+                        DatePicker("종료", selection: $draft.endedAt,
+                                   displayedComponents: [.date, .hourAndMinute])
+                        LabeledContent("소요 시간") {
+                            Text(durationText)
+                                .foregroundStyle(MemdoTheme.secondaryInk)
                         }
                     }
-                    .pickerStyle(.menu)
-                }
 
-                Section("시간") {
-                    DatePicker("시작", selection: $draft.startedAt, displayedComponents: [.date, .hourAndMinute])
-                    DatePicker("종료", selection: $draft.endedAt,   displayedComponents: [.date, .hourAndMinute])
-                }
+                    // 거리 — 유산소 운동만 (러닝/사이클/수영/걷기)
+                    if draft.activityType.hasDistance {
+                        Section("거리") {
+                            let isSwim = draft.activityType == .swimming
+                            TextField(
+                                isSwim ? "거리 (m)" : "거리 (km)",
+                                value: Binding(
+                                    get: {
+                                        guard let m = draft.distanceMeters, m > 0 else { return 0.0 }
+                                        return isSwim ? m : m / 1000
+                                    },
+                                    set: { v in
+                                        draft.distanceMeters = v > 0 ? (isSwim ? v : v * 1000) : nil
+                                    }
+                                ),
+                                format: .number
+                            )
+                            .keyboardType(.decimalPad)
 
-                Section("수치") {
-                    TextField("거리 (km)", value: Binding(
-                        get: { draft.distanceMeters.map { $0 / 1000 } ?? 0 },
-                        set: { draft.distanceMeters = $0 > 0 ? $0 * 1000 : nil }
-                    ), format: .number)
-                    .keyboardType(.decimalPad)
-
-                    TextField("칼로리 (kcal)", value: $draft.calories, format: .number)
-                        .keyboardType(.decimalPad)
-                }
-
-                Section("장소") {
-                    TextField("헬스장 이름 또는 장소", text: Binding(
-                        get: { draft.locationName ?? "" },
-                        set: { draft.locationName = $0.isEmpty ? nil : $0 }
-                    ))
-                }
-
-                Section("사진 첨부 (Nike RC 캡처 등)") {
-                    PhotosPicker(selection: $photoPicker, matching: .images) {
-                        Label(draft.photoURL != nil ? "사진 변경" : "사진 선택", systemImage: "photo.badge.plus")
-                    }
-                    .onChange(of: photoPicker) { _, item in
-                        Task {
-                            photoData = try? await item?.loadTransferable(type: Data.self)
+                            if let pace = draft.paceFormatted {
+                                LabeledContent("페이스") {
+                                    Text(pace + "/km")
+                                        .foregroundStyle(MemdoTheme.secondaryInk)
+                                }
+                            }
                         }
                     }
-                    if let data = photoData, let uiImage = UIImage(data: data) {
-                        Image(uiImage: uiImage)
-                            .resizable().scaledToFill()
-                            .frame(height: 160).clipped()
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                    // 근력 운동 — 세트 기록
+                    if draft.activityType == .strengthTraining {
+                        exerciseSection
                     }
-                }
 
-                // 근력 운동 세트 기록
-                if draft.activityType == .strengthTraining {
-                    exerciseSection
-                }
+                    // 칼로리 (항상 표시)
+                    Section("칼로리") {
+                        TextField("소모 칼로리 (kcal)", value: $draft.calories, format: .number)
+                            .keyboardType(.decimalPad)
+                    }
 
-                Section("노트") {
-                    TextField("메모", text: $draft.notes, axis: .vertical)
-                        .lineLimit(3...6)
+                    // 장소
+                    Section("장소") {
+                        TextField("헬스장, 공원, 수영장 등", text: Binding(
+                            get: { draft.locationName ?? "" },
+                            set: { draft.locationName = $0.isEmpty ? nil : $0 }
+                        ))
+                    }
+
+                    // 사진 첨부 (Nike RC 캡처 등)
+                    Section {
+                        let photoLabel = draft.photoURL != nil ? "사진 변경" : "사진 선택"
+                        PhotosPicker(selection: $photoPicker, matching: .images) {
+                            Label(photoLabel, systemImage: "photo.badge.plus")
+                        }
+                        .onChange(of: photoPicker) { _, item in
+                            Task { photoData = try? await item?.loadTransferable(type: Data.self) }
+                        }
+                        if let data = photoData, let uiImage = UIImage(data: data) {
+                            Image(uiImage: uiImage)
+                                .resizable().scaledToFill()
+                                .frame(height: 160).clipped()
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                    } header: {
+                        Text("사진")
+                    } footer: {
+                        Text("Nike Running Club, Strava 등 앱의 캡처를 첨부할 수 있어요.")
+                    }
+
+                    // 노트
+                    Section("노트") {
+                        TextField("메모", text: $draft.notes, axis: .vertical)
+                            .lineLimit(3...6)
+                    }
                 }
             }
             .navigationTitle(isNew ? "운동 기록 추가" : "운동 편집")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("취소") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("취소") { dismiss() }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("저장") { save() }
+                        .fontWeight(.semibold)
                         .disabled(isUploading)
                 }
             }
             .overlay {
-                if isUploading { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background(.ultraThinMaterial) }
+                if isUploading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.ultraThinMaterial)
+                }
             }
         }
+    }
+
+    // 활동 종류 선택 — 아이콘 + 라벨 타일
+    private var activityTypePicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(WorkoutActivityType.allCases) { type in
+                    let isSelected = draft.activityType == type
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            draft.activityType = type
+                            // 근력 운동으로 바꾸면 거리 초기화
+                            if !type.hasDistance { draft.distanceMeters = nil }
+                        }
+                    } label: {
+                        VStack(spacing: 6) {
+                            Image(systemName: type.systemImage)
+                                .font(.system(size: 20, weight: .medium))
+                            Text(type.label)
+                                .font(.caption.weight(.medium))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(isSelected ? MemdoTheme.onAccent : MemdoTheme.ink)
+                        .frame(width: 76, height: 64)
+                        .background(
+                            isSelected ? MemdoTheme.accent : MemdoTheme.surface,
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
+                        .overlay {
+                            if !isSelected {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(MemdoTheme.controlOutline, lineWidth: 0.5)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, MemdoMetrics.pagePadding)
+        }
+    }
+
+    private var durationText: String {
+        let sec = max(0, Int(draft.endedAt.timeIntervalSince(draft.startedAt)))
+        let h = sec / 3600, m = (sec % 3600) / 60
+        return h > 0 ? "\(h)시간 \(m)분" : "\(m)분"
     }
 
     private var exercisesBinding: Binding<[ExerciseSet]> {
@@ -386,23 +473,28 @@ struct WorkoutLogEditorSheet: View {
     private var exerciseSection: some View {
         Section {
             ForEach(exercisesBinding) { $set in
-                HStack {
-                    TextField("운동 이름", text: $set.name)
-                    Spacer()
+                HStack(spacing: 8) {
+                    TextField("운동 이름 (예: 벤치프레스)", text: $set.name)
+                    Divider()
                     TextField("세트", value: $set.sets, format: .number)
-                        .frame(width: 36).multilineTextAlignment(.center)
-                    Text("세트")
-                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .frame(width: 32).multilineTextAlignment(.center)
+                        .keyboardType(.numberPad)
+                    Text("세트").foregroundStyle(MemdoTheme.secondaryInk)
+                        .font(.caption)
                 }
             }
             .onDelete { exercisesBinding.wrappedValue.remove(atOffsets: $0) }
-            Button("세트 추가") {
+            Button {
                 var sets = draft.exercises ?? []
                 sets.append(ExerciseSet(name: "", sets: 3, reps: 10))
                 draft.exercises = sets
+            } label: {
+                Label("운동 종목 추가", systemImage: "plus")
             }
         } header: {
             Text("세트 기록")
+        } footer: {
+            Text("종목을 추가하고 세트 수를 기록하세요. 왼쪽으로 쓸어 삭제할 수 있어요.")
         }
     }
 
@@ -411,18 +503,33 @@ struct WorkoutLogEditorSheet: View {
         Task {
             isUploading = true
             defer { isUploading = false }
-
-            // 첨부 사진 업로드는 WorkoutStore가 내부적으로 처리
-            // photoData는 WorkoutStore에 함께 전달 (현재는 메모만 저장)
-            // TODO: photo upload integration after backend deploy
-            if isNew {
-                workoutStore.save(draft)
-            } else {
-                workoutStore.update(draft)
-            }
+            if isNew { workoutStore.save(draft) } else { workoutStore.update(draft) }
             dismiss()
         }
     }
+}
+
+#Preview("운동 기록 추가") {
+    WorkoutLogEditorSheet()
+        .environment(WorkoutStore())
+}
+
+#Preview("근력 운동 편집") {
+    let w = WorkoutLog(
+        activityType: .strengthTraining,
+        startedAt: .now.addingTimeInterval(-3600),
+        endedAt: .now,
+        durationSeconds: 3600,
+        calories: 350,
+        locationName: "강남 헬스장",
+        exercises: [
+            ExerciseSet(name: "벤치프레스", sets: 4, reps: 10, weightKg: 80),
+            ExerciseSet(name: "스쿼트", sets: 3, reps: 12, weightKg: 100)
+        ],
+        notes: "오늘 컨디션 좋았음"
+    )
+    return WorkoutLogEditorSheet(workout: w)
+        .environment(WorkoutStore())
 }
 
 // MARK: - HealthKit Import Sheet
