@@ -76,7 +76,6 @@ struct AppShellView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     Task { await scheduleStore.refresh() }
-                    Task { await workoutStore.syncHealthKit() }
                 }
             }
             .modifier(IntentCaptureBehavior { text in

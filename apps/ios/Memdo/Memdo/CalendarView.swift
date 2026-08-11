@@ -12,7 +12,9 @@ struct CalendarView: View {
     @State private var showAll = false
     @State private var presentedSheet: CalendarSheetDestination?
     @State private var selectedWorkout: WorkoutLog?
+    @State private var showWorkoutAddOptions = false
     @State private var showAddWorkout = false
+    @State private var showHealthKitImport = false
     @State private var searchQuery = ""
     @State private var searchScope = ScheduleSearchScope.all
     @State private var calendarFilter = CalendarDisplayFilter.all
@@ -113,7 +115,7 @@ struct CalendarView: View {
                 TodayWorkoutSection(
                     workouts: workoutStore.workouts(on: selectedDate),
                     onTap: { selectedWorkout = $0 },
-                    onAdd: { showAddWorkout = true }
+                    onAdd: { showWorkoutAddOptions = true }
                 )
             }
         }
@@ -127,12 +129,20 @@ struct CalendarView: View {
                 ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
             }
         }
+        .confirmationDialog("운동 기록 추가", isPresented: $showWorkoutAddOptions) {
+            Button("HealthKit에서 가져오기") { showHealthKitImport = true }
+            Button("직접 입력") { showAddWorkout = true }
+        }
         .sheet(item: $selectedWorkout) { workout in
             WorkoutDetailSheet(workout: workout)
                 .environment(workoutStore)
         }
         .sheet(isPresented: $showAddWorkout) {
             WorkoutLogEditorSheet()
+                .environment(workoutStore)
+        }
+        .sheet(isPresented: $showHealthKitImport) {
+            HealthKitImportSheet()
                 .environment(workoutStore)
         }
         .onChange(of: targetDate) { _, date in
@@ -526,7 +536,9 @@ private struct DayAgendaSheet: View {
     let date: Date
     @State private var presentedSheet: DayAgendaDestination?
     @State private var selectedWorkout: WorkoutLog?
+    @State private var showWorkoutAddOptions = false
     @State private var showAddWorkout = false
+    @State private var showHealthKitImport = false
 
     private var daySchedules: [ScheduleDetail] {
         scheduleStore.items(for: date)
@@ -602,12 +614,20 @@ private struct DayAgendaSheet: View {
                 ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
             }
         }
+        .confirmationDialog("운동 기록 추가", isPresented: $showWorkoutAddOptions) {
+            Button("HealthKit에서 가져오기") { showHealthKitImport = true }
+            Button("직접 입력") { showAddWorkout = true }
+        }
         .sheet(item: $selectedWorkout) { workout in
             WorkoutDetailSheet(workout: workout)
                 .environment(workoutStore)
         }
         .sheet(isPresented: $showAddWorkout) {
             WorkoutLogEditorSheet()
+                .environment(workoutStore)
+        }
+        .sheet(isPresented: $showHealthKitImport) {
+            HealthKitImportSheet()
                 .environment(workoutStore)
         }
         .memdoSheetPresentation()

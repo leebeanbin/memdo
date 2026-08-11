@@ -393,3 +393,159 @@ struct WorkoutLogEditorSheet: View {
         }
     }
 }
+
+// MARK: - HealthKit Import Sheet
+
+struct HealthKitImportSheet: View {
+    @Environment(WorkoutStore.self) private var workoutStore
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var pending: [WorkoutLog] = []
+    @State private var selected: Set<UUID> = []
+    @State private var phase: ImportPhase = .loading
+
+    enum ImportPhase { case loading, empty, ready, importing }
+
+    var body: some View {
+        NavigationStack {
+            content
+                .background(MemdoPageBackground())
+                .navigationTitle("HealthKit 가져오기")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("취소") { dismiss() }
+                            .disabled(phase == .importing)
+                    }
+                    if case .ready = phase {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("가져오기") { Task { await doImport() } }
+                                .disabled(selected.isEmpty)
+                                .fontWeight(.semibold)
+                        }
+                    }
+                }
+        }
+        .task { await loadPending() }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch phase {
+        case .loading, .importing:
+            let label = phase == .loading
+                ? "새 운동 기록 확인 중..."
+                : "\(selected.count)개 운동 저장 중..."
+            VStack(spacing: 14) {
+                ProgressView()
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        case .empty:
+            ContentUnavailableView(
+                "새 운동 기록이 없어요",
+                systemImage: "figure.run.circle",
+                description: Text("Apple Watch 또는 운동 앱에서 운동을 완료한 후 다시 시도해 보세요.")
+            )
+
+        case .ready:
+            List {
+                Section {
+                    ForEach(pending) { workout in
+                        Button { toggleSelection(workout.id) } label: {
+                            HStack(spacing: 12) {
+                                importRow(workout)
+                                Spacer()
+                                Image(systemName: selected.contains(workout.id)
+                                      ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(selected.contains(workout.id)
+                                                     ? MemdoTheme.brand : MemdoTheme.secondaryInk)
+                                    .font(.title3)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    Text("가져올 수 있는 운동 \(pending.count)개")
+                } footer: {
+                    Text("선택한 운동만 Memdo 캘린더에 추가됩니다. HealthKit 원본 데이터는 변경되지 않아요.")
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .bottomBar) {
+                    Button(selected.count == pending.count ? "모두 선택 해제" : "모두 선택") {
+                        if selected.count == pending.count {
+                            selected.removeAll()
+                        } else {
+                            selected = Set(pending.map(\.id))
+                        }
+                    }
+                    .font(.footnote)
+                }
+            }
+        }
+    }
+
+    private func importRow(_ workout: WorkoutLog) -> some View {
+        HStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(activityColor(workout.activityType).opacity(0.15))
+                    .frame(width: 36, height: 36)
+                Image(systemName: workout.activityType.systemImage)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(activityColor(workout.activityType))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(workout.activityType.label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MemdoTheme.ink)
+                HStack(spacing: 6) {
+                    Text(workout.startedAt.formatted(.dateTime.month().day().hour().minute()))
+                    if let d = workout.distanceFormatted {
+                        Text("·"); Text(d)
+                    }
+                    Text("·"); Text(workout.durationFormatted)
+                }
+                .font(.caption)
+                .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+        }
+    }
+
+    private func activityColor(_ type: WorkoutActivityType) -> Color {
+        switch type {
+        case .running: .orange
+        case .cycling: .green
+        case .swimming: .blue
+        case .strengthTraining: .purple
+        case .yoga: .teal
+        case .hiit: .red
+        case .walking: .mint
+        case .other: MemdoTheme.brand
+        }
+    }
+
+    private func toggleSelection(_ id: UUID) {
+        if selected.contains(id) { selected.remove(id) } else { selected.insert(id) }
+    }
+
+    private func loadPending() async {
+        let workouts = await workoutStore.fetchPendingFromHealthKit()
+        pending = workouts
+        selected = Set(workouts.map(\.id))
+        phase = workouts.isEmpty ? .empty : .ready
+    }
+
+    private func doImport() async {
+        phase = .importing
+        for workout in pending where selected.contains(workout.id) {
+            workoutStore.save(workout)
+        }
+        dismiss()
+    }
+}

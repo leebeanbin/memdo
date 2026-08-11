@@ -221,6 +221,13 @@ final class WorkoutStore {
         }
     }
 
+    // 유저가 명시적으로 요청할 때만 호출 — 저장하지 않고 목록만 반환
+    func fetchPendingFromHealthKit() async -> [WorkoutLog] {
+        guard await importer.requestAuthorization() else { return [] }
+        let known = Set(workouts.compactMap(\.hkUUID))
+        return await importer.fetchNewWorkouts(excluding: known)
+    }
+
     func dismissSyncError() { lastSyncError = nil }
     func reset() { workouts = []; lastSyncError = nil }
 
