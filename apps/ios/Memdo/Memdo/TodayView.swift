@@ -79,7 +79,7 @@ struct TodayView: View {
 
                         TodayHeader(
                             eyebrow: isToday ? "좋은 하루예요" : selectedDate < .now ? "지난 하루" : "다가오는 하루",
-                            title: isToday ? "오늘" : selectedDate.formatted(.dateTime.month().day()),
+                            title: isToday ? "오늘" : selectedDate.memdoMonthDay,
                             subtitle: dateSubtitle,
                             completedCount: completedCount,
                             totalCount: taskCount,
@@ -178,7 +178,7 @@ struct TodayView: View {
     }
 
     private var dateSubtitle: String {
-        selectedDate.formatted(.dateTime.year().month().day().weekday(.wide))
+        selectedDate.memdoFullDate
     }
 
     private var isToday: Bool {

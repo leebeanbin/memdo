@@ -321,9 +321,9 @@ private struct CalendarMonthCard: View {
             .buttonStyle(.plain)
             .accessibilityLabel("이전 달")
 
-            Text(month.memdoMonth)
+            Text(month.memdoYearMonth)
                 .font(.headline)
-                .frame(minWidth: 52)
+                .frame(minWidth: 80)
 
             Button { onMoveMonth(1) } label: {
                 Image(systemName: "chevron.right")
@@ -611,18 +611,32 @@ private enum DayAgendaDestination: Identifiable {
     }
 }
 
-private extension Date {
+extension Date {
+    /// "2026년 8월"
     var memdoYearMonth: String {
         let value = Calendar.current.dateComponents([.year, .month], from: self)
         return "\(value.year ?? 0)년 \(value.month ?? 0)월"
     }
 
-    var memdoMonth: String {
-        "\(Calendar.current.component(.month, from: self))월"
-    }
-
+    /// "8월 12일"
     var memdoMonthDay: String {
         let value = Calendar.current.dateComponents([.month, .day], from: self)
         return "\(value.month ?? 0)월 \(value.day ?? 0)일"
+    }
+
+    /// "8월 12일 수요일"
+    var memdoMonthDayWeekday: String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "ko_KR")
+        fmt.dateFormat = "M월 d일 EEEE"
+        return fmt.string(from: self)
+    }
+
+    /// "2026년 8월 12일 수요일"
+    var memdoFullDate: String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "ko_KR")
+        fmt.dateFormat = "yyyy년 M월 d일 EEEE"
+        return fmt.string(from: self)
     }
 }
