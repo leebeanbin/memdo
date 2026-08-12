@@ -99,30 +99,33 @@ actor HealthKitImporter {
 
     private func fetchRouteLocations(for workout: HKWorkout) async -> [CLLocation]? {
         let routePredicate = HKQuery.predicateForObjects(from: workout)
-        return await withCheckedContinuation { cont in
-            let sampleQuery = HKSampleQuery(
+
+        guard let route: HKWorkoutRoute = await withCheckedContinuation({ cont in
+            let q = HKSampleQuery(
                 sampleType: HKSeriesType.workoutRoute(),
                 predicate: routePredicate,
                 limit: 1,
                 sortDescriptors: nil
-            ) { [store] _, samples, _ in
-                guard let route = samples?.first as? HKWorkoutRoute else {
-                    cont.resume(returning: nil)
-                    return
-                }
-                // HealthKit calls this closure serially on its own queue.
-                // @unchecked Sendable lets us accumulate batches safely.
-                final class LocationBatch: @unchecked Sendable { var items: [CLLocation] = [] }
-                let batch = LocationBatch()
-                let routeQuery = HKWorkoutRouteQuery(route: route) { _, locations, done, error in
-                    if error != nil { cont.resume(returning: nil); return }
-                    if let locations { batch.items.append(contentsOf: locations) }
-                    if done { cont.resume(returning: batch.items.isEmpty ? nil : batch.items) }
-                }
-                store.execute(routeQuery)
+            ) { _, samples, _ in
+                cont.resume(returning: samples?.first as? HKWorkoutRoute)
             }
-            store.execute(sampleQuery)
+            store.execute(q)
+        }) else { return nil }
+
+        // Bridge HealthKit's serial callback into AsyncStream so accumulation
+        // happens in the actor context, avoiding captured-var concurrency warnings.
+        let stream = AsyncStream<[CLLocation]> { [store] continuation in
+            let q = HKWorkoutRouteQuery(route: route) { _, locations, done, error in
+                if error != nil { continuation.finish(); return }
+                if let locations { continuation.yield(locations) }
+                if done { continuation.finish() }
+            }
+            store.execute(q)
         }
+
+        var all: [CLLocation] = []
+        for await batch in stream { all.append(contentsOf: batch) }
+        return all.isEmpty ? nil : all
     }
 
     // UIGraphicsImageRenderer, MKMapSnapshotter 모두 non-main thread에서 안전
