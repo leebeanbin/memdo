@@ -110,11 +110,14 @@ actor HealthKitImporter {
                     cont.resume(returning: nil)
                     return
                 }
-                var all: [CLLocation] = []
-                let routeQuery = HKWorkoutRouteQuery(route: route) { _, batch, done, error in
+                // HealthKit calls this closure serially on its own queue.
+                // @unchecked Sendable lets us accumulate batches safely.
+                final class LocationBatch: @unchecked Sendable { var items: [CLLocation] = [] }
+                let batch = LocationBatch()
+                let routeQuery = HKWorkoutRouteQuery(route: route) { _, locations, done, error in
                     if error != nil { cont.resume(returning: nil); return }
-                    if let batch { all.append(contentsOf: batch) }
-                    if done { cont.resume(returning: all.isEmpty ? nil : all) }
+                    if let locations { batch.items.append(contentsOf: locations) }
+                    if done { cont.resume(returning: batch.items.isEmpty ? nil : batch.items) }
                 }
                 store.execute(routeQuery)
             }

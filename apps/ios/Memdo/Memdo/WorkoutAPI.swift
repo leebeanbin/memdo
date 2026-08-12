@@ -234,7 +234,7 @@ actor WorkoutRepository {
     /// 이미지 Data → Supabase Storage 업로드 → public URL 반환
     func uploadImage(_ data: Data, path: String) async throws -> String {
         let options = FileOptions(contentType: "image/jpeg", upsert: true)
-        _ = try await auth.storage.from(Self.mediaBucket).upload(path: path, file: data, options: options)
+        _ = try await auth.storage.from(Self.mediaBucket).upload(path, data: data, options: options)
         let url = try auth.storage.from(Self.mediaBucket).getPublicURL(path: path)
         return url.absoluteString
     }

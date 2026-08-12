@@ -21,17 +21,23 @@ struct GenerateWallpaperIntent: AppIntent {
             ?? .empty(at: .now)
         let hidesContent = defaults?.bool(forKey: MemdoWidgetStorage.hideContentKey) ?? false
 
-        func style<Style: RawRepresentable>(_ key: String, default fallback: Style) -> Style
+        // Extract String? values before the nested function so only Sendable types are captured.
+        let calendarRaw  = defaults?.string(forKey: WallpaperStyleStorage.calendarKey)
+        let backdropRaw  = defaults?.string(forKey: WallpaperStyleStorage.backdropKey)
+        let glassRaw     = defaults?.string(forKey: WallpaperStyleStorage.glassKey)
+
+        func style<Style: RawRepresentable>(_ raw: String?, default fallback: Style) -> Style
         where Style.RawValue == String {
-            defaults?.string(forKey: key).flatMap(Style.init(rawValue:)) ?? fallback
+            guard let raw else { return fallback }
+            return Style(rawValue: raw) ?? fallback
         }
 
         guard let image = WallpaperImageExporter.uiImage(
             month: .now,
             titlesByDay: WallpaperCanvas.titles(from: snapshot, month: .now, hidesContent: hidesContent),
-            calendarStyle: style(WallpaperStyleStorage.calendarKey, default: .label),
-            backdrop: style(WallpaperStyleStorage.backdropKey, default: .aurora),
-            glassStrength: style(WallpaperStyleStorage.glassKey, default: .balanced)
+            calendarStyle: style(calendarRaw, default: .label),
+            backdrop: style(backdropRaw, default: .aurora),
+            glassStrength: style(glassRaw, default: .balanced)
         ), let data = image.pngData() else {
             throw GenerateWallpaperError.renderingFailed
         }
