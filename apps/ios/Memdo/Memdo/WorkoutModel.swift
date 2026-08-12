@@ -175,7 +175,12 @@ final class WorkoutStore {
             let cal = Calendar.current
             let from = cal.date(byAdding: .day, value: -90, to: .now) ?? .now
             let to   = cal.date(byAdding: .day, value: 7,   to: .now) ?? .now
-            workouts = try await repository.load(from: from, to: to)
+            let serverWorkouts = try await repository.load(from: from, to: to)
+            let serverIDs = Set(serverWorkouts.map(\.id))
+            // Preserve workouts created locally but not yet confirmed by the server
+            // so an offline save isn't silently wiped by the next load.
+            let localOnly = workouts.filter { !serverIDs.contains($0.id) }
+            workouts = (serverWorkouts + localOnly).sorted { $0.startedAt > $1.startedAt }
         } catch { lastSyncError = error.localizedDescription }
     }
 
@@ -212,12 +217,15 @@ final class WorkoutStore {
     }
 
     func save(_ workout: WorkoutLog) {
+        upsertLocally(workout) // optimistic — visible immediately
         Task {
-            guard let repository,
-                  let token = try? await repository.accessToken(),
-                  let saved = try? await repository.create(workout, accessToken: token)
-            else { upsertLocally(workout); return }
-            upsertLocally(saved)
+            guard let repository, let token = try? await repository.accessToken() else { return }
+            do {
+                let saved = try await repository.create(workout, accessToken: token)
+                upsertLocally(saved)
+            } catch {
+                lastSyncError = "운동을 서버에 저장하지 못했어요. 네트워크를 확인해 주세요."
+            }
         }
     }
 
