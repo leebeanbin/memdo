@@ -377,7 +377,7 @@ private struct SummaryHistoryRow: View {
         HStack(spacing: MemdoMetrics.rowSpacing) {
             Image(systemName: status.systemImage)
                 .font(.title3)
-                .foregroundStyle(status == .completed ? MemdoTheme.secondaryInk : MemdoTheme.peach)
+                .foregroundStyle(status == .completed ? MemdoTheme.secondaryInk : MemdoTheme.brand)
                 .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {

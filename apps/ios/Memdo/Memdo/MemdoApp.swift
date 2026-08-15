@@ -232,7 +232,7 @@ final class MemdoSession {
         case "apple":  "Apple로 로그인"
         case "google": "Google로 로그인"
         case "github": "GitHub로 로그인"
-        default:       raw.isEmpty ? "" : "\(raw)으로 로그인"
+        default:       raw.isEmpty ? "" : "\(raw) 계정으로 로그인"
         }
     }
 }

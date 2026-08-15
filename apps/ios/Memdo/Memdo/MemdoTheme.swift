@@ -13,14 +13,14 @@ enum MemdoTheme {
     static let brand = Color(
         uiColor: UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.72, green: 0.67, blue: 1, alpha: 1)      // lavender
+                ? UIColor(red: 1.00, green: 0.78, blue: 0.35, alpha: 1)    // amber (lifted for dark)
                 : UIColor(red: 0.996, green: 0.725, blue: 0.149, alpha: 1) // #FEB926 amber
         }
     )
     static let brandSoft = Color(
         uiColor: UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.22, green: 0.20, blue: 0.31, alpha: 1)   // dark lavender
+                ? UIColor(red: 0.28, green: 0.22, blue: 0.08, alpha: 1)   // deep amber
                 : UIColor(red: 1.0, green: 0.97, blue: 0.87, alpha: 1)    // light amber cream
         }
     )

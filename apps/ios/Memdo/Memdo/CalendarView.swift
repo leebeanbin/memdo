@@ -614,7 +614,7 @@ private struct DayAgendaSheet: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 150)
+                    .fixedSize()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("닫기") { dismiss() }
@@ -691,10 +691,18 @@ private struct DayTimelineView: View {
     let onOpenSchedule: (ScheduleDetail) -> Void
     let onOpenWorkout: (WorkoutLog) -> Void
 
-    private let startHour: Int = 6
     private let endHour:   Int = 24
     private let hourHeight: CGFloat = 64
     private let labelWidth: CGFloat = 38
+
+    // Grid opens at 06:00 but extends earlier when a schedule starts before that,
+    // so early-morning events aren't rendered off-canvas.
+    private var startHour: Int {
+        let earliest = timedEvents.compactMap(\.startAt)
+            .map { Calendar.current.component(.hour, from: $0) }
+            .min()
+        return min(6, earliest ?? 6)
+    }
 
     private var timedEvents: [ScheduleDetail] {
         schedules
@@ -842,6 +850,12 @@ private struct TimelineEventBlock: View {
         return f.string(from: start)
     }
 
+    // Match ScheduleRow: blocks carry the schedule's category color so the same
+    // event looks consistent between the list and the timeline.
+    private var blockColor: Color {
+        event.color?.swiftUIColor ?? MemdoTheme.accent
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(event.title)
@@ -857,7 +871,7 @@ private struct TimelineEventBlock: View {
         .padding(.horizontal, 7)
         .padding(.vertical, 5)
         .frame(width: trackWidth, height: blockHeight, alignment: .topLeading)
-        .background(MemdoTheme.accent, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .background(blockColor, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         .offset(x: labelWidth + 8, y: topOffset)
     }
 }
