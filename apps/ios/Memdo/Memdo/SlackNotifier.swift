@@ -12,7 +12,7 @@ enum SlackNotifier {
     }
 
     enum Event {
-        case created, completed, reminder
+        case created, completed
     }
 
     static func notify(schedule: ScheduleDetail, event: Event) async {
@@ -36,7 +36,6 @@ enum SlackNotifier {
         switch event {
         case .created:   prefix = "📅 새 일정"
         case .completed: prefix = "✅ 완료"
-        case .reminder:  prefix = "⏰ 리마인더"
         }
 
         var parts = ["\(prefix): \(schedule.title)"]

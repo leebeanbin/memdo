@@ -129,7 +129,7 @@ struct SettingsView: View {
                         title: "Google Calendar",
                         capability: "일정 읽기 · 승인 후 쓰기",
                         status: googleCalendarConnected == nil ? "확인 중" : googleCalendarConnected == true ? "연결됨" : "미연결",
-                        badge: "MCP"
+                        badge: nil
                     )
                 }
                 .buttonStyle(.plain)
@@ -140,7 +140,7 @@ struct SettingsView: View {
                         title: "Slack",
                         capability: "요약 전송 · 알림 예약",
                         status: slackConnected ? "연결됨" : "미연결",
-                        badge: "MCP"
+                        badge: nil
                     )
                 }
                 .buttonStyle(.plain)
@@ -173,14 +173,20 @@ struct SettingsView: View {
                     GuestUpgradeRow(onUpgrade: { presentedSheet = .guestUpgrade })
                     Divider()
                     Button { showsSignOutConfirmation = true } label: {
-                        Text("로그아웃")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(MemdoTheme.secondaryInk)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack {
+                            Text("로그아웃")
+                                .font(.subheadline)
+                                .foregroundStyle(.red)
+                            Spacer()
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.red)
+                                .accessibilityHidden(true)
+                        }
+                        .memdoSettingsRow()
                     }
                     .buttonStyle(.plain)
                     .disabled(session.isBusy)
-                    .memdoSettingsRow()
                 } else {
                     HStack(spacing: 12) {
                         Image(systemName: "person.circle.fill")
@@ -360,7 +366,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var keywordHint: some View {
         if showKeywordHint {
-            Label("키워드는 브리핑 완성 후 적용됩니다.", systemImage: "info.circle")
+            Label("오늘 탭의 브리핑에 바로 적용됐어요.", systemImage: "checkmark.circle")
                 .font(.footnote.weight(.medium))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -867,15 +873,15 @@ private struct SlackConnectionSheet: View {
                     MCPToolIdentityRow(
                         icon: .asset("Slack"),
                         title: "Slack",
-                        summary: "내 Agent가 승인된 요약과 알림만 전송해요."
+                        summary: "선택한 채널로 일정 알림을 보내요."
                     )
                 } header: {
-                    Text("Agent MCP 도구")
+                    Text("Slack 알림")
                 }
                 Section("연결하면 가능한 일") {
-                    Label("일정·오늘 요약 보내기", systemImage: "message")
-                    Label("정한 시간에 알림 예약", systemImage: "clock")
-                    Label("/memdo add로 할 일 초안", systemImage: "text.badge.plus")
+                    Label("새 일정 만들면 채널에 알림", systemImage: "calendar.badge.plus")
+                    Label("할 일 완료하면 채널에 알림", systemImage: "checkmark.circle")
+                    Label("테스트 메시지로 연결 확인", systemImage: "paperplane")
                 }
                 Section("자동으로 하지 않는 일") {
                     Label("채널 기록·DM을 읽지 않음", systemImage: "lock")
