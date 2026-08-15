@@ -47,6 +47,7 @@ final class MemdoSession {
     enum Phase: Equatable {
         case loading
         case signedOut
+        case guest
         case signedIn
         case failed(String)
     }
@@ -55,6 +56,7 @@ final class MemdoSession {
     private(set) var isBusy = false
     private(set) var errorMessage: String?
     private(set) var accountLabel = ""
+    private(set) var providerLabel = ""
     let scheduleStore: ScheduleStore?
     let preferencesStore: PreferencesStore?
     let workoutStore: WorkoutStore
@@ -112,12 +114,18 @@ final class MemdoSession {
         for await (event, session) in client.auth.authStateChanges {
             if let session {
                 guard !session.user.isAnonymous else {
-                    activeUserID = nil
-                    accountLabel = ""
-                    scheduleStore?.reset()
-                    preferencesStore?.reset()
-                    workoutStore.reset()
-                    phase = .signedOut
+                    // Anonymous users enter guest mode — data is stored in Supabase
+                    // under their anonymous user_id and migrates if they link a social
+                    // identity later (Supabase anonymous→permanent promotion).
+                    if activeUserID != session.user.id {
+                        scheduleStore?.reset()
+                        preferencesStore?.reset()
+                        workoutStore.reset()
+                    }
+                    activeUserID = session.user.id
+                    accountLabel = "게스트"
+                    providerLabel = ""
+                    phase = .guest
                     continue
                 }
                 if activeUserID != session.user.id {
@@ -127,18 +135,31 @@ final class MemdoSession {
                 }
                 activeUserID = session.user.id
                 accountLabel = session.user.email ?? "연결된 계정"
+                let rawProvider = session.user.identities?.first?.provider ?? ""
+                providerLabel = MemdoSession.formatProvider(rawProvider)
                 phase = .signedIn
                 continue
             }
 
             activeUserID = nil
             accountLabel = ""
+            providerLabel = ""
             scheduleStore?.reset()
             preferencesStore?.reset()
             workoutStore.reset()
 
             switch event {
-            case .initialSession, .signedOut:
+            case .initialSession:
+                // No existing session on launch — silently create an anonymous guest
+                // session so the user enters the app without a sign-in screen.
+                Task {
+                    await signInAnonymously()
+                    // If the device is offline or Supabase is unreachable, fall back
+                    // to the sign-in screen so the user can see the error and retry.
+                    if phase == .loading { phase = .signedOut }
+                }
+            case .signedOut:
+                // User explicitly signed out from Settings → show the sign-in screen.
                 phase = .signedOut
             default:
                 phase = .signedOut
@@ -176,6 +197,18 @@ final class MemdoSession {
         }
     }
 
+    func signInAnonymously() async {
+        guard let client else { return }
+        isBusy = true
+        errorMessage = nil
+        defer { isBusy = false }
+        do {
+            try await client.auth.signInAnonymously()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func signOut() async {
         guard let client else { return }
         isBusy = true
@@ -192,6 +225,15 @@ final class MemdoSession {
     func handle(_ url: URL) {
         guard url.scheme == "memdo", url.host == "auth" else { return }
         client?.handle(url)
+    }
+
+    static func formatProvider(_ raw: String) -> String {
+        switch raw {
+        case "apple":  "Apple로 로그인"
+        case "google": "Google로 로그인"
+        case "github": "GitHub로 로그인"
+        default:       raw.isEmpty ? "" : "\(raw)으로 로그인"
+        }
     }
 }
 
@@ -231,6 +273,11 @@ private struct MemdoRootView: View {
             MemdoLaunchView()
         case .signedOut:
             MemdoSignInView(session: session)
+        case .guest:
+            if let scheduleStore = session.scheduleStore {
+                AppShellView(scheduleStore: scheduleStore)
+                    .environment(session.workoutStore)
+            }
         case .signedIn:
             if let scheduleStore = session.scheduleStore {
                 AppShellView(scheduleStore: scheduleStore)
@@ -261,11 +308,15 @@ private struct MemdoLaunchView: View {
     }
 }
 
-private struct MemdoSignInView: View {
+struct MemdoSignInView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var currentNonce: String?
 
     let session: MemdoSession
+    /// When set, shows a compact header with sparkle icon instead of the brand logo.
+    /// Used by GuestLoginGateSheet to reuse sign-in buttons without duplication.
+    var gateTitle: String? = nil
+    var gateSubtitle: String? = nil
 
     var body: some View {
         GeometryReader { proxy in
@@ -290,15 +341,60 @@ private struct MemdoSignInView: View {
         .disabled(session.isBusy)
     }
 
+    // Per-provider fill following each brand's official button guidelines.
+    private func providerFill(_ provider: Provider) -> Color {
+        switch provider {
+        case .google:
+            return colorScheme == .dark
+                ? Color(red: 0.075, green: 0.075, blue: 0.078)  // #131314 (Google dark)
+                : .white
+        case .github:
+            return Color(red: 0.141, green: 0.161, blue: 0.184) // #24292F (GitHub)
+        default:
+            return colorScheme == .dark ? .white : .black        // Apple
+        }
+    }
+
+    private func providerText(_ provider: Provider) -> Color {
+        switch provider {
+        case .google:
+            return colorScheme == .dark
+                ? .white
+                : Color(red: 0.459, green: 0.459, blue: 0.459)  // #757575 (Google light)
+        case .github:
+            return .white
+        default:
+            return colorScheme == .dark ? .black : .white        // Apple
+        }
+    }
+
     private var signInContent: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 48)
+            if let gateTitle {
+                VStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 40))
+                        .foregroundStyle(MemdoTheme.brand)
+                    Text(gateTitle)
+                        .font(.title2.bold())
+                    if let gateSubtitle {
+                        Text(gateSubtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+                .padding(.top, 20)
+                .padding(.bottom, 44)
+            } else {
+                Spacer(minLength: 48)
 
-            MemdoBrandMark(size: 72)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Memdo")
+                MemdoBrandMark(size: 72)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Memdo")
 
-            Spacer(minLength: 64)
+                Spacer(minLength: 64)
+            }
 
             VStack(spacing: 10) {
                 appleSignInButton
@@ -328,74 +424,84 @@ private struct MemdoSignInView: View {
         }
     }
 
+    // Icon + text centered together — consistent layout across all three buttons.
     private func providerButton(_ title: String, image: String, provider: Provider) -> some View {
         Button {
             Task { await session.signIn(with: provider) }
         } label: {
-            ZStack {
+            signInButtonBody(fill: providerFill(provider), label: providerText(provider)) {
+                Image(image)
+                    .renderingMode(provider == .google ? .original : .template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
                 Text(title)
-                    .font(.subheadline.weight(.medium))
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
-
-                HStack {
-                    providerLogo(image, provider: provider)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
             }
-            .frame(maxWidth: .infinity, minHeight: 52)
-            .background(
-                providerBackground(provider),
-                in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
-            )
+            // Google's white-background variant requires a subtle border so the
+            // button is distinguishable from the page background.
             .overlay {
-                if provider == .google {
+                if provider == .google && colorScheme == .light {
                     RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
-                        .stroke(providerOutline, lineWidth: 1)
+                        .stroke(Color(white: 0, opacity: 0.12), lineWidth: 1)
                 }
             }
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(providerForeground(provider))
-    }
-
-    // GitHub ships a single-colour mark, so tint it to match the button surface;
-    // Google's multi-colour logo must render as-is.
-    @ViewBuilder
-    private func providerLogo(_ image: String, provider: Provider) -> some View {
-        if provider == .github {
-            Image(image)
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 20, height: 20)
-        } else {
-            Image(image)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 20, height: 20)
-        }
     }
 
     private var appleSignInButton: some View {
-        SignInWithAppleButton(.continue) { request in
-            let nonce = Self.randomNonce()
-            currentNonce = nonce
-            request.requestedScopes = [.fullName, .email]
-            request.nonce = Self.sha256(nonce)
-        } onCompletion: { result in
-            guard case let .success(authorization) = result,
-                  let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-                  let tokenData = credential.identityToken,
-                  let idToken = String(data: tokenData, encoding: .utf8),
-                  let nonce = currentNonce
-            else { return }
-            Task { await session.signInWithApple(idToken: idToken, nonce: nonce) }
+        ZStack {
+            // Real Sign in with Apple button — handles the auth flow.
+            // Kept nearly invisible so SwiftUI's hit-testing routes taps to it.
+            SignInWithAppleButton(.continue) { request in
+                let nonce = Self.randomNonce()
+                currentNonce = nonce
+                request.requestedScopes = [.fullName, .email]
+                request.nonce = Self.sha256(nonce)
+            } onCompletion: { result in
+                guard case let .success(authorization) = result,
+                      let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                      let tokenData = credential.identityToken,
+                      let idToken = String(data: tokenData, encoding: .utf8),
+                      let nonce = currentNonce
+                else { return }
+                Task { await session.signInWithApple(idToken: idToken, nonce: nonce) }
+            }
+            .opacity(0.011)
+            .frame(height: 52)
+
+            // Custom visual layer: Korean label + same centered layout as other buttons.
+            signInButtonBody(fill: providerFill(.apple), label: providerText(.apple)) {
+                Image(systemName: "apple.logo")
+                    .font(.system(size: 18, weight: .medium))
+                    .frame(width: 20, height: 20)
+                Text("Apple로 계속")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .allowsHitTesting(false)
         }
-        .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
         .frame(height: 52)
         .clipShape(RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func signInButtonBody<Content: View>(
+        fill: Color,
+        label: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack {
+            Spacer(minLength: 0)
+            HStack(spacing: 10) { content() }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: 52)
+        .background(fill, in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
+        .foregroundStyle(label)
+        .contentShape(Rectangle())
     }
 
     private static func randomNonce(length: Int = 32) -> String {
@@ -405,29 +511,5 @@ private struct MemdoSignInView: View {
 
     private static func sha256(_ input: String) -> String {
         SHA256.hash(data: Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
-    }
-
-    private func providerBackground(_ provider: Provider) -> Color {
-        switch provider {
-        case .github:
-            return colorScheme == .dark ? .white : .black
-        default:
-            return colorScheme == .dark ? Color(red: 19 / 255, green: 19 / 255, blue: 20 / 255) : .white
-        }
-    }
-
-    private func providerForeground(_ provider: Provider) -> Color {
-        switch provider {
-        case .github:
-            return colorScheme == .dark ? .black : .white
-        default:
-            return colorScheme == .dark ? .white : Color(red: 31 / 255, green: 31 / 255, blue: 31 / 255)
-        }
-    }
-
-    private var providerOutline: Color {
-        colorScheme == .dark
-            ? Color(white: 1).opacity(0.18)
-            : Color(red: 116 / 255, green: 119 / 255, blue: 117 / 255).opacity(0.4)
     }
 }
