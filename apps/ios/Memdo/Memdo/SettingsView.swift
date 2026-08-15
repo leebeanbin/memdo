@@ -1,20 +1,36 @@
 import AuthenticationServices
 import SwiftUI
 
+private enum SettingsDefaults {
+    static let summaryHour = 21
+    static let summaryMinute = 30
+    static let promptHour = 9
+    static let keywordMaxLength = 30
+    static let keywordMaxCount = 5
+    static let suggestedKeywords = ["AI", "SwiftUI", "제품 디자인", "서울 로컬", "스타트업"]
+    static let preferencePushDebounce: Duration = .milliseconds(500)
+}
+
 struct SettingsView: View {
     let coachMarkTarget: CoachMarkTarget?
+    let onStartCoachMarkTour: ((CoachMarkTour) -> Void)?
     @Environment(MemdoSession.self) private var session
     @Environment(ScheduleStore.self) private var scheduleStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showKeywordHint = false
     @State private var dailySummary = true
     @State private var notifications = true
-    @State private var summaryTime = Calendar.current.date(from: DateComponents(hour: 21, minute: 30)) ?? .now
-    @State private var promptTime = Calendar.current.date(from: DateComponents(hour: 9)) ?? .now
+    @State private var summaryTime = Calendar.current.date(from: DateComponents(hour: SettingsDefaults.summaryHour, minute: SettingsDefaults.summaryMinute)) ?? .now
+    @State private var promptTime = Calendar.current.date(from: DateComponents(hour: SettingsDefaults.promptHour)) ?? .now
     // Persisted locally only: the backend preferences contract has no keyword
     // column yet (moves server-side with B9 briefing work).
     @State private var briefingKeywords: Set<String>
     @State private var customKeywords: [String]
+    @State private var briefingCategories: Set<String>
     @State private var presentedSheet: SettingsSheet?
-    @State private var googleCalendarConnected = false
+    @State private var googleCalendarConnected: Bool? = nil
+    @AppStorage("slack-webhook-url") private var slackWebhookURL: String = ""
+    private var slackConnected: Bool { !slackWebhookURL.isEmpty }
     @State private var showsSignOutConfirmation = false
     @State private var summaryTimePushTask: Task<Void, Never>?
     @State private var promptTimePushTask: Task<Void, Never>?
@@ -23,11 +39,13 @@ struct SettingsView: View {
         store: UserDefaults(suiteName: MemdoWidgetStorage.suiteName)
     ) private var hideWidgetContent = false
 
-    private static let selectedKeywordsKey = "briefing-selected-keywords"
-    private static let customKeywordsKey = "briefing-custom-keywords"
+    private static let selectedKeywordsKey   = "briefing-selected-keywords"
+    private static let customKeywordsKey    = "briefing-custom-keywords"
+    private static let selectedCategoriesKey = "briefing-selected-categories"
 
-    init(coachMarkTarget: CoachMarkTarget? = nil) {
+    init(coachMarkTarget: CoachMarkTarget? = nil, onStartCoachMarkTour: ((CoachMarkTour) -> Void)? = nil) {
         self.coachMarkTarget = coachMarkTarget
+        self.onStartCoachMarkTour = onStartCoachMarkTour
         let defaults = UserDefaults.standard
         // nil means "never saved" (seed the suggested defaults); an empty array
         // is a deliberate deselect-all and must stay empty.
@@ -37,6 +55,9 @@ struct SettingsView: View {
         )
         _customKeywords = State(
             initialValue: defaults.stringArray(forKey: Self.customKeywordsKey) ?? []
+        )
+        _briefingCategories = State(
+            initialValue: defaults.stringArray(forKey: Self.selectedCategoriesKey).map(Set.init) ?? []
         )
     }
 
@@ -78,7 +99,11 @@ struct SettingsView: View {
                     .memdoSettingsRow()
                 Divider()
                 Button { presentedSheet = .briefingKeywords } label: {
-                    SettingsDisclosureRow(title: "브리핑 키워드", value: "\(briefingKeywords.count)개 선택")
+                    let total = briefingCategories.count + briefingKeywords.count
+                    SettingsDisclosureRow(
+                        title: "브리핑 관심사",
+                        value: total > 0 ? "분야 \(briefingCategories.count) · 키워드 \(briefingKeywords.count)" : "설정 안 함"
+                    )
                 }
                 .buttonStyle(.plain)
             }
@@ -103,7 +128,7 @@ struct SettingsView: View {
                         icon: .asset("GoogleCalendar"),
                         title: "Google Calendar",
                         capability: "일정 읽기 · 승인 후 쓰기",
-                        status: googleCalendarConnected ? "연결됨" : "미연결",
+                        status: googleCalendarConnected == nil ? "확인 중" : googleCalendarConnected == true ? "연결됨" : "미연결",
                         badge: "MCP"
                     )
                 }
@@ -114,7 +139,7 @@ struct SettingsView: View {
                         icon: .asset("Slack"),
                         title: "Slack",
                         capability: "요약 전송 · 알림 예약",
-                        status: "미연결",
+                        status: slackConnected ? "연결됨" : "미연결",
                         badge: "MCP"
                     )
                 }
@@ -144,26 +169,43 @@ struct SettingsView: View {
             .coachMarkTarget(.settingsConnections)
 
             SettingsGroup(title: "계정") {
-                Button {
-                    showsSignOutConfirmation = true
-                } label: {
+                if session.phase == .guest {
+                    GuestUpgradeRow(onUpgrade: { presentedSheet = .guestUpgrade })
+                    Divider()
+                    Button { showsSignOutConfirmation = true } label: {
+                        Text("로그아웃")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(session.isBusy)
+                    .memdoSettingsRow()
+                } else {
                     HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
+                        Image(systemName: "person.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                            .frame(width: 36, height: 36)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
                             Text(session.accountLabel)
                                 .font(.subheadline.weight(.semibold))
-                            Text("이 기기의 세션을 종료합니다")
+                            Text(session.providerLabel)
                                 .font(.caption)
                                 .foregroundStyle(MemdoTheme.secondaryInk)
                         }
                         Spacer()
-                        Text("로그아웃")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(MemdoTheme.secondaryInk)
+                        Button { showsSignOutConfirmation = true } label: {
+                            Text("로그아웃")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(session.isBusy)
                     }
                     .memdoSettingsRow()
                 }
-                .buttonStyle(.plain)
-                .disabled(session.isBusy)
 
                 if let errorMessage = session.errorMessage {
                     Divider()
@@ -174,10 +216,29 @@ struct SettingsView: View {
                 }
             }
 
+            if let onStartCoachMarkTour {
+                SettingsGroup(title: "도움말") {
+                    Button {
+                        onStartCoachMarkTour(.app)
+                    } label: {
+                        HStack {
+                            Label("앱 투어 다시 보기", systemImage: "map")
+                                .font(.subheadline)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.bold())
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                                .accessibilityHidden(true)
+                        }
+                        .memdoSettingsRow()
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
 
         }
         .confirmationDialog(
-            "로그아웃 하시겠어요?",
+            session.phase == .guest ? "게스트 로그아웃" : "로그아웃 하시겠어요?",
             isPresented: $showsSignOutConfirmation,
             titleVisibility: .visible
         ) {
@@ -186,7 +247,9 @@ struct SettingsView: View {
             }
             Button("취소", role: .cancel) {}
         } message: {
-            Text("이 기기에서 로그아웃합니다.")
+            Text(session.phase == .guest
+                ? "저장된 일정과 기록이 모두 삭제됩니다."
+                : "이 기기에서 로그아웃합니다.")
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
@@ -194,6 +257,7 @@ struct SettingsView: View {
                 AIConsentSheet()
             case .briefingKeywords:
                 BriefingKeywordsSheet(
+                    selectedCategories: $briefingCategories,
                     selectedKeywords: $briefingKeywords,
                     customKeywords: $customKeywords
                 )
@@ -203,23 +267,33 @@ struct SettingsView: View {
                 SlackConnectionSheet()
             case .googleCalendar:
                 GoogleCalendarConnectionSheet()
+            case .guestUpgrade:
+                GuestUpgradeSheet()
             case .wallpaperPreview:
                 WallpaperPreviewSheet()
             }
         }
         .sensoryFeedback(.selection, trigger: briefingKeywords)
+        .sensoryFeedback(.selection, trigger: briefingCategories)
         .onChange(of: briefingKeywords) { _, value in
             UserDefaults.standard.set(Array(value).sorted(), forKey: Self.selectedKeywordsKey)
         }
         .onChange(of: customKeywords) { _, value in
             UserDefaults.standard.set(value, forKey: Self.customKeywordsKey)
         }
+        .onChange(of: briefingCategories) { _, value in
+            UserDefaults.standard.set(Array(value).sorted(), forKey: Self.selectedCategoriesKey)
+        }
         .task { await loadPreferences() }
         .task { await loadGoogleCalendarStatus() }
-        .onChange(of: presentedSheet) { _, sheet in
+        .onChange(of: presentedSheet) { oldSheet, sheet in
             guard sheet == nil else { return }
+            if oldSheet == .briefingKeywords {
+                withAnimation(reduceMotion ? nil : .easeIn) { showKeywordHint = true }
+            }
             Task { await loadGoogleCalendarStatus() }
         }
+        .overlay(alignment: .bottom) { keywordHint }
         .onChange(of: dailySummary) { _, value in
             guard session.preferencesStore?.preferences?.dailyReviewEnabled != value else { return }
             push {
@@ -234,7 +308,7 @@ struct SettingsView: View {
             guard session.preferencesStore?.preferences?.dailyReviewTime != ClockString.from(value) else { return }
             summaryTimePushTask?.cancel()
             summaryTimePushTask = Task {
-                try? await Task.sleep(for: .milliseconds(500))
+                try? await Task.sleep(for: SettingsDefaults.preferencePushDebounce)
                 guard !Task.isCancelled else { return }
                 push { $0.dailyReviewTime = ClockString.from(value) }
             }
@@ -243,7 +317,7 @@ struct SettingsView: View {
             guard session.preferencesStore?.preferences?.planningPromptTime != ClockString.from(value) else { return }
             promptTimePushTask?.cancel()
             promptTimePushTask = Task {
-                try? await Task.sleep(for: .milliseconds(500))
+                try? await Task.sleep(for: SettingsDefaults.preferencePushDebounce)
                 guard !Task.isCancelled else { return }
                 push { $0.planningPromptTime = ClockString.from(value) }
             }
@@ -281,6 +355,27 @@ struct SettingsView: View {
 
     private func loadGoogleCalendarStatus() async {
         googleCalendarConnected = (try? await scheduleStore.googleCalendarStatus())?.connected == true
+    }
+
+    @ViewBuilder
+    private var keywordHint: some View {
+        if showKeywordHint {
+            Label("키워드는 브리핑 완성 후 적용됩니다.", systemImage: "info.circle")
+                .font(.footnote.weight(.medium))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    .regularMaterial,
+                    in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                )
+                .padding(.horizontal, MemdoMetrics.pagePadding)
+                .padding(.bottom, MemdoMetrics.tabBarClearance)
+                .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
+                .task {
+                    try? await Task.sleep(for: MemdoMetrics.bannerDismissDuration)
+                    withAnimation(reduceMotion ? nil : .easeOut) { showKeywordHint = false }
+                }
+        }
     }
 }
 
@@ -446,6 +541,7 @@ private enum SettingsSheet: String, Identifiable {
     case aiConsent
     case briefingKeywords
     case googleCalendar
+    case guestUpgrade
     case privacy
     case slack
     case wallpaperPreview
@@ -454,14 +550,15 @@ private enum SettingsSheet: String, Identifiable {
 
 private struct BriefingKeywordsSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Binding var selectedCategories: Set<String>
     @Binding var selectedKeywords: Set<String>
     @Binding var customKeywords: [String]
     @State private var draft = ""
 
-    private let suggestedKeywords = ["AI", "SwiftUI", "제품 디자인", "서울 로컬", "스타트업"]
+    private static let suggestedKeywords = SettingsDefaults.suggestedKeywords
 
     private var keywordOptions: [String] {
-        suggestedKeywords + customKeywords.filter { !suggestedKeywords.contains($0) }
+        Self.suggestedKeywords + customKeywords.filter { !Self.suggestedKeywords.contains($0) }
     }
 
     private var normalizedDraft: String {
@@ -470,8 +567,8 @@ private struct BriefingKeywordsSheet: View {
 
     private var canAddKeyword: Bool {
         !normalizedDraft.isEmpty
-            && normalizedDraft.count <= 30
-            && selectedKeywords.count < 5
+            && normalizedDraft.count <= SettingsDefaults.keywordMaxLength
+            && selectedKeywords.count < SettingsDefaults.keywordMaxCount
             && !keywordOptions.contains { $0.localizedCaseInsensitiveCompare(normalizedDraft) == .orderedSame }
     }
 
@@ -479,9 +576,39 @@ private struct BriefingKeywordsSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
-                    Text("오늘의 브리핑에서 살펴볼 주제를 최대 5개 선택하세요.")
+
+                    // MARK: Category selection (primary)
+                    Text("관심 분야를 선택하면 해당 RSS 뉴스를 가져와요.")
                         .font(.subheadline)
                         .foregroundStyle(MemdoTheme.secondaryInk)
+
+                    MemdoSection(title: "관심 분야") {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 96), spacing: 8)],
+                            alignment: .leading,
+                            spacing: 8
+                        ) {
+                            ForEach(BriefingFeedCategory.allCases) { category in
+                                MemdoChoiceButton(
+                                    title: category.rawValue,
+                                    isSelected: selectedCategories.contains(category.rawValue),
+                                    action: { toggleCategory(category) }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, MemdoMetrics.rowInset)
+                        .padding(.vertical, 12)
+                    }
+
+                    // MARK: Keyword refinement (optional)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("키워드 (선택 사항)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                        Text("키워드를 추가하면 해당 단어가 포함된 기사만 표시돼요.")
+                            .font(.caption)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                    }
 
                     HStack(spacing: 8) {
                         TextField("키워드 입력", text: $draft)
@@ -499,7 +626,7 @@ private struct BriefingKeywordsSheet: View {
                     .frame(minHeight: MemdoMetrics.touchTarget)
                     .memdoFloatingSurface()
 
-                    MemdoSection(title: "키워드", trailing: "\(selectedKeywords.count)/5") {
+                    MemdoSection(title: "키워드", trailing: "\(selectedKeywords.count)/\(SettingsDefaults.keywordMaxCount)") {
                         LazyVGrid(
                             columns: [GridItem(.adaptive(minimum: 88), spacing: 8)],
                             alignment: .leading,
@@ -518,7 +645,7 @@ private struct BriefingKeywordsSheet: View {
                 .padding(MemdoMetrics.pagePadding)
             }
             .background(MemdoTheme.background)
-            .navigationTitle("브리핑 키워드")
+            .navigationTitle("브리핑 관심사")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -526,7 +653,17 @@ private struct BriefingKeywordsSheet: View {
                 }
             }
         }
-        .memdoSheetPresentation([.medium, .large])
+        .memdoSheetPresentation([.large])
+    }
+
+    private func toggleCategory(_ category: BriefingFeedCategory) {
+        withAnimation(.snappy(duration: 0.2)) {
+            if selectedCategories.contains(category.rawValue) {
+                selectedCategories.remove(category.rawValue)
+            } else {
+                selectedCategories.insert(category.rawValue)
+            }
+        }
     }
 
     private func addKeyword() {
@@ -537,10 +674,12 @@ private struct BriefingKeywordsSheet: View {
     }
 
     private func toggleKeyword(_ keyword: String) {
-        if selectedKeywords.contains(keyword) {
-            selectedKeywords.remove(keyword)
-        } else if selectedKeywords.count < 5 {
-            selectedKeywords.insert(keyword)
+        withAnimation(.snappy(duration: 0.2)) {
+            if selectedKeywords.contains(keyword) {
+                selectedKeywords.remove(keyword)
+            } else if selectedKeywords.count < SettingsDefaults.keywordMaxCount {
+                selectedKeywords.insert(keyword)
+            }
         }
     }
 }
@@ -705,6 +844,21 @@ private struct GoogleCalendarConnectionSheet: View {
 
 private struct SlackConnectionSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("slack-webhook-url") private var webhookURL: String = ""
+    @State private var draftURL = ""
+    @State private var isTesting = false
+    @State private var testResult: SlackTestResult?
+    @State private var showDisconnectConfirm = false
+
+    private var isConnected: Bool { !webhookURL.isEmpty }
+    private var maskedURL: String {
+        guard let host = URL(string: webhookURL)?.host else { return webhookURL }
+        return "hooks.slack.com/…/\(String(webhookURL.suffix(8)))"
+            .replacingOccurrences(of: host, with: "hooks.slack.com")
+    }
+    private var canConnect: Bool {
+        draftURL.hasPrefix("https://hooks.slack.com/services/")
+    }
 
     var body: some View {
         NavigationStack {
@@ -718,26 +872,68 @@ private struct SlackConnectionSheet: View {
                 } header: {
                     Text("Agent MCP 도구")
                 }
-                Section("MVP에서 실제 지원") {
-                    LabeledContent("일정·오늘 요약 보내기", value: "chat.postMessage")
-                    LabeledContent("정한 시간에 알림 예약", value: "chat.scheduleMessage")
-                    LabeledContent("/memdo add로 할 일 초안", value: "commands")
-                }
-                Section("요청 권한") {
-                    LabeledContent("메시지 전송", value: "chat:write")
-                    LabeledContent("공개 채널 선택", value: "channels:read")
-                    LabeledContent("명령 실행", value: "commands")
+                Section("연결하면 가능한 일") {
+                    Label("일정·오늘 요약 보내기", systemImage: "message")
+                    Label("정한 시간에 알림 예약", systemImage: "clock")
+                    Label("/memdo add로 할 일 초안", systemImage: "text.badge.plus")
                 }
                 Section("자동으로 하지 않는 일") {
                     Label("채널 기록·DM을 읽지 않음", systemImage: "lock")
                     Label("전송 전 채널과 내용을 확인", systemImage: "checkmark.shield")
                     Label("개인 일정은 기본 공유 안 함", systemImage: "person.crop.circle.badge.xmark")
                 }
-                Section {
-                    Button("Slack 연결") {}
-                        .disabled(true)
-                } footer: {
-                    Text("Slack OAuth 앱, /memdo 명령, 서버 콜백을 등록한 뒤 활성화돼요. 비공개 채널은 앱 초대와 groups:read 동의가 추가로 필요해요.")
+
+                if isConnected {
+                    Section("연결된 채널") {
+                        LabeledContent("Webhook URL") {
+                            Text(maskedURL)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                                .lineLimit(1)
+                        }
+                        Button {
+                            Task { await sendTestMessage() }
+                        } label: {
+                            if isTesting {
+                                HStack(spacing: 8) {
+                                    ProgressView().scaleEffect(0.8)
+                                    Text("전송 중")
+                                }
+                            } else {
+                                Text("테스트 메시지 보내기")
+                            }
+                        }
+                        .disabled(isTesting)
+                    }
+                    if let result = testResult {
+                        Section {
+                            Label(result.message, systemImage: result.icon)
+                                .foregroundStyle(result.isSuccess ? .green : .red)
+                                .font(.caption)
+                        }
+                    }
+                    Section {
+                        Button("연결 해제", role: .destructive) {
+                            showDisconnectConfirm = true
+                        }
+                    }
+                } else {
+                    Section {
+                        TextField("https://hooks.slack.com/services/…", text: $draftURL)
+                            .font(.caption.monospacedDigit())
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                        Button("연결") {
+                            webhookURL = draftURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                            draftURL = ""
+                        }
+                        .disabled(!canConnect)
+                    } header: {
+                        Text("Incoming Webhook URL")
+                    } footer: {
+                        Text("Slack 워크스페이스 설정 → 앱 → Incoming Webhooks에서 URL을 발급받아 붙여넣으세요.")
+                    }
                 }
             }
             .memdoSystemList()
@@ -749,8 +945,42 @@ private struct SlackConnectionSheet: View {
                 }
             }
         }
+        .confirmationDialog("Slack 연결을 해제할까요?", isPresented: $showDisconnectConfirm, titleVisibility: .visible) {
+            Button("연결 해제", role: .destructive) {
+                webhookURL = ""
+                testResult = nil
+            }
+            Button("취소", role: .cancel) {}
+        }
         .memdoSheetPresentation([.large])
     }
+
+    private func sendTestMessage() async {
+        guard let url = URL(string: webhookURL) else { return }
+        isTesting = true
+        testResult = nil
+        defer { isTesting = false }
+        do {
+            let payload = ["text": "✅ Memdo에서 보낸 테스트 메시지예요. 연결이 잘 됐어요!"]
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let ok = (response as? HTTPURLResponse)?.statusCode == 200
+            testResult = ok
+                ? SlackTestResult(isSuccess: true, message: "Slack 채널에 메시지를 전달했어요.", icon: "checkmark.circle.fill")
+                : SlackTestResult(isSuccess: false, message: "전송에 실패했어요. URL을 확인해 주세요.", icon: "exclamationmark.circle.fill")
+        } catch {
+            testResult = SlackTestResult(isSuccess: false, message: "네트워크 오류: \(error.localizedDescription)", icon: "wifi.exclamationmark")
+        }
+    }
+}
+
+private struct SlackTestResult {
+    let isSuccess: Bool
+    let message: String
+    let icon: String
 }
 
 private struct MCPToolIdentityRow: View {
@@ -800,11 +1030,6 @@ private struct PrivacySheet: View {
                     Label("AI·알림·캘린더 동의는 각각 철회", systemImage: "hand.raised")
                     Label("연결 해제 시 외부 토큰 즉시 폐기", systemImage: "key.slash")
                     Label("AI 기록 삭제 요청 제공", systemImage: "trash")
-                }
-                Section {
-                    Text("현재 보존 정책은 출시 전 법률 검토가 필요한 제품 초안이에요.")
-                        .font(.footnote)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
                 }
             }
             .memdoSystemList()
@@ -856,6 +1081,72 @@ private struct AIConsentSheet: View {
                     Button("닫기") { dismiss() }
                 }
             }
+        }
+        .memdoSheetPresentation([.large])
+    }
+}
+
+// MARK: - Guest Upgrade
+
+private struct GuestUpgradeRow: View {
+    let onUpgrade: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "person.crop.circle.badge.questionmark")
+                    .font(.title2)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+                    .frame(width: 36, height: 36)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("게스트 모드")
+                        .font(.subheadline.weight(.semibold))
+                    Text("계정을 연결하면 데이터가 영구 보관돼요")
+                        .font(.caption)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                }
+            }
+
+            Button(action: onUpgrade) {
+                Label("계정 연결하기", systemImage: "arrow.up.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MemdoTheme.onAccent)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .background(
+                        MemdoTheme.accent,
+                        in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .memdoSettingsRow()
+    }
+}
+
+private struct GuestUpgradeSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(MemdoSession.self) private var session
+
+    var body: some View {
+        MemdoSignInView(
+            session: session,
+            gateTitle: "계정 연결하기",
+            gateSubtitle: "지금까지의 기록이 그대로 유지돼요.\n모든 기기에서 동기화도 바로 시작돼요."
+        )
+        .overlay(alignment: .topTrailing) {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 16)
+            .padding(.trailing, 16)
+        }
+        .onChange(of: session.phase) { _, phase in
+            if phase == .signedIn { dismiss() }
         }
         .memdoSheetPresentation([.large])
     }
