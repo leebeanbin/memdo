@@ -1,3 +1,4 @@
+import SafariServices
 import SwiftUI
 
 struct TodayHeader: View {
@@ -141,7 +142,7 @@ struct TodayWeekIndex: View {
         }
         .buttonStyle(.plain)
         .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.5)
+            LongPressGesture(minimumDuration: 0.35)
                 .onEnded { _ in onAdd(date) }
         )
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -162,7 +163,7 @@ struct TodayIntentionPrompt: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("오늘의 방향", systemImage: "sparkle")
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(MemdoTheme.peach)
+                        .foregroundStyle(MemdoTheme.brand)
                     Text(isToday ? "오늘은 어떤 하루를 보내고 싶나요?" : "이날에는 어떤 시간을 보내고 싶나요?")
                         .font(.headline)
                         .foregroundStyle(MemdoTheme.ink)
@@ -175,7 +176,7 @@ struct TodayIntentionPrompt: View {
                 if !dynamicTypeSize.isAccessibilitySize {
                     Image(systemName: "plus")
                         .font(.subheadline.weight(.bold))
-                        .foregroundStyle(MemdoTheme.peach)
+                        .foregroundStyle(MemdoTheme.brand)
                         .frame(width: 36, height: 36)
                         .background(MemdoTheme.brandSoft, in: Circle())
                 }
@@ -191,7 +192,15 @@ struct TodayIntentionPrompt: View {
                     .stroke(MemdoTheme.outline, lineWidth: 0.5)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MemdoScaleButtonStyle())
+    }
+}
+
+private struct MemdoScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
@@ -243,13 +252,75 @@ struct TodayScheduleSection: View {
 }
 
 struct TodayBriefingSection: View {
+    @State private var items: [BriefingRepository.FetchedItem] = []
+    @State private var isLoading = false
+    @State private var aiSummary: String?
+    @State private var selectedURL: URL?
+    @State private var showSafari = false
+
+    private var selectedCategories: [BriefingFeedCategory] {
+        (UserDefaults.standard.stringArray(forKey: "briefing-selected-categories") ?? [])
+            .compactMap { BriefingFeedCategory(rawValue: $0) }
+    }
+
+    private var selectedKeywords: [String] {
+        UserDefaults.standard.stringArray(forKey: "briefing-selected-keywords") ?? []
+    }
+
+    private var isEnabled: Bool { !selectedCategories.isEmpty || !selectedKeywords.isEmpty }
+
     var body: some View {
-        MemdoSection(title: "오늘의 브리핑", trailing: "연결 준비 중") {
-            MemdoStatusRow(
-                title: "관심사 브리핑을 준비하고 있어요",
-                systemImage: "sparkles",
-                detail: "뉴스 파이프라인이 연결되면 이곳에 요약이 표시됩니다.",
-                tint: MemdoTheme.brand
+        if isEnabled {
+            MemdoSection(title: "오늘의 브리핑", trailing: isLoading && items.isEmpty ? "업데이트 중" : nil) {
+                if isLoading && items.isEmpty {
+                    BriefingLoadingRow()
+                } else if items.isEmpty {
+                    MemdoStatusRow(
+                        title: "불러온 기사가 없어요",
+                        systemImage: "newspaper",
+                        detail: "관심 분야와 키워드를 확인해주세요.",
+                        tint: MemdoTheme.secondaryInk
+                    )
+                } else {
+                    if let summary = aiSummary {
+                        BriefingSummaryCard(text: summary)
+                    }
+                    VStack(spacing: 0) {
+                        ForEach(Array(items.prefix(5).enumerated()), id: \.element.id) { index, item in
+                            BriefingNewsRow(item: item) {
+                                selectedURL = item.url
+                                showSafari = true
+                            }
+                            if index < min(4, items.count - 1) {
+                                Divider().padding(.leading, MemdoMetrics.rowContentLeading)
+                            }
+                        }
+                    }
+                    .memdoRowGroup()
+                }
+            }
+            .task { await loadBriefing() }
+            .sheet(isPresented: $showSafari) {
+                if let url = selectedURL {
+                    BriefingSafariView(url: url).ignoresSafeArea()
+                }
+            }
+        }
+    }
+
+    private func loadBriefing() async {
+        guard isEnabled else { return }
+        isLoading = true
+        let cats = selectedCategories
+        let kws  = selectedKeywords
+        let fetched = await BriefingRepository.shared.fetchWithCache(categories: cats, keywords: kws)
+        items = fetched
+        isLoading = false
+
+        // AI summary runs after articles are visible (returns instantly from cache if same day)
+        if #available(iOS 26, *) {
+            aiSummary = await BriefingRepository.shared.summarize(
+                items: fetched, categories: cats, keywords: kws
             )
         }
     }
@@ -381,4 +452,122 @@ struct BriefingDetailSheet: View {
         }
         .memdoSheetPresentation([.medium])
     }
+}
+
+// MARK: - Briefing AI Summary Card
+
+private struct BriefingSummaryCard: View {
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("AI 요약", systemImage: "sparkles")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(MemdoTheme.brand)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(MemdoTheme.ink)
+                .lineSpacing(3)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            MemdoTheme.brandSoft,
+            in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                .stroke(MemdoTheme.brand.opacity(0.2), lineWidth: 0.5)
+        }
+        .padding(.horizontal, MemdoMetrics.rowInset)
+        .padding(.bottom, 4)
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+}
+
+// MARK: - Briefing News Row (RSS feed items)
+
+private struct BriefingLoadingRow: View {
+    var body: some View {
+        HStack(spacing: 10) {
+            ProgressView().scaleEffect(0.85)
+            Text("최신 뉴스를 가져오는 중...")
+                .font(.subheadline)
+                .foregroundStyle(MemdoTheme.secondaryInk)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(MemdoMetrics.rowInset)
+        .frame(minHeight: 56)
+    }
+}
+
+private struct BriefingNewsRow: View {
+    let item: BriefingRepository.FetchedItem
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(alignment: .top, spacing: MemdoMetrics.rowSpacing) {
+                VStack(alignment: .leading, spacing: 6) {
+                    // Category chip + source + relative time
+                    HStack(spacing: 6) {
+                        Text(item.category.rawValue)
+                            .font(.caption2.bold())
+                            .foregroundStyle(MemdoTheme.brand)
+                            .padding(.horizontal, 7)
+                            .frame(height: 18)
+                            .background(MemdoTheme.brandSoft, in: Capsule())
+
+                        Text(item.sourceName)
+                            .font(.caption2)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+
+                        if !item.relativeTime.isEmpty {
+                            Text("·")
+                                .font(.caption2)
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                            Text(item.relativeTime)
+                                .font(.caption2)
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                        }
+                    }
+                    .lineLimit(1)
+
+                    Text(item.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.ink)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "arrow.up.right.square")
+                    .font(.caption.bold())
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+                    .padding(.top, 3)
+            }
+            .padding(.horizontal, MemdoMetrics.rowInset)
+            .frame(minHeight: 64)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.category.rawValue), \(item.sourceName), \(item.title)")
+        .accessibilityHint("탭하면 원문을 열어요")
+    }
+}
+
+// MARK: - In-app browser
+
+struct BriefingSafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let vc = SFSafariViewController(url: url)
+        vc.preferredControlTintColor = UIColor(MemdoTheme.brand)
+        return vc
+    }
+
+    func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
 }
