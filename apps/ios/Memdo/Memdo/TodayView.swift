@@ -20,6 +20,7 @@ struct TodayView: View {
     @State private var selectedDate = Calendar.current.startOfDay(for: .now)
     @State private var showAllSchedules = false
     @State private var autoExpandArmed = true
+    @State private var weekDragOffset: CGFloat = 0
 
     init(
         coachMarkTarget: CoachMarkTarget? = nil,
@@ -55,7 +56,13 @@ struct TodayView: View {
 
     private var dateSwipeGesture: some Gesture {
         DragGesture(minimumDistance: 44)
+            .onChanged { value in
+                guard !reduceMotion,
+                      abs(value.translation.width) > abs(value.translation.height) else { return }
+                weekDragOffset = min(max(value.translation.width * 0.25, -28), 28)
+            }
             .onEnded { value in
+                withAnimation(.spring(duration: 0.3, bounce: 0.25)) { weekDragOffset = 0 }
                 guard abs(value.translation.width) > abs(value.translation.height) * 1.5,
                       abs(value.translation.width) > 64 else { return }
                 moveDate(by: value.translation.width < 0 ? 1 : -1)
@@ -78,7 +85,7 @@ struct TodayView: View {
                         .frame(height: 0)
 
                         TodayHeader(
-                            eyebrow: isToday ? "좋은 하루예요" : selectedDate < .now ? "지난 하루" : "다가오는 하루",
+                            eyebrow: selectedDate.memdoYearMonth,
                             title: isToday ? "오늘" : selectedDate.memdoMonthDay,
                             subtitle: dateSubtitle,
                             completedCount: completedCount,
@@ -97,6 +104,7 @@ struct TodayView: View {
                         )
                             .id(CoachMarkTarget.todayDates)
                             .coachMarkTarget(.todayDates)
+                            .offset(x: weekDragOffset)
                             .highPriorityGesture(
                                 dateSwipeGesture,
                                 including: dynamicTypeSize.isAccessibilitySize ? .subviews : .all
@@ -178,7 +186,10 @@ struct TodayView: View {
     }
 
     private var dateSubtitle: String {
-        selectedDate.memdoFullDate
+        guard isToday else { return selectedDate.memdoMonthDayWeekday }
+        if taskCount == 0 { return selectedDate.memdoMonthDayWeekday }
+        let remaining = taskCount - completedCount
+        return remaining > 0 ? "할 일 \(remaining)개 남았어요" : "할 일 모두 완료 \u{1F389}"
     }
 
     private var isToday: Bool {
@@ -186,9 +197,11 @@ struct TodayView: View {
     }
 
     private func selectDate(_ date: Date) {
-        selectedDate = Calendar.current.startOfDay(for: date)
-        showAllSchedules = false
-        autoExpandArmed = true
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) {
+            selectedDate = Calendar.current.startOfDay(for: date)
+            showAllSchedules = false
+            autoExpandArmed = true
+        }
         Task { await scheduleStore.ensureLoaded(for: selectedDate) }
     }
 

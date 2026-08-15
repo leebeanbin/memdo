@@ -145,6 +145,7 @@ struct EventCaptureSheet: View {
     @State private var text = ""
     @State private var draft: EventDraft? = nil
     @State private var isAnalyzing = false
+    @FocusState private var isTextFocused: Bool
 
     let onApply: (EventDraft) -> Void
 
@@ -165,6 +166,7 @@ struct EventCaptureSheet: View {
                         axis: .vertical
                     )
                     .lineLimit(4...10)
+                    .focused($isTextFocused)
                 } footer: {
                     Text(EventCapture.isIntelligenceAvailable
                         ? "제목은 기기 안에서 AI가, 시간은 자동 인식해요. 추가 전 항상 확인합니다."
@@ -213,6 +215,13 @@ struct EventCaptureSheet: View {
             }
         }
         .memdoSheetPresentation([.medium, .large])
+        .task {
+            if trimmed.isEmpty {
+                isTextFocused = true
+            } else {
+                analyze()
+            }
+        }
     }
 
     private func analyze() {

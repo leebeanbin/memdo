@@ -325,7 +325,7 @@ struct MemdoDisclosureRow: View {
             disclosureLayout {
                 Label(
                     isExpanded ? "일정 접기" : "나머지 \(hiddenCount)개 보기",
-                    systemImage: isExpanded ? "chevron.up" : "ellipsis"
+                    systemImage: isExpanded ? "chevron.up" : "chevron.down"
                 )
                 Text("총 \(totalCount)개")
                     .font(.caption)

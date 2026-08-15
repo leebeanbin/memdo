@@ -9,6 +9,7 @@ struct ScheduleDetailSheet: View {
     @State private var saved: ScheduleDetail
     @State private var isEditing = false
     @State private var showsDeleteConfirmation = false
+    @State private var editRepeat: ScheduleRepeatRule? = nil
 
     let onSave: (ScheduleDetail) -> Void
 
@@ -34,6 +35,25 @@ struct ScheduleDetailSheet: View {
             Form {
                 if isEditing {
                     ScheduleEditorFields(schedule: $draft)
+                    if draft.scheduleRuleId != nil {
+                        Section {
+                            Picker("새 반복 주기", selection: $editRepeat) {
+                                Text("변경 안 함").tag(ScheduleRepeatRule?.none)
+                                Text("반복 해제").tag(Optional(ScheduleRepeatRule.never))
+                                ForEach(ScheduleRepeatRule.allCases.filter { $0 != .never }) { rule in
+                                    Text(rule.label).tag(Optional(rule))
+                                }
+                            }
+                        } header: {
+                            Text("반복 수정")
+                        } footer: {
+                            if let rule = editRepeat {
+                                Text(rule == .never
+                                     ? "이 일정 이후의 반복이 모두 해제됩니다."
+                                     : "이 일정부터 '\(rule.label)' 반복이 적용됩니다.")
+                            }
+                        }
+                    }
                 } else {
                     Section {
                         ScheduleDetailHeader(schedule: draft)
@@ -190,6 +210,7 @@ struct ScheduleDetailSheet: View {
     private func cancelOrDismiss() {
         if isEditing {
             draft = saved
+            editRepeat = nil
             isEditing = false
         } else {
             dismiss()
@@ -198,10 +219,25 @@ struct ScheduleDetailSheet: View {
 
     private func editOrSave() {
         if isEditing {
-            saved = draft
-            onSave(draft)
+            if let ruleId = saved.scheduleRuleId, let newRule = editRepeat {
+                if newRule == .never {
+                    scheduleStore.deleteRecurring(ruleId: ruleId)
+                    draft.scheduleRuleId = nil
+                } else {
+                    scheduleStore.deleteRecurring(ruleId: ruleId)
+                    var recurringDraft = draft
+                    recurringDraft.repeatRule = newRule
+                    recurringDraft.scheduleRuleId = nil
+                    Task { await scheduleStore.createRecurring(recurringDraft) }
+                }
+                editRepeat = nil
+            } else {
+                saved = draft
+                onSave(draft)
+            }
             isEditing = false
         } else {
+            editRepeat = nil
             isEditing = true
         }
     }
@@ -382,7 +418,7 @@ struct ScheduleEditorFields: View {
                     }
                     .pickerStyle(.menu)
                 } else {
-                    LabeledContent("반복", value: schedule.repeatRule.label)
+                    LabeledContent("반복", value: schedule.scheduleRuleId != nil ? "반복 중 (아래에서 변경)" : "반복 안 함")
                 }
             }
 
@@ -423,9 +459,9 @@ struct ScheduleEditorFields: View {
                     Text("노트")
                     Spacer()
                     Menu {
-                        Button("문장 정리", systemImage: "text.alignleft", action: tidyNote)
-                        Button("할 일로 나누기", systemImage: "checklist", action: splitNote)
-                        Button("준비물 제안", systemImage: "list.bullet", action: suggestPreparation)
+                        Button("기본 서식 삽입", systemImage: "text.alignleft", action: tidyNote)
+                        Button("할 일 목록 삽입", systemImage: "checklist", action: splitNote)
+                        Button("준비 항목 삽입", systemImage: "list.bullet", action: suggestPreparation)
                     } label: {
                         Label("빠른 서식", systemImage: "text.badge.checkmark")
                             .font(.caption.weight(.semibold))
@@ -648,11 +684,12 @@ struct AddScheduleSheet: View {
             && draft.isTimeRangeValid
     }
 
-    init(date: Date, onSave: @escaping (ScheduleDetail) -> Void) {
+    init(date: Date, defaultKind: ScheduleKind? = nil, onSave: @escaping (ScheduleDetail) -> Void) {
         let d = Self.makeDraft(for: date)
         _draft = State(initialValue: d)
         _workoutStartAt = State(initialValue: d.startAt ?? date)
         _workoutEndAt   = State(initialValue: d.endAt   ?? date.addingTimeInterval(3_600))
+        _selectedCategory = State(initialValue: defaultKind == .event ? .event : .task)
         self.onSave = onSave
     }
 
@@ -712,14 +749,17 @@ struct AddScheduleSheet: View {
                             Spacer()
                             ForEach(ScheduleColor.allCases) { c in
                                 let isSelected = draft.color == c
-                                Circle()
-                                    .fill(c.swiftUIColor)
-                                    .frame(width: 20, height: 20)
-                                    .overlay(Circle().stroke(.primary, lineWidth: isSelected ? 2 : 0).padding(2))
-                                    .scaleEffect(isSelected ? 1.15 : 1)
-                                    .animation(.easeInOut(duration: 0.12), value: isSelected)
-                                    .onTapGesture { draft.color = isSelected ? nil : c }
-                                    .accessibilityLabel(c.label)
+                                ZStack {
+                                    Circle().fill(c.swiftUIColor)
+                                    Circle().fill(MemdoTheme.background).padding(isSelected ? 3 : 26)
+                                    Circle().fill(c.swiftUIColor).padding(isSelected ? 6 : 0)
+                                }
+                                .frame(width: 26, height: 26)
+                                .clipShape(Circle())
+                                .animation(.easeInOut(duration: 0.15), value: isSelected)
+                                .onTapGesture { draft.color = isSelected ? nil : c }
+                                .accessibilityLabel(c.label)
+                                .accessibilityAddTraits(isSelected ? .isSelected : [])
                             }
                         }
                         .padding(.vertical, 4)
@@ -800,9 +840,13 @@ struct AddScheduleSheet: View {
         }
 
         if workoutActivityType.hasDistance {
-            Section(workoutActivityType.distanceLabel) {
-                TextField("0.0", text: $workoutDistanceText)
-                    .keyboardType(.decimalPad)
+            Section("거리") {
+                HStack {
+                    TextField("0.0", text: $workoutDistanceText)
+                        .keyboardType(.decimalPad)
+                    Text(workoutActivityType == .swimming ? "m" : "km")
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                }
             }
         }
 
@@ -931,15 +975,18 @@ private struct AddCategorySheet: View {
                 Section("색상") {
                     HStack(spacing: 12) {
                         ForEach(ScheduleColor.allCases) { c in
-                            Circle()
-                                .fill(c.swiftUIColor)
-                                .frame(width: 30, height: 30)
-                                .overlay(
-                                    Circle().stroke(Color.primary, lineWidth: color == c ? 2.5 : 0).padding(2)
-                                )
-                                .onTapGesture { color = c }
-                                .accessibilityLabel(c.label)
-                                .accessibilityAddTraits(color == c ? .isSelected : [])
+                            let isSelected = color == c
+                            ZStack {
+                                Circle().fill(c.swiftUIColor)
+                                Circle().fill(MemdoTheme.background).padding(isSelected ? 3 : 30)
+                                Circle().fill(c.swiftUIColor).padding(isSelected ? 6 : 0)
+                            }
+                            .frame(width: 30, height: 30)
+                            .clipShape(Circle())
+                            .animation(.easeInOut(duration: 0.15), value: isSelected)
+                            .onTapGesture { color = c }
+                            .accessibilityLabel(c.label)
+                            .accessibilityAddTraits(isSelected ? .isSelected : [])
                         }
                     }
                     .padding(.vertical, 4)
@@ -997,70 +1044,85 @@ private struct LocationPickerView: View {
             Map(position: $cameraPosition) {
                 ForEach(Array(results.enumerated()), id: \.offset) { index, item in
                     Marker(item.name ?? "장소", coordinate: item.placemark.coordinate)
-                        .tint(index == selectedIndex ? MemdoTheme.brand : MemdoTheme.controlOutline)
+                        .tint(index == selectedIndex ? MemdoTheme.brand : .gray)
                 }
             }
             .mapStyle(.standard)
             .frame(height: 220)
 
+            Divider()
+
             List {
-                if let currentLocation {
-                    Section("저장된 장소") {
-                        Button(currentLocation.displayText) {
-                            onSelect(currentLocation)
-                            dismiss()
-                        }
-                        .foregroundStyle(MemdoTheme.ink)
+                // 저장된 장소 — 검색 전에만 표시
+                if let currentLocation, query.isEmpty {
+                    locationRow(
+                        name: currentLocation.displayText,
+                        address: nil,
+                        icon: "mappin.circle.fill",
+                        tint: MemdoTheme.brand,
+                        isSelected: false
+                    ) {
+                        onSelect(currentLocation)
+                        dismiss()
                     }
+                    .listRowSeparator(.hidden)
                 }
 
-                Section("검색 결과") {
-                    if isSearching {
-                        ProgressView("장소를 찾는 중")
-                    } else if results.isEmpty {
-                        ContentUnavailableView(
-                            "장소를 검색해 보세요",
-                            systemImage: "map",
-                            description: Text("건물명, 상호 또는 주소를 입력하세요.")
+                // 검색 결과 / 안내
+                if isSearching {
+                    HStack {
+                        Spacer()
+                        ProgressView().tint(MemdoTheme.secondaryInk)
+                        Spacer()
+                    }
+                    .padding(.vertical, 20)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                } else if results.isEmpty {
+                    HStack(spacing: 8) {
+                        Image(systemName: query.isEmpty ? "magnifyingglass" : "mappin.slash")
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                        Text(query.isEmpty ? "건물명, 상호 또는 주소로 검색하세요" : "결과를 찾지 못했어요")
+                            .font(.subheadline)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                    }
+                    .padding(.vertical, 20)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                } else {
+                    ForEach(Array(results.enumerated()), id: \.offset) { index, item in
+                        locationRow(
+                            name: item.name ?? "이름 없는 장소",
+                            address: item.placemark.title,
+                            icon: "mappin.circle.fill",
+                            tint: index == selectedIndex ? MemdoTheme.brand : Color.secondary,
+                            isSelected: index == selectedIndex
+                        ) {
+                            select(at: index)
+                        }
+                        .listRowBackground(
+                            index == selectedIndex
+                                ? MemdoTheme.brand.opacity(0.07)
+                                : Color.clear
                         )
-                    } else {
-                        ForEach(Array(results.enumerated()), id: \.offset) { index, item in
-                            Button { select(at: index) } label: {
-                                HStack(spacing: 10) {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(item.name ?? "이름 없는 장소")
-                                            .font(.subheadline.weight(.medium))
-                                            .foregroundStyle(MemdoTheme.ink)
-                                        if let address = item.placemark.title {
-                                            Text(address)
-                                                .font(.caption)
-                                                .foregroundStyle(MemdoTheme.secondaryInk)
-                                                .lineLimit(1)
-                                        }
-                                    }
-                                    Spacer(minLength: 4)
-                                    if index == selectedIndex {
-                                        Image(systemName: "checkmark")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(MemdoTheme.brand)
-                                    }
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        .listRowSeparator(index < results.count - 1 ? .visible : .hidden, edges: .bottom)
                     }
                 }
 
+                // 장소 지우기
                 if currentLocation != nil {
-                    Section {
-                        Button("장소 지우기", role: .destructive) {
-                            onSelect(nil)
-                            dismiss()
-                        }
+                    Button(role: .destructive) {
+                        onSelect(nil)
+                        dismiss()
+                    } label: {
+                        Label("장소 지우기", systemImage: "trash")
                     }
+                    .listRowSeparator(.hidden)
                 }
             }
-            .memdoSystemList()
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
         }
         .searchable(text: $query, prompt: "건물, 상호, 주소")
         .onSubmit(of: .search, search)
@@ -1096,6 +1158,44 @@ private struct LocationPickerView: View {
                 cameraPosition = .automatic
             }
         }
+    }
+
+    @ViewBuilder
+    private func locationRow(
+        name: String,
+        address: String?,
+        icon: String,
+        tint: Color,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(tint)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(MemdoTheme.ink)
+                    if let address {
+                        Text(address)
+                            .font(.caption)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 4)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(MemdoTheme.brand)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func select(at index: Int) {

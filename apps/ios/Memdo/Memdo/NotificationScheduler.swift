@@ -254,7 +254,7 @@ enum NotificationScheduler {
         let size = CGSize(width: 60, height: 60)
         let image = UIGraphicsImageRenderer(size: size).image { _ in
             colorUIColor(for: color).setFill()
-            UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 16).fill()
+            UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: MemdoMetrics.contentRadius).fill()
         }
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("memdo-color-\(color.rawValue).png")

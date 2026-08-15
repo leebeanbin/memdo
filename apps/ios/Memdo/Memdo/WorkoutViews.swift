@@ -187,11 +187,11 @@ struct WorkoutDetailSheet: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("편집") { editing = true }
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(role: .destructive) { showDeleteConfirm = true } label: {
-                        Image(systemName: "trash")
+                    Menu {
+                        Button("편집", systemImage: "pencil") { editing = true }
+                        Button("삭제", systemImage: "trash", role: .destructive) { showDeleteConfirm = true }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
                     }
                 }
             }
@@ -219,7 +219,7 @@ struct WorkoutDetailSheet: View {
                     Label("운동 완료", systemImage: "checkmark.circle.fill")
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(.green, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .background(.green, in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous))
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
@@ -236,7 +236,7 @@ struct WorkoutDetailSheet: View {
                     Label("Dynamic Island 추적 시작", systemImage: "liveactivity")
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(MemdoTheme.accent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .background(MemdoTheme.accent, in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous))
                         .foregroundStyle(MemdoTheme.onAccent)
                 }
                 .buttonStyle(.plain)
@@ -432,7 +432,7 @@ struct WorkoutLogEditorSheet: View {
                             Image(uiImage: uiImage)
                                 .resizable().scaledToFill()
                                 .frame(height: 160).clipped()
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .clipShape(RoundedRectangle(cornerRadius: MemdoMetrics.iconRadius))
                         }
                     } header: {
                         Text("사진")
@@ -519,11 +519,11 @@ struct WorkoutLogEditorSheet: View {
                         .frame(width: 76, height: 64)
                         .background(
                             isSelected ? MemdoTheme.accent : MemdoTheme.surface,
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous)
                         )
                         .overlay {
                             if !isSelected {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous)
                                     .stroke(MemdoTheme.controlOutline, lineWidth: 0.5)
                             }
                         }
@@ -624,7 +624,7 @@ struct HealthKitImportSheet: View {
     @State private var selected: Set<UUID> = []
     @State private var phase: ImportPhase = .loading
 
-    enum ImportPhase { case loading, empty, ready, importing }
+    enum ImportPhase { case loading, empty, ready, importing, done }
 
     var body: some View {
         NavigationStack {
@@ -663,6 +663,17 @@ struct HealthKitImportSheet: View {
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+        case .done:
+            ContentUnavailableView(
+                "\(selected.count)개 운동을 저장했어요",
+                systemImage: "checkmark.circle.fill",
+                description: Text("Memdo 캘린더에서 확인할 수 있어요.")
+            )
+            .task {
+                try? await Task.sleep(for: .milliseconds(900))
+                dismiss()
+            }
 
         case .empty:
             ContentUnavailableView(
@@ -766,6 +777,6 @@ struct HealthKitImportSheet: View {
         for workout in pending where selected.contains(workout.id) {
             workoutStore.save(workout)
         }
-        dismiss()
+        withAnimation { phase = .done }
     }
 }

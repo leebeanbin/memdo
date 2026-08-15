@@ -9,7 +9,7 @@ enum CoachMarkTour {
         case .app:
             [
                 .init(.todayOverview, .today, "오늘", "날짜와 완료 현황을 한눈에 확인해요."),
-                .init(.todayDates, .today, "날짜 이동", "날짜를 누르거나 좌우로 밀어 다른 날을 확인해요."),
+                .init(.todayDates, .today, "날짜 이동", "날짜를 누르거나 좌우로 밀어 다른 날을 확인해요. 날짜를 길게 누르면 바로 일정을 추가할 수 있어요."),
                 .init(.todaySchedule, .today, "일정", "빈 날은 바로 계획하고, 일정은 완료하거나 상세를 열 수 있어요."),
                 .init(.todayBriefing, .today, "오늘의 브리핑", "관심사와 일정에 영향을 주는 정보만 짧게 정리해요."),
                 .init(.calendarOverview, .calendar, "캘린더", "월간 흐름을 보고 검색과 필터로 필요한 일정만 찾을 수 있어요."),

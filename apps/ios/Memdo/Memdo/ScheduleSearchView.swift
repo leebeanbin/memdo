@@ -1,44 +1,64 @@
 import SwiftUI
 
+private enum SearchStatus: String, CaseIterable, Identifiable {
+    case all = "전체 상태"
+    case pending = "예정"
+    case done = "완료"
+    var id: String { rawValue }
+}
+
+private enum SearchPeriod: String, CaseIterable, Identifiable {
+    case all = "전체 기간"
+    case twoWeeks = "최근 2주"
+    case thisWeek = "이번 주"
+    var id: String { rawValue }
+
+    var interval: DateInterval? {
+        let calendar = Calendar.current
+        let now = Date.now
+        switch self {
+        case .all: return nil
+        case .thisWeek: return calendar.dateInterval(of: .weekOfYear, for: now)
+        case .twoWeeks:
+            let today = calendar.startOfDay(for: now)
+            guard let start = calendar.date(byAdding: .day, value: -13, to: today),
+                  let end = calendar.date(byAdding: .day, value: 1, to: today) else { return nil }
+            return DateInterval(start: start, end: end)
+        }
+    }
+}
+
 struct ScheduleSearchView: View {
     @Environment(ScheduleStore.self) private var scheduleStore
     @Binding var query: String
     let scope: ScheduleSearchScope
-    @State private var status = "전체 상태"
-    @State private var period = "전체 기간"
+    @State private var status = SearchStatus.all
+    @State private var period = SearchPeriod.all
     @State private var presentedSheet: SearchSheet?
     @State private var results: [ScheduleDetail] = []
     @State private var searchError: String?
     @State private var isSearching = false
 
     private var activeFilterDescription: String? {
-        let filters = [status, period].filter { $0 != "전체 상태" && $0 != "전체 기간" }
-        return filters.isEmpty ? nil : filters.joined(separator: " · ")
-    }
-
-    private var periodInterval: DateInterval? {
-        let calendar = Calendar.current
-        let now = Date.now
-        switch period {
-        case "이번 주":
-            return calendar.dateInterval(of: .weekOfYear, for: now)
-        case "최근 2주":
-            let today = calendar.startOfDay(for: now)
-            guard let start = calendar.date(byAdding: .day, value: -13, to: today),
-                  let end = calendar.date(byAdding: .day, value: 1, to: today) else { return nil }
-            return DateInterval(start: start, end: end)
-        default:
-            return nil
-        }
+        let parts = [
+            status != .all ? status.rawValue : nil,
+            period != .all ? period.rawValue : nil
+        ].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     // Text matching now happens server-side (`/search`); the remaining scope/
     // status/period controls filter the returned matches client-side.
     private var filteredResults: [ScheduleDetail] {
-        let interval = periodInterval
+        let interval = period.interval
         return results.filter { schedule in
             let matchesScope = scope == .all || (scope == .google ? schedule.isExternal : !schedule.isExternal)
-            let matchesStatus = status == "전체 상태" || (status == "완료" ? schedule.isDone : !schedule.isDone)
+            let matchesStatus: Bool
+            switch status {
+            case .all: matchesStatus = true
+            case .pending: matchesStatus = !schedule.isDone
+            case .done: matchesStatus = schedule.isDone
+            }
             let matchesPeriod = interval.map {
                 schedule.scheduledDate >= $0.start && schedule.scheduledDate < $0.end
             } ?? true
@@ -180,17 +200,17 @@ private enum SearchSheet: Identifiable {
 
 private struct SearchFilterSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Binding var status: String
-    @Binding var period: String
+    @Binding var status: SearchStatus
+    @Binding var period: SearchPeriod
 
     var body: some View {
         NavigationStack {
             Form {
                 Picker("상태", selection: $status) {
-                    ForEach(["전체 상태", "예정", "완료"], id: \.self) { Text($0) }
+                    ForEach(SearchStatus.allCases) { Text($0.rawValue).tag($0) }
                 }
                 Picker("기간", selection: $period) {
-                    ForEach(["전체 기간", "최근 2주", "이번 주"], id: \.self) { Text($0) }
+                    ForEach(SearchPeriod.allCases) { Text($0.rawValue).tag($0) }
                 }
                 Button("필터 초기화", action: resetFilters)
             }
@@ -199,7 +219,7 @@ private struct SearchFilterSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("적용") { dismiss() }
+                    Button("완료") { dismiss() }
                         .fontWeight(.semibold)
                 }
             }
@@ -208,7 +228,7 @@ private struct SearchFilterSheet: View {
     }
 
     private func resetFilters() {
-        status = "전체 상태"
-        period = "전체 기간"
+        status = .all
+        period = .all
     }
 }

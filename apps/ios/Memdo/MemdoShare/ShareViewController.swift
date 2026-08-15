@@ -4,14 +4,29 @@ import UniformTypeIdentifiers
 
 @MainActor
 final class ShareViewController: UIViewController {
+    private var spinner: UIActivityIndicatorView?
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
+
+        let s = UIActivityIndicatorView(style: .medium)
+        s.translatesAutoresizingMaskIntoConstraints = false
+        s.startAnimating()
+        view.addSubview(s)
+        NSLayoutConstraint.activate([
+            s.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            s.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+        spinner = s
+
         Task { await setup() }
     }
 
     private func setup() async {
         let text = await extractText()
+        spinner?.removeFromSuperview()
+        spinner = nil
         let shareView = ShareWorkoutView(
             initialNotes: text,
             onSave: { [weak self] workout in
