@@ -51,15 +51,17 @@ enum BriefingFeedCategory: String, CaseIterable, Identifiable {
 struct BriefingFeedSource: Identifiable {
     let id: String
     let name: String
-    let rssURL: URL
+    let urlString: String
     let category: BriefingFeedCategory
 
     init(id: String, name: String, url urlString: String, category: BriefingFeedCategory) {
         self.id = id
         self.name = name
-        self.rssURL = URL(string: urlString)!
+        self.urlString = urlString
         self.category = category
     }
+
+    var rssURL: URL? { URL(string: urlString) }
 }
 
 // MARK: - RSS XML Parser
@@ -95,6 +97,13 @@ private final class RSSParser: NSObject, XMLParserDelegate {
         if elementName == "item" || elementName == "entry" {
             insideItem  = true
             currentItem = RSSItem()
+        }
+        // Atom feeds carry the URL in <link href="..."/> (self-closing, no text
+        // content); rel is absent or "alternate" for the article link.
+        if insideItem, elementName == "link", currentItem.link.isEmpty,
+           let href = attributeDict["href"],
+           attributeDict["rel"] == nil || attributeDict["rel"] == "alternate" {
+            currentItem.link = href
         }
     }
 
@@ -184,7 +193,8 @@ actor BriefingRepository {
     }
 
     private func fetchFeed(_ feed: BriefingFeedSource, keywords: [String]) async -> [FetchedItem] {
-        guard let (data, _) = try? await URLSession.shared.data(from: feed.rssURL) else { return [] }
+        guard let rssURL = feed.rssURL,
+              let (data, _) = try? await URLSession.shared.data(from: rssURL) else { return [] }
 
         let parser = RSSParser()
         let rssItems = parser.parse(data: data)
