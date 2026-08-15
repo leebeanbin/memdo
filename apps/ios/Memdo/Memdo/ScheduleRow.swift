@@ -49,6 +49,7 @@ struct ScheduleRow: View {
                     Image(systemName: schedule.isDone ? "checkmark.circle.fill" : "circle")
                         .font(.title3)
                         .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : activeColor)
+                        .contentTransition(.symbolEffect(.replace.byLayer))
                         .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                 }
                 .buttonStyle(.plain)
@@ -179,12 +180,21 @@ struct ScheduleSourceIcon: View {
     var body: some View {
         Image(systemName: schedule.kind == .task ? "checkmark" : schedule.isExternal ? "calendar" : "clock")
             .font(.caption.weight(.bold))
-            .foregroundStyle(schedule.kind == .task ? MemdoTheme.brand : MemdoTheme.secondaryInk)
+            .foregroundStyle(iconColor)
             .frame(width: 30, height: 30)
             .background(
-                MemdoTheme.accentSoft,
+                iconBackground,
                 in: RoundedRectangle(cornerRadius: MemdoMetrics.iconRadius, style: .continuous)
             )
             .accessibilityHidden(true)
+    }
+
+    private var iconColor: Color {
+        if let c = schedule.color { return c.swiftUIColor }
+        return schedule.kind == .task ? MemdoTheme.brand : MemdoTheme.secondaryInk
+    }
+
+    private var iconBackground: Color {
+        schedule.color?.softSwiftUIColor ?? MemdoTheme.accentSoft
     }
 }

@@ -11,8 +11,8 @@ private enum MemdoWidgetTheme {
     static let brand = Color(
         uiColor: UIColor { traits in
             traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.72, green: 0.67, blue: 1, alpha: 1)
-                : UIColor(red: 0.36, green: 0.30, blue: 0.72, alpha: 1)
+                ? UIColor(red: 0.72, green: 0.67, blue: 1, alpha: 1)      // lavender
+                : UIColor(red: 0.996, green: 0.725, blue: 0.149, alpha: 1) // #FEB926 amber
         }
     )
 
@@ -607,7 +607,7 @@ private struct WidgetMonthDay: View {
         VStack(spacing: 1) {
             Text(date.memdoDay)
                 .font(.caption2.weight(isToday ? .bold : .regular))
-                .foregroundStyle(isToday ? MemdoWidgetTheme.onAccent : .primary)
+                .foregroundStyle(isToday ? MemdoWidgetTheme.accent : .primary)
                 .frame(width: isLarge ? 23 : 16, height: isLarge ? 23 : 15)
                 .background(isToday ? MemdoWidgetTheme.brand : .clear, in: Circle())
             Circle()
