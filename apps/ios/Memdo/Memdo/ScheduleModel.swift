@@ -771,6 +771,9 @@ final class ScheduleStore {
             let previous = schedules[index]
             schedules[index] = schedule
             updateWidgetSnapshot()
+            if schedule.isDone && !previous.isDone {
+                Task { await SlackNotifier.notify(schedule: schedule, event: .completed) }
+            }
             Task {
                 await update(schedule, replacing: previous)
                 pendingWriteIDs.remove(schedule.id)
@@ -778,6 +781,7 @@ final class ScheduleStore {
         } else {
             schedules.append(schedule)
             updateWidgetSnapshot()
+            Task { await SlackNotifier.notify(schedule: schedule, event: .created) }
             Task {
                 await create(schedule)
                 pendingWriteIDs.remove(schedule.id)
@@ -881,9 +885,11 @@ final class ScheduleStore {
     func toggleDone(id: UUID) {
         guard let index = schedules.firstIndex(where: { $0.id == id }),
               schedules[index].kind == .task else { return }
-        var schedule = schedules[index]
-        schedule.isDone.toggle()
-        save(schedule)
+        // Update local state immediately so the ring reflects the change even
+        // when save() returns early due to a concurrent in-flight write.
+        schedules[index].isDone.toggle()
+        updateWidgetSnapshot()
+        save(schedules[index])
     }
 
     func move(id: UUID, to date: Date) {
