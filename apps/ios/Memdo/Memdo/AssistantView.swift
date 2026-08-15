@@ -1,29 +1,296 @@
 import SwiftUI
+import FoundationModels
+
+// MARK: - Message model
+
+struct AgentMessage: Identifiable, Equatable {
+    var id = UUID()
+    var role: Role
+    var text: String
+    var isStreaming: Bool = false
+    var isError: Bool = false
+    var toolHint: String? = nil   // shown while a tool is executing and no text yet
+
+    enum Role: Equatable { case user, assistant }
+}
+
+// MARK: - Context
+
+enum AgentContext {
+    case today
+    case calendar
+    case settings
+    case todaySummary
+    case weekReview
+    case monthReview
+
+    var displayTitle: String {
+        switch self {
+        case .today: "오늘"
+        case .calendar: "캘린더"
+        case .settings: "설정"
+        case .todaySummary: "오늘 요약"
+        case .weekReview: "지난 7일 회고"
+        case .monthReview: "지난 30일 회고"
+        }
+    }
+}
+
+// MARK: - Schedule Proposal (Tool result)
+
+struct ProposedScheduleDraft: Sendable, Equatable {
+    let title: String
+    let dateString: String          // "today" | "tomorrow" | "yyyy-MM-dd"
+    let startTimeString: String?    // "HH:mm"
+    let endTimeString: String?      // "HH:mm"
+    let isTask: Bool
+    let note: String?
+
+    var displayDate: String {
+        switch dateString {
+        case "today":    return "오늘"
+        case "tomorrow": return "내일"
+        default:
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "ko_KR")
+            f.dateFormat = "M월 d일"
+            return f.string(from: scheduledDate())
+        }
+    }
+
+    var displayTime: String {
+        if isTask { return "할 일" }
+        guard let start = startTimeString else { return "시간 미정" }
+        return start + (endTimeString.map { " – \($0)" } ?? "")
+    }
+
+    func scheduledDate() -> Date {
+        let cal = Calendar.current
+        switch dateString {
+        case "today":    return cal.startOfDay(for: .now)
+        case "tomorrow": return cal.startOfDay(for: cal.date(byAdding: .day, value: 1, to: .now) ?? .now)
+        default:
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+            return f.date(from: dateString).map { cal.startOfDay(for: $0) } ?? cal.startOfDay(for: .now)
+        }
+    }
+
+    func toScheduleDetail(calendar: ScheduleCalendar) -> ScheduleDetail {
+        let date    = scheduledDate()
+        let startAt = startTimeString.flatMap { parseTime($0, on: date) }
+        let endAt   = endTimeString.flatMap   { parseTime($0, on: date) }
+        return ScheduleDetail(
+            scheduledDate: date,
+            startAt: startAt, endAt: endAt,
+            title: title, memo: note ?? "",
+            kind: isTask ? .task : .event,
+            calendar: calendar,
+            timeBucket: startAt.map(ScheduleTimeBucket.inferred) ?? .anytime
+        )
+    }
+
+    private func parseTime(_ s: String, on date: Date) -> Date? {
+        let parts = s.split(separator: ":").compactMap { Int($0) }
+        guard parts.count >= 2 else { return nil }
+        return Calendar.current.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: date)
+    }
+}
+
+@MainActor
+@Observable
+final class AgentScheduleProposal {
+    var draft: ProposedScheduleDraft?
+    func propose(_ d: ProposedScheduleDraft) { draft = d }
+    func clear() { draft = nil }
+}
+
+@available(iOS 26, *)
+struct ProposeScheduleTool: Tool {
+    let name = "proposeSchedule"
+    let description = "Proposes a new schedule or task to the user for confirmation. Use this whenever the user wants to create, add, or make a new schedule or task."
+
+    @Generable
+    struct Arguments: Sendable {
+        @Guide(description: "Schedule title in Korean")
+        let title: String
+        @Guide(description: "Date: 'today', 'tomorrow', or yyyy-MM-dd")
+        let date: String
+        @Guide(description: "Start time HH:mm. Empty string for tasks")
+        let startTime: String
+        @Guide(description: "End time HH:mm. Empty string for tasks")
+        let endTime: String
+        @Guide(description: "true for a to-do task with no fixed time, false for timed event")
+        let isTask: Bool
+        @Guide(description: "Optional memo or note. Empty string if none")
+        let note: String
+    }
+
+    let proposal: AgentScheduleProposal
+
+    func call(arguments: Arguments) async throws -> String {
+        let draft = ProposedScheduleDraft(
+            title:           arguments.title,
+            dateString:      arguments.date,
+            startTimeString: arguments.startTime.isEmpty ? nil : arguments.startTime,
+            endTimeString:   arguments.endTime.isEmpty   ? nil : arguments.endTime,
+            isTask:          arguments.isTask,
+            note:            arguments.note.isEmpty       ? nil : arguments.note
+        )
+        await proposal.propose(draft)
+        return "'\(draft.title)' 일정을 제안했습니다."
+    }
+}
+
+// MARK: - Free Slot Tool
+
+@available(iOS 26, *)
+struct FindFreeSlotTool: Tool {
+    struct ScheduleInterval: Sendable {
+        let scheduledDate: Date
+        let startAt: Date?
+        let endAt: Date?
+    }
+
+    let name        = "findFreeSlots"
+    let description = "Finds available free time blocks in the user's calendar. Call this when the user asks to find free time, an open slot, or where to fit a new event."
+
+    @Generable
+    struct Arguments: Sendable {
+        @Guide(description: "Date scope — one of: 'today', 'tomorrow', 'this_week', or a specific yyyy-MM-dd")
+        let scope: String
+        @Guide(description: "Required free-slot length in minutes, e.g. 30, 60, 90")
+        let durationMinutes: Int
+        @Guide(description: "Earliest start time HH:mm, e.g. '09:00'. Empty string = no preference.")
+        let windowStart: String
+        @Guide(description: "Latest end time HH:mm, e.g. '21:00'. Empty string = no preference.")
+        let windowEnd: String
+    }
+
+    let snapshot: [ScheduleInterval]
+
+    func call(arguments: Arguments) async throws -> String {
+        let dates    = expandScope(arguments.scope)
+        let duration = TimeInterval(max(15, arguments.durationMinutes) * 60)
+
+        var lines: [String] = []
+        for date in dates {
+            let busyOnDay = snapshot.filter { Calendar.current.isDate($0.scheduledDate, inSameDayAs: date) }
+            let slots = freeSlots(on: date, busy: busyOnDay, duration: duration,
+                                  wStart: arguments.windowStart, wEnd: arguments.windowEnd)
+            guard !slots.isEmpty else { continue }
+            lines.append("\(dateLabel(date)): \(slots.map(formatInterval).joined(separator: ", "))")
+        }
+
+        return lines.isEmpty ? "요청한 조건에 맞는 빈 시간을 찾지 못했어요." : lines.joined(separator: "\n")
+    }
+
+    private func expandScope(_ scope: String) -> [Date] {
+        let cal   = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        switch scope {
+        case "today":     return [today]
+        case "tomorrow":  return [cal.date(byAdding: .day, value: 1, to: today) ?? today]
+        case "this_week": return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: today) }
+        default:
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+            return [f.date(from: scope).map { cal.startOfDay(for: $0) } ?? today]
+        }
+    }
+
+    private func freeSlots(on date: Date, busy: [ScheduleInterval],
+                           duration: TimeInterval, wStart: String, wEnd: String) -> [DateInterval] {
+        let cal    = Calendar.current
+        let start  = timeFrom(wStart, on: date) ?? cal.date(bySettingHour: 8,  minute: 0, second: 0, of: date)!
+        let end    = timeFrom(wEnd,   on: date) ?? cal.date(bySettingHour: 22, minute: 0, second: 0, of: date)!
+
+        let busyRanges: [DateInterval] = busy
+            .compactMap { s in
+                guard let s1 = s.startAt, let e1 = s.endAt, e1 > s1 else { return nil }
+                return DateInterval(start: s1, end: e1)
+            }
+            .sorted { $0.start < $1.start }
+
+        var slots:  [DateInterval] = []
+        var cursor: Date           = start
+
+        for range in busyRanges {
+            guard range.start > cursor else { cursor = max(cursor, range.end); continue }
+            if range.start.timeIntervalSince(cursor) >= duration {
+                slots.append(DateInterval(start: cursor, duration: duration))
+            }
+            cursor = max(cursor, range.end)
+        }
+        if end.timeIntervalSince(cursor) >= duration {
+            slots.append(DateInterval(start: cursor, duration: duration))
+        }
+
+        return Array(slots.prefix(3))
+    }
+
+    private func timeFrom(_ hhmm: String, on date: Date) -> Date? {
+        guard !hhmm.isEmpty else { return nil }
+        let parts = hhmm.split(separator: ":").compactMap { Int($0) }
+        guard parts.count >= 2 else { return nil }
+        return Calendar.current.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: date)
+    }
+
+    private func formatInterval(_ interval: DateInterval) -> String {
+        let f = DateFormatter()
+        f.locale     = Locale(identifier: "ko_KR")
+        f.dateFormat = "H:mm"
+        let endTime  = interval.start.addingTimeInterval(interval.duration)
+        return "\(f.string(from: interval.start))–\(f.string(from: endTime))"
+    }
+
+    private func dateLabel(_ date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date)    { return "오늘" }
+        if cal.isDateInTomorrow(date) { return "내일" }
+        let f = DateFormatter()
+        f.locale     = Locale(identifier: "ko_KR")
+        f.dateFormat = "M월 d일(E)"
+        return f.string(from: date)
+    }
+}
+
+// MARK: - Agent Sheet
 
 struct AgentSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(ScheduleStore.self) private var scheduleStore
     @Binding var composer: String
-    @Binding var response: String
+    @Binding var messages: [AgentMessage]
 
-    let context: String
+    let context: AgentContext
+
+    @State private var _sessionBacking: AnyObject? = nil
+    @State private var isLoading = false
+    @State private var showSessionGapNotice = false
+    @State private var proposal = AgentScheduleProposal()
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
-                    AgentSheetHeader(context: context)
-                    if !response.isEmpty {
-                        AgentResponse(text: response)
-                    } else {
-                        AgentQuickActions(context: context, onSelect: selectQuickAction)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
+                        AgentSheetHeader(context: context, hasStarted: !messages.isEmpty)
+
+                        messageList
+
+                        Color.clear.frame(height: 1).id("agentBottom")
+                    }
+                    .padding(MemdoMetrics.pagePadding)
+                }
+                .onChange(of: messages) { _, _ in
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo("agentBottom", anchor: .bottom)
                     }
                 }
-                .padding(MemdoMetrics.pagePadding)
             }
             .scrollDismissesKeyboard(.interactively)
             .background(MemdoTheme.background)
             .safeAreaInset(edge: .bottom) {
-                AgentComposer(text: $composer, onSend: send)
+                AgentComposer(text: $composer, isLoading: isLoading, onSend: send)
                     .padding(.horizontal, MemdoMetrics.pagePadding)
                     .padding(.vertical, 6)
             }
@@ -32,14 +299,80 @@ struct AgentSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("새 대화", systemImage: "square.and.pencil", action: resetConversation)
-                        .disabled(composer.isEmpty && response.isEmpty)
+                        .disabled(messages.isEmpty || isLoading)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("닫기") { dismiss() }
                 }
             }
         }
+        .task {
+            if #available(iOS 26, *) {
+                let hadHistory = !messages.isEmpty
+                if typedSession == nil {
+                    _sessionBacking = LanguageModelSession(
+                        tools: [
+                            ProposeScheduleTool(proposal: proposal),
+                            FindFreeSlotTool(snapshot: scheduleSnapshot())
+                        ],
+                        instructions: agentInstructions()
+                    )
+                    if hadHistory { showSessionGapNotice = true }
+                }
+                typedSession?.prewarm()
+            }
+        }
+        .onChange(of: proposal.draft) { _, draft in
+            guard draft != nil else { return }
+            if let last = messages.indices.last,
+               messages[last].isStreaming, messages[last].text.isEmpty {
+                messages[last].toolHint = "일정을 제안하는 중..."
+            }
+        }
         .memdoSheetPresentation([.medium, .large])
+    }
+
+    @ViewBuilder
+    private var messageList: some View {
+        if messages.isEmpty && proposal.draft == nil {
+            AgentQuickActions(context: context, hasSchedulesToday: hasSchedulesToday, onSelect: selectQuickAction)
+        } else {
+            if showSessionGapNotice { sessionGapBanner }
+            ForEach(messages) { message in
+                if message.role == .user {
+                    AgentUserBubble(text: message.text)
+                } else {
+                    AgentResponse(message: message, onRetry: message.isError ? { retry() } : nil)
+                }
+            }
+            if let draft = proposal.draft {
+                ProposedScheduleCard(draft: draft) {
+                    confirmProposal(draft)
+                } onDecline: {
+                    withAnimation(.easeOut(duration: 0.2)) { proposal.clear() }
+                }
+            }
+        }
+    }
+
+    private var sessionGapBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle")
+                .font(.caption)
+            Text("새 세션이 시작됐어요. 이전 대화는 참고만 가능해요.")
+                .font(.caption)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("새 대화") {
+                resetConversation()
+                showSessionGapNotice = false
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(MemdoTheme.brand)
+        }
+        .foregroundStyle(MemdoTheme.secondaryInk)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(MemdoTheme.brandSoft, in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
     }
 
     private func selectQuickAction(_ prompt: String) {
@@ -49,62 +382,254 @@ struct AgentSheet: View {
 
     private func send() {
         let prompt = composer.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !prompt.isEmpty else { return }
-        // Agent isn't implemented yet -- this is a preview of the composer/response
-        // layout, not a real response, so the copy says so rather than sounding
-        // like a genuine (if canned) confirmation of the request.
-        response = "Agent는 아직 준비 중이에요. ‘\(prompt)’ 요청은 지금은 실제로 처리되지 않아요."
+        guard !prompt.isEmpty, !isLoading else { return }
         composer = ""
+        messages.append(AgentMessage(role: .user, text: prompt))
+        if #available(iOS 26, *) {
+            Task { await sendWithFoundationModels(prompt) }
+        } else {
+            messages.append(AgentMessage(
+                role: .assistant,
+                text: "Agent 기능은 iOS 26 이상에서 사용할 수 있어요.",
+                isError: true
+            ))
+        }
     }
 
     private func resetConversation() {
         composer = ""
-        response = ""
+        messages = []
+        _sessionBacking = nil
+        isLoading = false
+        showSessionGapNotice = false
+        proposal.clear()
     }
-}
 
-private struct AgentSheetHeader: View {
-    let context: String
+    private func confirmProposal(_ draft: ProposedScheduleDraft) {
+        let cal = scheduleStore.calendars.first(where: { $0.provider == .memdo })
+                  ?? scheduleStore.calendars.first
+        if let cal {
+            scheduleStore.save(draft.toScheduleDetail(calendar: cal))
+            messages.append(AgentMessage(role: .assistant, text: "'\(draft.title)' 일정을 저장했어요 ✓"))
+        }
+        withAnimation(.easeOut(duration: 0.2)) { proposal.clear() }
+    }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label("\(context) 문맥 사용 중", systemImage: "sparkles")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(MemdoTheme.brand)
-            Text("무엇을 정리할까요?")
-                .font(.title2.bold())
-            Text("Agent 기능은 준비 중이에요. 요청을 미리 작성해두고, 기능이 열리면 바로 쓸 수 있어요.")
-                .font(.subheadline)
-                .foregroundStyle(MemdoTheme.secondaryInk)
+    private func retry() {
+        guard !isLoading else { return }
+        guard let lastUserMsg = messages.dropLast().last(where: { $0.role == .user }) else { return }
+        messages.removeLast()
+        if #available(iOS 26, *) {
+            Task { await sendWithFoundationModels(lastUserMsg.text) }
+        }
+    }
+
+    private var hasSchedulesToday: Bool {
+        let cal = Calendar.current
+        return scheduleStore.schedules.contains { cal.isDateInToday($0.scheduledDate) }
+    }
+
+    @available(iOS 26, *)
+    private func scheduleSnapshot() -> [FindFreeSlotTool.ScheduleInterval] {
+        scheduleStore.schedules.map {
+            .init(scheduledDate: $0.scheduledDate, startAt: $0.startAt, endAt: $0.endAt)
+        }
+    }
+
+    // MARK: - FoundationModels
+
+    @available(iOS 26, *)
+    private var typedSession: LanguageModelSession? {
+        _sessionBacking as? LanguageModelSession
+    }
+
+    @available(iOS 26, *)
+    private func sendWithFoundationModels(_ prompt: String) async {
+        let model = SystemLanguageModel.default
+        guard case .available = model.availability else {
+            messages.append(AgentMessage(
+                role: .assistant,
+                text: unavailabilityMessage(model.availability),
+                isError: true
+            ))
+            return
+        }
+        if typedSession == nil {
+            _sessionBacking = LanguageModelSession(
+                tools: [
+                    ProposeScheduleTool(proposal: proposal),
+                    FindFreeSlotTool(snapshot: scheduleSnapshot())
+                ],
+                instructions: agentInstructions()
+            )
+        }
+        guard let session = typedSession else { return }
+
+        isLoading = true
+        messages.append(AgentMessage(role: .assistant, text: "", isStreaming: true))
+
+        defer {
+            isLoading = false
+            if let last = messages.indices.last, messages[last].isStreaming {
+                messages[last].isStreaming = false
+            }
+        }
+
+        do {
+            let stream = session.streamResponse(to: prompt)
+            for try await snapshot in stream {
+                if let last = messages.indices.last, messages[last].role == .assistant {
+                    messages[last].text = snapshot.content
+                }
+            }
+        } catch {
+            if let last = messages.indices.last, messages[last].role == .assistant {
+                messages[last].text = "오류가 발생했어요. 다시 시도해주세요."
+                messages[last].isError = true
+            }
+        }
+    }
+
+    @available(iOS 26, *)
+    private func agentInstructions() -> String {
+        return """
+            The person’s locale is ko_KR. You MUST respond in Korean.
+            You are Memdo’s personal schedule assistant. Be concise, warm, and practical.
+            When the user wants to create, add, or make any new schedule or task, call the proposeSchedule tool — do not just describe it in text.
+            When the user asks to find free time, an open slot, or where to fit something, call the findFreeSlots tool — do not guess from the context alone.
+            Current view context: \(context.displayTitle)
+            \(buildScheduleContext())
+            """
+    }
+
+    // Injects different schedule data depending on which tab opened the agent.
+    private func buildScheduleContext() -> String {
+        let cal = Calendar.current
+        let now = Date()
+        let schedules = scheduleStore.schedules
+
+        switch context {
+        case .today, .todaySummary:
+            let today = schedules.filter { cal.isDateInToday($0.scheduledDate) }
+            guard !today.isEmpty else { return "" }
+            let done = today.filter { $0.isDone }
+            let pending = today.filter { !$0.isDone }
+            var parts: [String] = []
+            if !pending.isEmpty {
+                parts.append("오늘 남은 일정:\n" + pending.prefix(10).map { "- \($0.title) \($0.displayTime)" }.joined(separator: "\n"))
+            }
+            if !done.isEmpty {
+                parts.append("오늘 완료:\n" + done.prefix(5).map { "- \($0.title)" }.joined(separator: "\n"))
+            }
+            return parts.joined(separator: "\n\n")
+
+        case .calendar:
+            guard let weekEnd = cal.date(byAdding: .day, value: 7, to: now) else { return "" }
+            let week = schedules.filter { $0.scheduledDate >= now && $0.scheduledDate <= weekEnd }
+            guard !week.isEmpty else { return "" }
+            return "이번 주 일정:\n" + week.prefix(15).map { "- \($0.title) \($0.displayTime)" }.joined(separator: "\n")
+
+        case .weekReview:
+            guard let weekStart = cal.date(byAdding: .day, value: -7, to: now) else { return "" }
+            let past = schedules.filter { $0.scheduledDate >= weekStart && $0.scheduledDate <= now }
+            guard !past.isEmpty else { return "" }
+            let doneCount = past.filter { $0.isDone }.count
+            return "지난 7일 일정 \(past.count)개 (완료 \(doneCount)개):\n"
+                + past.prefix(15).map { "- [\($0.isDone ? "✓" : " ")] \($0.title)" }.joined(separator: "\n")
+
+        case .monthReview:
+            guard let monthStart = cal.date(byAdding: .day, value: -30, to: now) else { return "" }
+            let past = schedules.filter { $0.scheduledDate >= monthStart && $0.scheduledDate <= now }
+            guard !past.isEmpty else { return "" }
+            let doneCount = past.filter { $0.isDone }.count
+            return "지난 30일 일정 \(past.count)개 (완료 \(doneCount)개)"
+
+        case .settings:
+            return ""
+        }
+    }
+
+    @available(iOS 26, *)
+    private func unavailabilityMessage(_ availability: SystemLanguageModel.Availability) -> String {
+        switch availability {
+        case .available: return ""
+        case .unavailable(.deviceNotEligible):
+            return "이 기기는 Apple Intelligence를 지원하지 않아요."
+        case .unavailable(.appleIntelligenceNotEnabled):
+            return "설정 > Apple Intelligence에서 Apple Intelligence를 활성화해주세요."
+        case .unavailable(.modelNotReady):
+            return "모델을 준비 중이에요. 잠시 후 다시 시도해주세요."
+        default:
+            return "지금은 Agent를 사용할 수 없어요."
         }
     }
 }
 
+private struct AgentSheetHeader: View {
+    let context: AgentContext
+    var hasStarted: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("\(context.displayTitle) 문맥 사용 중", systemImage: "sparkles")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(MemdoTheme.brand)
+            if !hasStarted {
+                Text("무엇을 정리할까요?")
+                    .font(.title2.bold())
+                Text("오늘 일정을 바탕으로 대화할 수 있어요. 질문하거나 요청해보세요.")
+                    .font(.subheadline)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+        }
+    }
+}
+
+private struct AgentUserBubble: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.subheadline)
+            .foregroundStyle(MemdoTheme.onAccent)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(MemdoTheme.accent, in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
+            .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+}
+
 private struct AgentQuickActions: View {
-    let context: String
+    let context: AgentContext
+    let hasSchedulesToday: Bool
     let onSelect: (String) -> Void
 
     private var prompts: [(String, String)] {
         switch context {
-        case "캘린더": [
+        case .calendar: [
             ("빈 시간 찾기", "이번 주에 1시간 비는 시간 찾아줘"),
             ("일정 정리", "겹치거나 너무 붙은 일정 알려줘"),
             ("할 일 배치", "미완료 할 일을 빈 시간에 제안해줘")
         ]
-        case "오늘 요약", "지난 7일 회고", "지난 30일 회고": [
-            ("완료 흐름", "\(context)에서 잘 이어간 작업을 알려줘"),
-            ("놓친 작업", "\(context)에서 놓친 작업의 공통점을 찾아줘"),
-            ("다음 계획", "\(context) 내용을 바탕으로 다음 계획을 제안해줘")
+        case .todaySummary, .weekReview, .monthReview: [
+            ("완료 흐름", "\(context.displayTitle)에서 잘 이어간 작업을 알려줘"),
+            ("놓친 작업", "\(context.displayTitle)에서 놓친 작업의 공통점을 찾아줘"),
+            ("다음 계획", "\(context.displayTitle) 내용을 바탕으로 다음 계획을 제안해줘")
         ]
-        case "설정": [
+        case .settings: [
             ("권한 확인", "Agent가 사용하는 정보를 알려줘"),
             ("요약 설정", "오늘 요약을 간단하게 설정해줘"),
             ("자동화 확인", "반복 일정 실행 전에 무엇을 확인하는지 알려줘")
         ]
-        default: [
+        case .today where !hasSchedulesToday: [
+            ("일정 만들기", "오늘 오후 2시에 집중 업무 1시간 일정 추가해줘"),
+            ("할 일 추가", "오늘 중요한 할 일 1개를 일정으로 만들어줘"),
+            ("루틴 시작", "오늘 아침 루틴 30분 일정 만들어줘")
+        ]
+        case .today: [
+            ("일정 추가", "오늘 빈 시간에 집중 일정 1시간 추가해줘"),
             ("오늘 요약", "오늘 일정 핵심만 요약해줘"),
-            ("새 일정", "오늘 빈 시간에 집중 일정 1시간 제안해줘"),
-            ("미완료 정리", "남은 할 일을 어떻게 처리할지 물어봐줘")
+            ("미완료 정리", "남은 할 일을 어떻게 처리할지 알려줘")
         ]
         }
     }
@@ -151,29 +676,205 @@ private struct AgentQuickActions: View {
 }
 
 private struct AgentResponse: View {
-    let text: String
+    let message: AgentMessage
+    var onRetry: (() -> Void)? = nil
+
+    private var accentColor: Color {
+        message.isError ? .red : MemdoTheme.brand
+    }
+
+    private var isToolPhase: Bool {
+        message.isStreaming && message.text.isEmpty && message.toolHint != nil
+    }
+
+    private var headerLabel: String {
+        if message.isError                              { return "오류" }
+        if isToolPhase                                  { return "실행 중" }
+        if message.isStreaming && message.text.isEmpty  { return "생각 중…" }
+        return "Agent"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("준비 중 미리보기", systemImage: "hourglass")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(MemdoTheme.brand)
-            Text(text)
+            // Header row
+            HStack(spacing: 6) {
+                if isToolPhase {
+                    Image(systemName: "gearshape.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.brand)
+                        .symbolEffect(.pulse)
+                } else if message.isStreaming && message.text.isEmpty {
+                    TypingDotsView()
+                } else if message.isError {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.red)
+                } else {
+                    Image(systemName: "sparkle")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.brand)
+                }
+                Text(headerLabel)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(accentColor)
+            }
+
+            // Tool hint
+            if let hint = message.toolHint, message.text.isEmpty {
+                Text(hint)
+                    .font(.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+
+            // Main content — markdown-rendered
+            if !message.text.isEmpty {
+                Group {
+                    if let attributed = try? AttributedString(
+                        markdown: message.text,
+                        options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+                    ) {
+                        Text(attributed)
+                    } else {
+                        Text(message.text)
+                    }
+                }
                 .font(.subheadline)
-                .foregroundStyle(MemdoTheme.ink)
+                .foregroundStyle(message.isError ? .red : MemdoTheme.ink)
+                .textSelection(.enabled)
+            }
+
+            // Retry
+            if message.isError, let onRetry {
+                Button(action: onRetry) {
+                    Label("다시 시도", systemImage: "arrow.clockwise")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.brand)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .padding(.leading, 12)
+        .padding(.leading, MemdoMetrics.rowInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .leading) {
             Capsule()
-                .fill(MemdoTheme.brand)
+                .fill(accentColor)
                 .frame(width: 3)
+        }
+        .contextMenu {
+            if !message.text.isEmpty {
+                Button {
+                    UIPasteboard.general.string = message.text
+                } label: {
+                    Label("복사하기", systemImage: "doc.on.doc")
+                }
+            }
         }
     }
 }
 
+private struct TypingDotsView: View {
+    @State private var active = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(MemdoTheme.brand)
+                    .frame(width: 6, height: 6)
+                    .scaleEffect(active ? 1.0 : 0.3)
+                    .opacity(active ? 1.0 : 0.2)
+                    .animation(
+                        .easeInOut(duration: 0.5)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(i) * 0.18),
+                        value: active
+                    )
+            }
+        }
+        .onAppear { active = true }
+    }
+}
+
+// MARK: - Proposed Schedule Card
+
+private struct ProposedScheduleCard: View {
+    let draft: ProposedScheduleDraft
+    let onConfirm: () -> Void
+    let onDecline: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("일정 제안", systemImage: "calendar.badge.plus")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(MemdoTheme.brand)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(draft.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MemdoTheme.ink)
+
+                HStack(spacing: 10) {
+                    Label(draft.displayDate, systemImage: "calendar")
+                    Label(draft.displayTime,
+                          systemImage: draft.isTask ? "checkmark.circle" : "clock")
+                }
+                .font(.caption)
+                .foregroundStyle(MemdoTheme.secondaryInk)
+                .lineLimit(1)
+
+                if let note = draft.note, !note.isEmpty {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .lineLimit(2)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button(action: onConfirm) {
+                    Label("저장하기", systemImage: "checkmark")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.onAccent)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(MemdoTheme.accent,
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onDecline) {
+                    Text("취소")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(MemdoTheme.surface,
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(MemdoTheme.outline, lineWidth: 0.5)
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .background(MemdoTheme.brandSoft,
+                    in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                .stroke(MemdoTheme.brand.opacity(0.2), lineWidth: 0.5)
+        }
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .move(edge: .bottom)),
+            removal: .opacity
+        ))
+    }
+}
+
+// MARK: - Composer
+
 private struct AgentComposer: View {
     @Binding var text: String
+    var isLoading: Bool = false
     let onSend: () -> Void
 
     private var isEmpty: Bool {
@@ -184,18 +885,24 @@ private struct AgentComposer: View {
         HStack(spacing: 8) {
             TextField("어떤 일을 정리할까요?", text: $text)
                 .onSubmit(onSend)
-                .padding(.leading, 12)
+                .disabled(isLoading)
+                .padding(.leading, MemdoMetrics.rowInset)
                 .frame(minHeight: MemdoMetrics.touchTarget)
 
             Button(action: onSend) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 30, weight: .semibold))
-                    .foregroundStyle(isEmpty ? MemdoTheme.secondaryInk : MemdoTheme.brand)
-                    .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
-                    .contentShape(Circle())
+                if isLoading {
+                    ProgressView()
+                        .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+                } else {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 30, weight: .semibold))
+                        .foregroundStyle(isEmpty ? MemdoTheme.secondaryInk : MemdoTheme.brand)
+                        .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+                        .contentShape(Circle())
+                }
             }
             .buttonStyle(.plain)
-            .disabled(isEmpty)
+            .disabled(isEmpty || isLoading)
             .accessibilityLabel("요청 보내기")
         }
         .padding(4)

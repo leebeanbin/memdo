@@ -7,7 +7,7 @@ struct DailySummaryView: View {
     @State private var pendingDeletion: ScheduleDetail?
     @State private var presentedSheet: SummarySheetDestination?
     @State private var agentComposer = ""
-    @State private var agentResponse = ""
+    @State private var agentMessages: [AgentMessage] = []
 
     let date: Date
 
@@ -76,7 +76,7 @@ struct DailySummaryView: View {
             case .agent(let scope):
                 AgentSheet(
                     composer: $agentComposer,
-                    response: $agentResponse,
+                    messages: $agentMessages,
                     context: scope.agentContext
                 )
             case .move(let schedule):
@@ -150,11 +150,11 @@ private enum SummaryScope: String, CaseIterable, Identifiable {
         }
     }
 
-    var agentContext: String {
+    var agentContext: AgentContext {
         switch self {
-        case .today: "오늘 요약"
-        case .week: "지난 7일 회고"
-        case .month: "지난 30일 회고"
+        case .today: .todaySummary
+        case .week: .weekReview
+        case .month: .monthReview
         }
     }
 
@@ -250,21 +250,16 @@ private struct SummaryAgentDigest: View {
                 .foregroundStyle(MemdoTheme.secondaryInk)
                 .fixedSize(horizontal: false, vertical: true)
             Button(action: onOpenAgent) {
-                HStack(spacing: 8) {
-                    Text("더 살펴보기")
-                    Spacer(minLength: 0)
-                    Image(systemName: "arrow.up.right")
-                        .accessibilityHidden(true)
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(MemdoTheme.brand)
-                .frame(minHeight: MemdoMetrics.touchTarget)
-                .contentShape(Rectangle())
+                Label("더 살펴보기", systemImage: "arrow.up.right")
+                    .font(.subheadline.weight(.semibold))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.bordered)
+            .tint(MemdoTheme.brand)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.top, 2)
             .overlay(alignment: .top) { Divider() }
         }
-        .padding(.leading, 12)
+        .padding(.leading, MemdoMetrics.rowInset)
         .overlay(alignment: .leading) {
             Capsule()
                 .fill(MemdoTheme.brand)
@@ -307,7 +302,7 @@ private struct SummaryProgressLine: View {
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
             ProgressView(value: totalCount == 0 ? 0 : Double(completedCount) / Double(totalCount))
-                .tint(MemdoTheme.accent)
+                .tint(MemdoTheme.brand)
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
@@ -382,7 +377,7 @@ private struct SummaryHistoryRow: View {
         HStack(spacing: MemdoMetrics.rowSpacing) {
             Image(systemName: status.systemImage)
                 .font(.title3)
-                .foregroundStyle(status == .completed ? MemdoTheme.secondaryInk : MemdoTheme.brand)
+                .foregroundStyle(status == .completed ? MemdoTheme.secondaryInk : MemdoTheme.peach)
                 .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
@@ -492,6 +487,7 @@ private struct SummaryReviewRow: View {
         Button(action: onComplete) {
             Image(systemName: "circle")
                 .font(.title3)
+                .foregroundStyle(MemdoTheme.brand)
                 .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
         }
         .buttonStyle(.plain)
@@ -511,9 +507,9 @@ private struct SummaryReviewRow: View {
 
     private var tomorrowButton: some View {
         Button(action: onMoveToTomorrow) {
-            Image(systemName: "calendar.badge.clock")
-                .font(.subheadline.weight(.semibold))
-                .frame(width: MemdoMetrics.touchTarget)
+            Label("내일", systemImage: "calendar.badge.clock")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(MemdoTheme.secondaryInk)
                 .frame(minHeight: MemdoMetrics.touchTarget)
         }
         .buttonStyle(.plain)

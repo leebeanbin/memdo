@@ -28,6 +28,7 @@ enum AppTab: String, CaseIterable {
 struct AppShellView: View {
     let scheduleStore: ScheduleStore
     @Environment(WorkoutStore.self) private var workoutStore
+    @Environment(MemdoSession.self) private var session
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = AppTab.today
@@ -38,9 +39,10 @@ struct AppShellView: View {
     @State private var calendarTargetDate: Date?
     @State private var presentedSheet: AppSheetDestination?
     @State private var agentComposer = ""
-    @State private var agentResponse = ""
+    @State private var agentMessages: [AgentMessage] = []
     @State private var coachMarkTour: CoachMarkTour?
     @State private var coachMarkIndex = 0
+    @State private var showTourSkipHint = false
     @State private var agentTabFrame = CGRect.zero
     @State private var scheduleSheet: ScheduleDetail?
     @AppStorage("has-seen-guide") private var hasSeenGuide = false
@@ -53,13 +55,13 @@ struct AppShellView: View {
                 count: coachMarkTour?.steps.count ?? 0,
                 onPrevious: previousCoachMark,
                 onNext: nextCoachMark,
-                onSkip: finishCoachMarks
+                onSkip: skipCoachMarks
             )
             .modifier(
                 AppShellBehavior(
                     presentedSheet: $presentedSheet,
                     agentComposer: $agentComposer,
-                    agentResponse: $agentResponse,
+                    agentMessages: $agentMessages,
                     onStartCoachMarkTour: startCoachMarks
                 )
             )
@@ -87,6 +89,7 @@ struct AppShellView: View {
             }
             .overlay { backendStateOverlay }
             .overlay(alignment: .bottom) { writeErrorToast }
+            .overlay(alignment: .bottom) { tourSkipHint }
     }
 
     @ViewBuilder
@@ -105,10 +108,31 @@ struct AppShellView: View {
                 .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
                 .onTapGesture { scheduleStore.dismissWriteError() }
                 .task(id: message) {
-                    try? await Task.sleep(for: .seconds(4))
+                    try? await Task.sleep(for: MemdoMetrics.bannerDismissDuration)
                     if scheduleStore.lastWriteError == message {
                         scheduleStore.dismissWriteError()
                     }
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var tourSkipHint: some View {
+        if showTourSkipHint {
+            Label("설정에서 '앱 투어 다시 보기'로 언제든 다시 볼 수 있어요.", systemImage: "info.circle")
+                .font(.footnote.weight(.medium))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    .regularMaterial,
+                    in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                )
+                .padding(.horizontal, MemdoMetrics.pagePadding)
+                .padding(.bottom, 12)
+                .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
+                .task {
+                    try? await Task.sleep(for: MemdoMetrics.bannerDismissDuration)
+                    withAnimation(reduceMotion ? nil : .easeOut) { showTourSkipHint = false }
                 }
         }
     }
@@ -161,7 +185,7 @@ struct AppShellView: View {
             )
                 .tabItem { Label(AppTab.calendar.title, systemImage: AppTab.calendar.icon) }
                 .tag(AppTab.calendar)
-            SettingsView(coachMarkTarget: coachMarkStep?.target)
+            SettingsView(coachMarkTarget: coachMarkStep?.target, onStartCoachMarkTour: startCoachMarks)
                 .tabItem { Label(AppTab.settings.title, systemImage: AppTab.settings.icon) }
                 .tag(AppTab.settings)
             Color.clear
@@ -244,7 +268,11 @@ struct AppShellView: View {
     }
 
     private func openAgent() {
-        presentedSheet = .agent(lastContentTab.agentContext)
+        if session.phase == .guest {
+            presentedSheet = .guestLoginGate
+        } else {
+            presentedSheet = .agent(lastContentTab.agentContext)
+        }
     }
 
     // Creates a schedule from an App Intent-driven capture. Uses the first
@@ -314,6 +342,11 @@ struct AppShellView: View {
         coachMarkTour = nil
         coachMarkIndex = 0
     }
+
+    private func skipCoachMarks() {
+        finishCoachMarks()
+        withAnimation(reduceMotion ? nil : .easeIn) { showTourSkipHint = true }
+    }
 }
 
 private extension URL {
@@ -330,15 +363,17 @@ private extension URL {
 }
 
 private enum AppSheetDestination: Identifiable {
-    case agent(String)
+    case agent(AgentContext)
     case guide
     case summary
+    case guestLoginGate
 
     var id: String {
         switch self {
         case .agent: "agent"
         case .guide: "guide"
         case .summary: "summary"
+        case .guestLoginGate: "guestLoginGate"
         }
     }
 }
@@ -346,7 +381,7 @@ private enum AppSheetDestination: Identifiable {
 private struct AppShellBehavior: ViewModifier {
     @Binding var presentedSheet: AppSheetDestination?
     @Binding var agentComposer: String
-    @Binding var agentResponse: String
+    @Binding var agentMessages: [AgentMessage]
     let onStartCoachMarkTour: (CoachMarkTour) -> Void
 
     func body(content: Content) -> some View {
@@ -355,25 +390,27 @@ private struct AppShellBehavior: ViewModifier {
             case .agent(let context):
                 AgentSheet(
                     composer: $agentComposer,
-                    response: $agentResponse,
+                    messages: $agentMessages,
                     context: context
                 )
             case .guide:
                 MemdoGuideSheet(onStartCoachMarkTour: onStartCoachMarkTour)
             case .summary:
                 DailySummaryView()
+            case .guestLoginGate:
+                GuestLoginGateSheet()
             }
         }
     }
 }
 
 private extension AppTab {
-    var agentContext: String {
+    var agentContext: AgentContext {
         switch self {
-        case .today: "오늘"
-        case .calendar: "캘린더"
-        case .settings: "설정"
-        case .agent: "오늘"
+        case .today: .today
+        case .calendar: .calendar
+        case .settings: .settings
+        case .agent: .today
         }
     }
 }
@@ -401,5 +438,27 @@ private struct NativeTabBarBehavior: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+private struct GuestLoginGateSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(MemdoSession.self) private var session
+
+    var body: some View {
+        NavigationStack {
+            MemdoSignInView(
+                session: session,
+                gateTitle: "로그인하고 Agent 사용하기",
+                gateSubtitle: "로그인하면 지금까지 만든 일정이 그대로 유지되고\nAgent를 제한 없이 사용할 수 있어요."
+            )
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("나중에") { dismiss() }
+                }
+            }
+        }
+        .memdoSheetPresentation([.large])
     }
 }
