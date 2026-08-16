@@ -266,6 +266,7 @@ struct AgentSheet: View {
     @State private var _sessionBacking: AnyObject? = nil
     @State private var isLoading = false
     @State private var showSessionGapNotice = false
+    @State private var showsResetConfirmation = false
     @State private var proposal = AgentScheduleProposal()
 
     var body: some View {
@@ -298,13 +299,25 @@ struct AgentSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("새 대화", systemImage: "square.and.pencil", action: resetConversation)
-                        .disabled(messages.isEmpty || isLoading)
+                    Button("새 대화", systemImage: "square.and.pencil") {
+                        showsResetConfirmation = true
+                    }
+                    .disabled(messages.isEmpty || isLoading)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("닫기") { dismiss() }
                 }
             }
+        }
+        .confirmationDialog(
+            "새 대화를 시작할까요?",
+            isPresented: $showsResetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("새 대화 시작", role: .destructive) { resetConversation() }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("현재 대화 내용이 삭제됩니다.")
         }
         .task {
             if #available(iOS 26, *) {

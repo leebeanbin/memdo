@@ -55,18 +55,7 @@ struct WorkoutLogRow: View {
         .buttonStyle(.plain)
     }
 
-    private var activityColor: Color {
-        switch workout.activityType {
-        case .running:          .orange
-        case .cycling:          .green
-        case .swimming:         .blue
-        case .strengthTraining: .purple
-        case .yoga:             .teal
-        case .hiit:             .red
-        case .walking:          .mint
-        case .other:            MemdoTheme.brand
-        }
-    }
+    private var activityColor: Color { workout.activityType.color }
 }
 
 // MARK: - Today Workout Section
@@ -329,6 +318,7 @@ private struct WorkoutStatCard: View {
 struct WorkoutLogEditorSheet: View {
     @Environment(WorkoutStore.self) private var workoutStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var draft: WorkoutLog
     @State private var photoPicker: PhotosPickerItem?
@@ -513,10 +503,12 @@ struct WorkoutLogEditorSheet: View {
                                 .font(.system(size: 20, weight: .medium))
                             Text(type.label)
                                 .font(.caption.weight(.medium))
-                                .lineLimit(1)
+                                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                                .multilineTextAlignment(.center)
                         }
                         .foregroundStyle(isSelected ? MemdoTheme.onAccent : MemdoTheme.ink)
-                        .frame(width: 76, height: 64)
+                        .frame(width: 76)
+                        .frame(minHeight: 64)
                         .background(
                             isSelected ? MemdoTheme.accent : MemdoTheme.surface,
                             in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous)
@@ -725,11 +717,11 @@ struct HealthKitImportSheet: View {
         HStack(spacing: 10) {
             ZStack {
                 Circle()
-                    .fill(activityColor(workout.activityType).opacity(0.15))
+                    .fill(workout.activityType.color.opacity(0.15))
                     .frame(width: 36, height: 36)
                 Image(systemName: workout.activityType.systemImage)
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(activityColor(workout.activityType))
+                    .foregroundStyle(workout.activityType.color)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(workout.activityType.label)
@@ -745,19 +737,6 @@ struct HealthKitImportSheet: View {
                 .font(.caption)
                 .foregroundStyle(MemdoTheme.secondaryInk)
             }
-        }
-    }
-
-    private func activityColor(_ type: WorkoutActivityType) -> Color {
-        switch type {
-        case .running: .orange
-        case .cycling: .green
-        case .swimming: .blue
-        case .strengthTraining: .purple
-        case .yoga: .teal
-        case .hiit: .red
-        case .walking: .mint
-        case .other: MemdoTheme.brand
         }
     }
 

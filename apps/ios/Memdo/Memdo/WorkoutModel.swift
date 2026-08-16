@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import Observation
+import SwiftUI
 
 // MARK: - Activity Type
 
@@ -34,6 +35,19 @@ enum WorkoutActivityType: String, CaseIterable, Identifiable, Codable {
         case .hiit:             "figure.highintensity.intervaltraining"
         case .walking:          "figure.walk"
         case .other:            "figure.mixed.cardio"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .running:          .orange
+        case .cycling:          .green
+        case .swimming:         .blue
+        case .strengthTraining: .purple
+        case .yoga:             .teal
+        case .hiit:             .red
+        case .walking:          .mint
+        case .other:            MemdoTheme.brand
         }
     }
 
