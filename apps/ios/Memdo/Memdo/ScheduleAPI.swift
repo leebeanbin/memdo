@@ -54,6 +54,40 @@ struct CategoriesReplaceRequestDTO: Encodable {
     let categories: [ScheduleUserCategory]
 }
 
+struct AgentKeyStatusResponseDTO: Decodable {
+    let connected: Bool
+}
+
+struct AgentKeySaveRequestDTO: Encodable {
+    let apiKey: String
+}
+
+struct AgentChatTurnDTO: Codable {
+    let role: String
+    let content: String
+}
+
+struct AgentChatRequestDTO: Encodable {
+    let message: String
+    let history: [AgentChatTurnDTO]
+}
+
+/// Field-for-field the same shape ProposeScheduleTool's Arguments produces
+/// on-device, so both paths feed the exact same proposal/consent UI.
+struct CloudProposedScheduleDTO: Decodable {
+    let title: String
+    let date: String
+    let startTime: String?
+    let endTime: String?
+    let isTask: Bool
+    let note: String?
+}
+
+struct AgentChatResponseDTO: Decodable {
+    let message: String
+    let proposedSchedule: CloudProposedScheduleDTO?
+}
+
 struct TodoListResponseDTO: Decodable {
     let items: [TodoResponseDTO]
     let nextCursor: String?
@@ -471,6 +505,36 @@ actor MemdoAPIClient {
         )
     }
 
+    func agentKeyStatus(accessToken: String) async throws -> AgentKeyStatusResponseDTO {
+        try await send(path: "agent-key", accessToken: accessToken)
+    }
+
+    func saveAgentKey(_ apiKey: String, accessToken: String) async throws -> AgentKeyStatusResponseDTO {
+        try await send(
+            path: "agent-key",
+            method: "PUT",
+            body: encoder.encode(AgentKeySaveRequestDTO(apiKey: apiKey)),
+            accessToken: accessToken
+        )
+    }
+
+    func deleteAgentKey(accessToken: String) async throws -> AgentKeyStatusResponseDTO {
+        try await send(path: "agent-key", method: "DELETE", accessToken: accessToken)
+    }
+
+    func agentCloudChat(
+        message: String,
+        history: [AgentChatTurnDTO],
+        accessToken: String
+    ) async throws -> AgentChatResponseDTO {
+        try await send(
+            path: "agent-cloud-chat",
+            method: "POST",
+            body: encoder.encode(AgentChatRequestDTO(message: message, history: history)),
+            accessToken: accessToken
+        )
+    }
+
     func send<Response: Decodable>(
         path: String,
         method: String = "GET",
@@ -657,6 +721,25 @@ actor ScheduleRepository {
 
     func replaceCategories(_ categories: [ScheduleUserCategory]) async throws -> [ScheduleUserCategory] {
         try await api.replaceCategories(categories, accessToken: accessToken()).items
+    }
+
+    func agentKeyConnected() async throws -> Bool {
+        try await api.agentKeyStatus(accessToken: accessToken()).connected
+    }
+
+    func saveAgentKey(_ apiKey: String) async throws {
+        _ = try await api.saveAgentKey(apiKey, accessToken: accessToken())
+    }
+
+    func deleteAgentKey() async throws {
+        _ = try await api.deleteAgentKey(accessToken: accessToken())
+    }
+
+    func agentCloudChat(
+        message: String,
+        history: [AgentChatTurnDTO]
+    ) async throws -> AgentChatResponseDTO {
+        try await api.agentCloudChat(message: message, history: history, accessToken: accessToken())
     }
 
     private func accessToken() async throws -> String {

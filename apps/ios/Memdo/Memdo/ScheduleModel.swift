@@ -536,6 +536,22 @@ final class ScheduleStore {
         await load()
     }
 
+    func agentKeyConnected() async throws -> Bool {
+        try await repository.agentKeyConnected()
+    }
+
+    func saveAgentKey(_ apiKey: String) async throws {
+        try await repository.saveAgentKey(apiKey)
+    }
+
+    func deleteAgentKey() async throws {
+        try await repository.deleteAgentKey()
+    }
+
+    func agentCloudChat(message: String, history: [AgentChatTurnDTO]) async throws -> AgentChatResponseDTO {
+        try await repository.agentCloudChat(message: message, history: history)
+    }
+
     func search(_ query: String) async throws -> [ScheduleDetail] {
         let calendarsByID = Dictionary(uniqueKeysWithValues: calendars.map { ($0.id, $0) })
         let dtos = try await repository.search(query: query)

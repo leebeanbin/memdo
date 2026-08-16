@@ -442,14 +442,63 @@ struct AgentSheet: View {
         guard !prompt.isEmpty, !isLoading else { return }
         composer = ""
         messages.append(AgentMessage(role: .user, text: prompt))
-        if #available(iOS 26, *) {
+        // On-device when this OS/device actually has it available; otherwise
+        // the cloud path (BYOK via OpenRouter, see agent-cloud-chat) covers
+        // both older devices and open-ended requests the fixed-shape
+        // on-device tools aren't suited for.
+        if #available(iOS 26, *), case .available = SystemLanguageModel.default.availability {
             Task { await sendWithFoundationModels(prompt) }
         } else {
-            messages.append(AgentMessage(
-                role: .assistant,
-                text: "Agent 기능은 iOS 26 이상에서 사용할 수 있어요.",
-                isError: true
-            ))
+            Task { await sendWithCloudAgent(prompt) }
+        }
+    }
+
+    /// Turns already-settled messages into the flat history the stateless
+    /// cloud endpoint expects (it has no session of its own -- every call
+    /// resends the conversation so far, same as every other request in this
+    /// app being independently authenticated rather than session-based).
+    private func cloudHistory() -> [AgentChatTurnDTO] {
+        messages
+            .filter { !$0.isStreaming && !$0.isError }
+            .map { AgentChatTurnDTO(role: $0.role == .user ? "user" : "assistant", content: $0.text) }
+    }
+
+    private func sendWithCloudAgent(_ prompt: String) async {
+        let history = cloudHistory()
+        isLoading = true
+        messages.append(AgentMessage(role: .assistant, text: "", isStreaming: true))
+        defer {
+            isLoading = false
+            if let last = messages.indices.last, messages[last].isStreaming {
+                messages[last].isStreaming = false
+            }
+        }
+
+        do {
+            let response = try await scheduleStore.agentCloudChat(message: prompt, history: history)
+            if let last = messages.indices.last, messages[last].role == .assistant {
+                messages[last].text = response.message
+            }
+            if let proposed = response.proposedSchedule {
+                proposal.propose(ProposedScheduleDraft(
+                    title: proposed.title,
+                    dateString: proposed.date,
+                    startTimeString: proposed.startTime?.isEmpty == false ? proposed.startTime : nil,
+                    endTimeString: proposed.endTime?.isEmpty == false ? proposed.endTime : nil,
+                    isTask: proposed.isTask,
+                    note: proposed.note?.isEmpty == false ? proposed.note : nil
+                ))
+            }
+        } catch ScheduleAPIError.server(_, let code, _, _) where code == "RESOURCE_NOT_FOUND" {
+            if let last = messages.indices.last, messages[last].role == .assistant {
+                messages[last].text = "이 기기에서 Agent를 쓰려면 클라우드 연결이 필요해요. 설정 > 클라우드 Agent에서 연결해 주세요."
+                messages[last].isError = true
+            }
+        } catch {
+            if let last = messages.indices.last, messages[last].role == .assistant {
+                messages[last].text = "오류가 발생했어요. 다시 시도해주세요."
+                messages[last].isError = true
+            }
         }
     }
 
@@ -476,8 +525,10 @@ struct AgentSheet: View {
         guard !isLoading else { return }
         guard let lastUserMsg = messages.dropLast().last(where: { $0.role == .user }) else { return }
         messages.removeLast()
-        if #available(iOS 26, *) {
+        if #available(iOS 26, *), case .available = SystemLanguageModel.default.availability {
             Task { await sendWithFoundationModels(lastUserMsg.text) }
+        } else {
+            Task { await sendWithCloudAgent(lastUserMsg.text) }
         }
     }
 

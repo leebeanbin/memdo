@@ -29,6 +29,7 @@ struct SettingsView: View {
     @State private var briefingCategories: Set<String>
     @State private var presentedSheet: SettingsSheet?
     @State private var googleCalendarConnected: Bool? = nil
+    @State private var cloudAgentConnected: Bool? = nil
     // Keychain-backed (see SlackNotifier), refreshed on appear and whenever
     // the Slack sheet is dismissed -- @AppStorage can't watch Keychain.
     @State private var slackConnected = false
@@ -141,6 +142,17 @@ struct SettingsView: View {
                         title: "Slack",
                         capability: "새 일정·완료 알림",
                         status: slackConnected ? "연결됨" : "미연결",
+                        badge: nil
+                    )
+                }
+                .buttonStyle(.plain)
+                Divider()
+                Button { presentedSheet = .cloudAgent } label: {
+                    AgentConnectionRow(
+                        icon: .system("cloud"),
+                        title: "클라우드 Agent",
+                        capability: "일정 검색 · 빈 시간 찾기",
+                        status: cloudAgentConnected == nil ? "확인 중" : cloudAgentConnected == true ? "연결됨" : "미연결",
                         badge: nil
                     )
                 }
@@ -274,6 +286,8 @@ struct SettingsView: View {
                 SlackConnectionSheet()
             case .googleCalendar:
                 GoogleCalendarConnectionSheet()
+            case .cloudAgent:
+                CloudAgentConnectionSheet()
             case .guestUpgrade:
                 GuestUpgradeSheet()
             case .wallpaperPreview:
@@ -293,6 +307,7 @@ struct SettingsView: View {
         }
         .task { await loadPreferences() }
         .task { await loadGoogleCalendarStatus() }
+        .task { await loadCloudAgentStatus() }
         .task { slackConnected = !SlackNotifier.webhookURL.isEmpty }
         .onChange(of: presentedSheet) { oldSheet, sheet in
             guard sheet == nil else { return }
@@ -300,6 +315,7 @@ struct SettingsView: View {
                 withAnimation(reduceMotion ? nil : .easeIn) { showKeywordHint = true }
             }
             Task { await loadGoogleCalendarStatus() }
+            Task { await loadCloudAgentStatus() }
             slackConnected = !SlackNotifier.webhookURL.isEmpty
         }
         .overlay(alignment: .bottom) { keywordHint }
@@ -364,6 +380,10 @@ struct SettingsView: View {
 
     private func loadGoogleCalendarStatus() async {
         googleCalendarConnected = (try? await scheduleStore.googleCalendarStatus())?.connected == true
+    }
+
+    private func loadCloudAgentStatus() async {
+        cloudAgentConnected = (try? await scheduleStore.agentKeyConnected()) == true
     }
 
     @ViewBuilder
@@ -549,6 +569,7 @@ private struct SettingsTimePicker: View {
 private enum SettingsSheet: String, Identifiable {
     case aiConsent
     case briefingKeywords
+    case cloudAgent
     case googleCalendar
     case guestUpgrade
     case privacy
@@ -993,6 +1014,132 @@ private struct SlackTestResult {
     let isSuccess: Bool
     let message: String
     let icon: String
+}
+
+private struct CloudAgentConnectionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(ScheduleStore.self) private var scheduleStore
+    @State private var isConnected: Bool?
+    @State private var draftKey = ""
+    @State private var isBusy = false
+    @State private var errorMessage: String?
+    @State private var showDisconnectConfirm = false
+
+    private var canConnect: Bool {
+        draftKey.trimmingCharacters(in: .whitespacesAndNewlines).count >= 20
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    MCPToolIdentityRow(
+                        icon: .system("cloud"),
+                        title: "클라우드 Agent",
+                        summary: "OpenRouter API 키로 온디바이스가 못 하는 일(일정 검색 등)을 처리해요."
+                    )
+                } header: {
+                    Text("클라우드 Agent")
+                }
+                Section("연결하면 가능한 일") {
+                    Label("과거·예정 일정을 검색해 답변", systemImage: "magnifyingglass")
+                    Label("Apple Intelligence 미지원 기기에서도 사용", systemImage: "iphone")
+                }
+                Section("권한 원칙") {
+                    Label("승인 전에는 아무것도 저장·변경하지 않음", systemImage: "checkmark.shield")
+                    Label("일정 검색 결과만 모델에 전달, 다른 데이터는 안 보냄", systemImage: "lock")
+                }
+
+                if isConnected == true {
+                    Section {
+                        Button("연결 해제", role: .destructive) {
+                            showDisconnectConfirm = true
+                        }
+                        .disabled(isBusy)
+                    }
+                } else if isConnected == false {
+                    Section {
+                        SecureField("sk-or-v1-…", text: $draftKey)
+                            .font(.caption.monospacedDigit())
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button {
+                            Task { await connect() }
+                        } label: {
+                            if isBusy {
+                                HStack(spacing: 8) {
+                                    ProgressView().scaleEffect(0.8)
+                                    Text("연결 중")
+                                }
+                            } else {
+                                Text("연결")
+                            }
+                        }
+                        .disabled(!canConnect || isBusy)
+                    } header: {
+                        Text("OpenRouter API 키")
+                    } footer: {
+                        Text("openrouter.ai에서 계정을 만들고 API 키를 발급받아 붙여넣으세요.")
+                    }
+                }
+
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .memdoSystemList()
+            .navigationTitle("클라우드 Agent")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("닫기") { dismiss() }
+                }
+            }
+        }
+        .confirmationDialog(
+            "클라우드 Agent 연결을 해제할까요?",
+            isPresented: $showDisconnectConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("연결 해제", role: .destructive) { Task { await disconnect() } }
+            Button("취소", role: .cancel) {}
+        }
+        .memdoSheetPresentation([.large])
+        .task { await loadStatus() }
+    }
+
+    private func loadStatus() async {
+        isConnected = (try? await scheduleStore.agentKeyConnected()) == true
+    }
+
+    private func connect() async {
+        isBusy = true
+        errorMessage = nil
+        defer { isBusy = false }
+        do {
+            try await scheduleStore.saveAgentKey(draftKey.trimmingCharacters(in: .whitespacesAndNewlines))
+            draftKey = ""
+            isConnected = true
+        } catch {
+            errorMessage = "연결하지 못했어요. 키를 확인해 주세요."
+        }
+    }
+
+    private func disconnect() async {
+        isBusy = true
+        errorMessage = nil
+        defer { isBusy = false }
+        do {
+            try await scheduleStore.deleteAgentKey()
+            isConnected = false
+        } catch {
+            errorMessage = "연결 해지에 실패했어요. 잠시 후 다시 시도해 주세요."
+        }
+    }
 }
 
 private struct MCPToolIdentityRow: View {
