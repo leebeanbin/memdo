@@ -29,8 +29,9 @@ struct SettingsView: View {
     @State private var briefingCategories: Set<String>
     @State private var presentedSheet: SettingsSheet?
     @State private var googleCalendarConnected: Bool? = nil
-    @AppStorage("slack-webhook-url") private var slackWebhookURL: String = ""
-    private var slackConnected: Bool { !slackWebhookURL.isEmpty }
+    // Keychain-backed (see SlackNotifier), refreshed on appear and whenever
+    // the Slack sheet is dismissed -- @AppStorage can't watch Keychain.
+    @State private var slackConnected = false
     @State private var showsSignOutConfirmation = false
     @State private var summaryTimePushTask: Task<Void, Never>?
     @State private var promptTimePushTask: Task<Void, Never>?
@@ -292,12 +293,14 @@ struct SettingsView: View {
         }
         .task { await loadPreferences() }
         .task { await loadGoogleCalendarStatus() }
+        .task { slackConnected = !SlackNotifier.webhookURL.isEmpty }
         .onChange(of: presentedSheet) { oldSheet, sheet in
             guard sheet == nil else { return }
             if oldSheet == .briefingKeywords {
                 withAnimation(reduceMotion ? nil : .easeIn) { showKeywordHint = true }
             }
             Task { await loadGoogleCalendarStatus() }
+            slackConnected = !SlackNotifier.webhookURL.isEmpty
         }
         .overlay(alignment: .bottom) { keywordHint }
         .onChange(of: dailySummary) { _, value in
@@ -850,7 +853,9 @@ private struct GoogleCalendarConnectionSheet: View {
 
 private struct SlackConnectionSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("slack-webhook-url") private var webhookURL: String = ""
+    // Keychain-backed (see SlackNotifier) rather than @AppStorage -- a Slack
+    // Incoming Webhook URL is a bearer credential, not a plain preference.
+    @State private var webhookURL = ""
     @State private var draftURL = ""
     @State private var isTesting = false
     @State private var testResult: SlackTestResult?
@@ -932,6 +937,7 @@ private struct SlackConnectionSheet: View {
                             .keyboardType(.URL)
                         Button("연결") {
                             webhookURL = draftURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                            SlackNotifier.webhookURL = webhookURL
                             draftURL = ""
                         }
                         .disabled(!canConnect)
@@ -954,11 +960,13 @@ private struct SlackConnectionSheet: View {
         .confirmationDialog("Slack 연결을 해제할까요?", isPresented: $showDisconnectConfirm, titleVisibility: .visible) {
             Button("연결 해제", role: .destructive) {
                 webhookURL = ""
+                SlackNotifier.webhookURL = ""
                 testResult = nil
             }
             Button("취소", role: .cancel) {}
         }
         .memdoSheetPresentation([.large])
+        .task { webhookURL = SlackNotifier.webhookURL }
     }
 
     private func sendTestMessage() async {

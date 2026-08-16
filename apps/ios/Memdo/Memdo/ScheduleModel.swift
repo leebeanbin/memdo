@@ -771,9 +771,6 @@ final class ScheduleStore {
             let previous = schedules[index]
             schedules[index] = schedule
             updateWidgetSnapshot()
-            if schedule.isDone && !previous.isDone {
-                Task { await SlackNotifier.notify(schedule: schedule, event: .completed) }
-            }
             Task {
                 await update(schedule, replacing: previous)
                 pendingWriteIDs.remove(schedule.id)
@@ -781,15 +778,18 @@ final class ScheduleStore {
         } else {
             schedules.append(schedule)
             updateWidgetSnapshot()
-            Task { await SlackNotifier.notify(schedule: schedule, event: .created) }
             Task {
-                await create(schedule)
+                await create(schedule, notifyOnSuccess: true)
                 pendingWriteIDs.remove(schedule.id)
             }
         }
     }
 
-    private func create(_ schedule: ScheduleDetail) async {
+    /// `notifyOnSuccess` is only true for a genuinely new, user-initiated
+    /// schedule (see save(_:)) -- create() is also the materialize step for
+    /// touching a virtual recurring occurrence, which isn't "a new schedule"
+    /// from the user's perspective and shouldn't announce itself as one.
+    private func create(_ schedule: ScheduleDetail, notifyOnSuccess: Bool = false) async {
         let saved: ScheduleDetail
         do {
             saved = try await repository.create(schedule)
@@ -828,6 +828,12 @@ final class ScheduleStore {
             schedules.append(saved)
         }
         updateWidgetSnapshot()
+        // Fires only now that the row is confirmed persisted -- not
+        // optimistically at the start of save(), which could announce a
+        // schedule that then fails validation or a conflict and never exists.
+        if notifyOnSuccess {
+            await SlackNotifier.notify(schedule: saved, event: .created)
+        }
         // POST /todos (create) doesn't accept a status -- new rows always start
         // "planned" server-side. If the caller's intent was e.g. completing a
         // virtual occurrence in one action, follow up with the real row's status
@@ -859,8 +865,16 @@ final class ScheduleStore {
         } catch {
             replace(schedule.id, with: previous)
             lastWriteError = error.localizedDescription
+            updateWidgetSnapshot()
+            return
         }
         updateWidgetSnapshot()
+        // Fires only now that the completion is confirmed persisted -- not
+        // optimistically when the toggle was tapped, which could announce a
+        // completion that a validation/conflict error then rolls back.
+        if schedule.isDone && !previous.isDone {
+            await SlackNotifier.notify(schedule: schedule, event: .completed)
+        }
     }
 
     func reset() {

@@ -1,14 +1,58 @@
 import Foundation
+import Security
 
 /// Sends schedule events to a user-configured Slack Incoming Webhook.
 /// All calls are fire-and-forget — failures are silently ignored to avoid
 /// disrupting the primary save flow.
 enum SlackNotifier {
-    private static let webhookKey = "slack-webhook-url"
+    // A Slack Incoming Webhook URL is a bearer credential (anyone with it can
+    // post to the user's channel) -- Keychain, not UserDefaults, matching
+    // DeviceOnlyKeychainStorage's device-only, non-backed-up handling of the
+    // Supabase session token elsewhere in this app.
+    private static let service = "com.memdo.ios.slack"
+    private static let account = "webhook-url"
+    private static let legacyUserDefaultsKey = "slack-webhook-url"
+
+    private static func query() -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+    }
 
     static var webhookURL: String {
-        get { UserDefaults.standard.string(forKey: webhookKey) ?? "" }
-        set { UserDefaults.standard.set(newValue.trimmingCharacters(in: .whitespacesAndNewlines), forKey: webhookKey) }
+        get {
+            var lookup = query()
+            lookup[kSecReturnData as String] = true
+            lookup[kSecMatchLimit as String] = kSecMatchLimitOne
+            var result: AnyObject?
+            if SecItemCopyMatching(lookup as CFDictionary, &result) == errSecSuccess,
+               let data = result as? Data, let value = String(data: data, encoding: .utf8) {
+                return value
+            }
+            // One-time migration: a value saved before this moved to Keychain
+            // shouldn't silently vanish and look like the connection was lost.
+            if let legacy = UserDefaults.standard.string(forKey: legacyUserDefaultsKey), !legacy.isEmpty {
+                webhookURL = legacy
+                UserDefaults.standard.removeObject(forKey: legacyUserDefaultsKey)
+                return legacy
+            }
+            return ""
+        }
+        set {
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, let data = trimmed.data(using: .utf8) else {
+                SecItemDelete(query() as CFDictionary)
+                return
+            }
+            var addQuery = query()
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            addQuery[kSecValueData as String] = data
+            if SecItemAdd(addQuery as CFDictionary, nil) == errSecDuplicateItem {
+                SecItemUpdate(query() as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+            }
+        }
     }
 
     enum Event {
