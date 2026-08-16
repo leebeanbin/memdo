@@ -89,6 +89,18 @@ struct ProposedScheduleDraft: Sendable, Equatable {
         )
     }
 
+    /// Resolved (start, end) for a timed proposal, or nil for a task/all-day
+    /// item with nothing to conflict-check against. `end` falls back to a
+    /// 1-hour block when the model omitted an end time, matching how a bare
+    /// start time is treated elsewhere in the app.
+    func resolvedInterval() -> (start: Date, end: Date)? {
+        guard !isTask, let startTimeString else { return nil }
+        let date = scheduledDate()
+        guard let start = parseTime(startTimeString, on: date) else { return nil }
+        let end = endTimeString.flatMap { parseTime($0, on: date) } ?? start.addingTimeInterval(3_600)
+        return (start, end)
+    }
+
     private func parseTime(_ s: String, on date: Date) -> Date? {
         let parts = s.split(separator: ":").compactMap { Int($0) }
         guard parts.count >= 2 else { return nil }
@@ -100,8 +112,15 @@ struct ProposedScheduleDraft: Sendable, Equatable {
 @Observable
 final class AgentScheduleProposal {
     var draft: ProposedScheduleDraft?
-    func propose(_ d: ProposedScheduleDraft) { draft = d }
-    func clear() { draft = nil }
+    /// Title of a conflicting existing item, set by ProposeScheduleTool's own
+    /// reflection step (see call(arguments:)) so ProposedScheduleCard can warn
+    /// before the user approves, rather than only after saving.
+    var conflictTitle: String?
+    func propose(_ d: ProposedScheduleDraft, conflictTitle: String? = nil) {
+        draft = d
+        self.conflictTitle = conflictTitle
+    }
+    func clear() { draft = nil; conflictTitle = nil }
 }
 
 @available(iOS 26, *)
@@ -125,7 +144,17 @@ struct ProposeScheduleTool: Tool {
         let note: String
     }
 
+    /// Minimal, Sendable view of an existing schedule -- just enough to
+    /// conflict-check and name the conflicting item, not the full model.
+    struct ExistingItem: Sendable {
+        let title: String
+        let scheduledDate: Date
+        let startAt: Date?
+        let endAt: Date?
+    }
+
     let proposal: AgentScheduleProposal
+    let existing: [ExistingItem]
 
     func call(arguments: Arguments) async throws -> String {
         let draft = ProposedScheduleDraft(
@@ -136,8 +165,23 @@ struct ProposeScheduleTool: Tool {
             isTask:          arguments.isTask,
             note:            arguments.note.isEmpty       ? nil : arguments.note
         )
-        await proposal.propose(draft)
-        return "'\(draft.title)' 일정을 제안했습니다."
+        // Reflection step: check the proposal against the real schedule
+        // before handing it back, instead of presenting it uncritically.
+        let conflict = conflictingItem(for: draft)
+        await proposal.propose(draft, conflictTitle: conflict?.title)
+
+        guard let conflict else {
+            return "'\(draft.title)' 일정을 제안했습니다."
+        }
+        return "'\(draft.title)' 일정을 제안했습니다. 주의: 같은 시간에 이미 '\(conflict.title)' 일정이 있어요."
+    }
+
+    private func conflictingItem(for draft: ProposedScheduleDraft) -> ExistingItem? {
+        guard let (start, end) = draft.resolvedInterval() else { return nil }
+        return existing.first { item in
+            guard let itemStart = item.startAt, let itemEnd = item.endAt else { return false }
+            return start < itemEnd && end > itemStart
+        }
     }
 }
 
@@ -325,7 +369,7 @@ struct AgentSheet: View {
                 if typedSession == nil {
                     _sessionBacking = LanguageModelSession(
                         tools: [
-                            ProposeScheduleTool(proposal: proposal),
+                            ProposeScheduleTool(proposal: proposal, existing: existingItemsSnapshot()),
                             FindFreeSlotTool(snapshot: scheduleSnapshot())
                         ],
                         instructions: agentInstructions()
@@ -359,7 +403,7 @@ struct AgentSheet: View {
                 }
             }
             if let draft = proposal.draft {
-                ProposedScheduleCard(draft: draft) {
+                ProposedScheduleCard(draft: draft, conflictTitle: proposal.conflictTitle) {
                     confirmProposal(draft)
                 } onDecline: {
                     withAnimation(.easeOut(duration: 0.2)) { proposal.clear() }
@@ -449,6 +493,13 @@ struct AgentSheet: View {
         }
     }
 
+    @available(iOS 26, *)
+    private func existingItemsSnapshot() -> [ProposeScheduleTool.ExistingItem] {
+        scheduleStore.schedules.map {
+            .init(title: $0.title, scheduledDate: $0.scheduledDate, startAt: $0.startAt, endAt: $0.endAt)
+        }
+    }
+
     // MARK: - FoundationModels
 
     @available(iOS 26, *)
@@ -470,7 +521,7 @@ struct AgentSheet: View {
         if typedSession == nil {
             _sessionBacking = LanguageModelSession(
                 tools: [
-                    ProposeScheduleTool(proposal: proposal),
+                    ProposeScheduleTool(proposal: proposal, existing: existingItemsSnapshot()),
                     FindFreeSlotTool(snapshot: scheduleSnapshot())
                 ],
                 instructions: agentInstructions()
@@ -812,6 +863,7 @@ private struct TypingDotsView: View {
 
 private struct ProposedScheduleCard: View {
     let draft: ProposedScheduleDraft
+    var conflictTitle: String? = nil
     let onConfirm: () -> Void
     let onDecline: () -> Void
 
@@ -839,6 +891,16 @@ private struct ProposedScheduleCard: View {
                     Text(note)
                         .font(.caption)
                         .foregroundStyle(MemdoTheme.secondaryInk)
+                        .lineLimit(2)
+                }
+
+                // Reflection result: ProposeScheduleTool already checked this
+                // against the real schedule -- surfaced here so approval is an
+                // informed choice, not just a rubber stamp.
+                if let conflictTitle {
+                    Label("같은 시간에 '\(conflictTitle)' 일정이 있어요", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
                         .lineLimit(2)
                 }
             }
