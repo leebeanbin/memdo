@@ -3,12 +3,14 @@ import HealthKit
 import MapKit
 import UIKit
 import CoreLocation
+import os
 
 // MARK: - HealthKit Importer
 
 actor HealthKitImporter {
     private let store = HKHealthStore()
     private var workoutCache: [String: HKWorkout] = [:]
+    private static let logger = Logger(subsystem: "com.memdo.ios", category: "healthkit")
 
     private static var readTypes: Set<HKObjectType> {
         var types: Set<HKObjectType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute()]
@@ -24,7 +26,14 @@ actor HealthKitImporter {
         do {
             try await store.requestAuthorization(toShare: [], read: Self.readTypes)
             return true
-        } catch { return false }
+        } catch {
+            // HealthKit deliberately doesn't reveal grant vs. deny for read-only
+            // types via this call -- a caught error here is something else (no
+            // entitlement, simulator without Health data, etc.), worth knowing
+            // about when reports of "HealthKit won't connect" come in.
+            Self.logger.error("HealthKit authorization request failed: \(error.localizedDescription)")
+            return false
+        }
     }
 
     // MARK: Fetch

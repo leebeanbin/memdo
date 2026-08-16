@@ -128,7 +128,7 @@ struct SettingsView: View {
                     AgentConnectionRow(
                         icon: .asset("GoogleCalendar"),
                         title: "Google Calendar",
-                        capability: "일정 읽기 · 승인 후 쓰기",
+                        capability: "일정 읽기 전용",
                         status: googleCalendarConnected == nil ? "확인 중" : googleCalendarConnected == true ? "연결됨" : "미연결",
                         badge: nil
                     )
@@ -139,7 +139,7 @@ struct SettingsView: View {
                     AgentConnectionRow(
                         icon: .asset("Slack"),
                         title: "Slack",
-                        capability: "요약 전송 · 알림 예약",
+                        capability: "새 일정·완료 알림",
                         status: slackConnected ? "연결됨" : "미연결",
                         badge: nil
                     )
@@ -719,19 +719,17 @@ private struct GoogleCalendarConnectionSheet: View {
                     MCPToolIdentityRow(
                         icon: .asset("GoogleCalendar"),
                         title: "Google Calendar",
-                        summary: "내 Agent가 일정 문맥을 읽고 변경안을 만들어요."
+                        summary: "Google Calendar 일정을 가져와서 내 캘린더에 함께 보여줘요."
                     )
                 } header: {
                     Text("Agent MCP 도구")
                 }
                 Section("연결하면 가능한 일") {
-                    Label("바쁜 시간만 확인해 일정 추천", systemImage: "clock.badge.checkmark")
-                    Label("선택한 캘린더 일정 가져오기", systemImage: "calendar")
-                    Label("승인한 일정만 생성·수정", systemImage: "checkmark.shield")
+                    Label("Google Calendar 일정을 캘린더 화면에 함께 표시", systemImage: "calendar")
+                    Label("15분마다 자동으로 최신 일정 반영", systemImage: "arrow.triangle.2.circlepath")
                 }
                 Section("권한 원칙") {
-                    Label("기본은 읽기 전용", systemImage: "eye")
-                    Label("쓰기 권한은 필요할 때 별도 요청", systemImage: "square.and.pencil")
+                    Label("읽기 전용 — Google Calendar에 쓰거나 수정하지 않음", systemImage: "eye")
                 }
                 if isConnected {
                     Section {

@@ -614,7 +614,6 @@ private struct DayAgendaSheet: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .fixedSize()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("닫기") { dismiss() }
