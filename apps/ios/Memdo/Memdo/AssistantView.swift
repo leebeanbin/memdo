@@ -21,11 +21,15 @@ struct AgentMessage: Identifiable, Equatable {
 /// re-validates this list itself rather than trusting the client, so a
 /// stale/tampered value here just gets rejected, not silently forwarded.
 enum CloudAgentModelPreference {
+    // Verified live against https://openrouter.ai/api/v1/models on
+    // 2026-08-16 -- must stay in sync with ALLOWED_OPENROUTER_MODELS in
+    // agent-cloud-contract.ts by hand. The server re-validates regardless,
+    // so a stale entry here just gets rejected rather than forwarded.
     static let options: [(id: String, label: String)] = [
-        ("openai/gpt-4o-mini", "GPT-4o mini (기본, 빠름)"),
-        ("openai/gpt-4o", "GPT-4o"),
-        ("anthropic/claude-3.5-sonnet", "Claude 3.5 Sonnet"),
-        ("google/gemini-2.0-flash-001", "Gemini 2.0 Flash"),
+        ("openai/gpt-5.4-mini", "GPT-5.4 mini (기본, 빠름)"),
+        ("openai/gpt-5.6-sol", "GPT-5.6 Sol"),
+        ("anthropic/claude-sonnet-5", "Claude Sonnet 5"),
+        ("google/gemini-3.5-flash", "Gemini 3.5 Flash"),
     ]
     private static let key = "memdo.v1.cloudAgentModel"
 
