@@ -43,6 +43,17 @@ struct GoogleCalendarDisconnectResponseDTO: Decodable {
     let connected: Bool
 }
 
+// ScheduleUserCategory's stored properties (id/name/emoji/color/isTaskKind)
+// already match /categories' DTO shape field-for-field -- no separate DTO
+// struct needed, it's sent and received directly.
+struct CategoriesResponseDTO: Decodable {
+    let items: [ScheduleUserCategory]
+}
+
+struct CategoriesReplaceRequestDTO: Encodable {
+    let categories: [ScheduleUserCategory]
+}
+
 struct TodoListResponseDTO: Decodable {
     let items: [TodoResponseDTO]
     let nextCursor: String?
@@ -444,6 +455,22 @@ actor MemdoAPIClient {
         try await send(path: "google-calendar-disconnect", method: "POST", accessToken: accessToken)
     }
 
+    func categories(accessToken: String) async throws -> CategoriesResponseDTO {
+        try await send(path: "categories", accessToken: accessToken)
+    }
+
+    func replaceCategories(
+        _ categories: [ScheduleUserCategory],
+        accessToken: String
+    ) async throws -> CategoriesResponseDTO {
+        try await send(
+            path: "categories",
+            method: "PUT",
+            body: encoder.encode(CategoriesReplaceRequestDTO(categories: categories)),
+            accessToken: accessToken
+        )
+    }
+
     func send<Response: Decodable>(
         path: String,
         method: String = "GET",
@@ -622,6 +649,14 @@ actor ScheduleRepository {
 
     func googleCalendarDisconnect() async throws {
         _ = try await api.googleCalendarDisconnect(accessToken: accessToken())
+    }
+
+    func loadCategories() async throws -> [ScheduleUserCategory] {
+        try await api.categories(accessToken: accessToken()).items
+    }
+
+    func replaceCategories(_ categories: [ScheduleUserCategory]) async throws -> [ScheduleUserCategory] {
+        try await api.replaceCategories(categories, accessToken: accessToken()).items
     }
 
     private func accessToken() async throws -> String {

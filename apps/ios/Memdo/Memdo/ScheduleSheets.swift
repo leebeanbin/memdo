@@ -797,7 +797,7 @@ struct AddScheduleSheet: View {
             .sheet(isPresented: $showAddCategory) {
                 AddCategorySheet { newCat in
                     userCategories.append(newCat)
-                    ScheduleUserCategory.persist(userCategories)
+                    scheduleStore.replaceUserCategories(userCategories)
                 }
             }
         }

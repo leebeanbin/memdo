@@ -568,6 +568,7 @@ final class ScheduleStore {
             // this: its first callback can fire before `state` becomes
             // `.loaded`, at which point drainOutbox() is a deliberate no-op.
             await drainOutbox()
+            await syncUserCategories()
             // UNCalendarNotificationTrigger with repeats:false is one-shot.
             // Rebuild all upcoming per-schedule reminders after every full load
             // so app restarts don't silently drop pending reminders.
@@ -718,6 +719,36 @@ final class ScheduleStore {
         } else {
             schedules.append(schedule)
         }
+    }
+
+    /// Pulls the backend's category set into the local cache (see
+    /// ScheduleUserCategory.load/persist) so AddScheduleSheet's synchronous,
+    /// offline-friendly reads stay current across devices. If the backend
+    /// has nothing yet but a local cache already exists -- true the first
+    /// time this runs against an account created before categories synced --
+    /// pushes the local set up once instead of silently wiping it.
+    private func syncUserCategories() async {
+        do {
+            let remote = try await repository.loadCategories()
+            if remote.isEmpty {
+                let local = ScheduleUserCategory.load()
+                if !local.isEmpty {
+                    _ = try? await repository.replaceCategories(local)
+                }
+            } else {
+                ScheduleUserCategory.persist(remote)
+            }
+        } catch {
+            // Best-effort -- the local cache still works offline either way.
+        }
+    }
+
+    /// Persists a category edit locally (instant, offline-friendly, matching
+    /// how AddScheduleSheet already reads via ScheduleUserCategory.load())
+    /// and pushes the full replacement set to the backend in the background.
+    func replaceUserCategories(_ categories: [ScheduleUserCategory]) {
+        ScheduleUserCategory.persist(categories)
+        Task { _ = try? await repository.replaceCategories(categories) }
     }
 
     /// Creates a recurrence rule on the backend, which materialises the
