@@ -1024,6 +1024,8 @@ private struct CloudAgentConnectionSheet: View {
     @State private var isBusy = false
     @State private var errorMessage: String?
     @State private var showDisconnectConfirm = false
+    @State private var selectedModel = CloudAgentModelPreference.selected
+        ?? CloudAgentModelPreference.options[0].id
 
     private var canConnect: Bool {
         draftKey.trimmingCharacters(in: .whitespacesAndNewlines).count >= 20
@@ -1051,6 +1053,18 @@ private struct CloudAgentConnectionSheet: View {
                 }
 
                 if isConnected == true {
+                    Section {
+                        Picker("모델", selection: $selectedModel) {
+                            ForEach(CloudAgentModelPreference.options, id: \.id) { option in
+                                Text(option.label).tag(option.id)
+                            }
+                        }
+                        .onChange(of: selectedModel) { _, value in
+                            CloudAgentModelPreference.selected = value
+                        }
+                    } footer: {
+                        Text("대화가 조금 더 정교해질 수 있어요. 요금은 OpenRouter 계정으로 청구돼요.")
+                    }
                     Section {
                         Button("연결 해제", role: .destructive) {
                             showDisconnectConfirm = true

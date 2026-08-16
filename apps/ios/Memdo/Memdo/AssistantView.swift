@@ -14,6 +14,27 @@ struct AgentMessage: Identifiable, Equatable {
     enum Role: Equatable { case user, assistant }
 }
 
+// MARK: - Cloud model preference
+
+/// Which OpenRouter model the cloud path requests. Must stay in sync with
+/// ALLOWED_OPENROUTER_MODELS in agent-cloud-contract.ts -- the server
+/// re-validates this list itself rather than trusting the client, so a
+/// stale/tampered value here just gets rejected, not silently forwarded.
+enum CloudAgentModelPreference {
+    static let options: [(id: String, label: String)] = [
+        ("openai/gpt-4o-mini", "GPT-4o mini (기본, 빠름)"),
+        ("openai/gpt-4o", "GPT-4o"),
+        ("anthropic/claude-3.5-sonnet", "Claude 3.5 Sonnet"),
+        ("google/gemini-2.0-flash-001", "Gemini 2.0 Flash"),
+    ]
+    private static let key = "memdo.v1.cloudAgentModel"
+
+    static var selected: String? {
+        get { UserDefaults.standard.string(forKey: key) }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
+    }
+}
+
 // MARK: - Context
 
 enum AgentContext {
@@ -475,19 +496,27 @@ struct AgentSheet: View {
         }
 
         do {
-            let response = try await scheduleStore.agentCloudChat(message: prompt, history: history)
-            if let last = messages.indices.last, messages[last].role == .assistant {
-                messages[last].text = response.message
+            let proposedSchedule = try await scheduleStore.agentCloudChat(
+                message: prompt,
+                history: history,
+                model: CloudAgentModelPreference.selected
+            ) { delta in
+                if let last = messages.indices.last, messages[last].role == .assistant {
+                    messages[last].text += delta
+                }
             }
-            if let proposed = response.proposedSchedule {
-                proposal.propose(ProposedScheduleDraft(
-                    title: proposed.title,
-                    dateString: proposed.date,
-                    startTimeString: proposed.startTime?.isEmpty == false ? proposed.startTime : nil,
-                    endTimeString: proposed.endTime?.isEmpty == false ? proposed.endTime : nil,
-                    isTask: proposed.isTask,
-                    note: proposed.note?.isEmpty == false ? proposed.note : nil
-                ))
+            if let proposed = proposedSchedule {
+                proposal.propose(
+                    ProposedScheduleDraft(
+                        title: proposed.title,
+                        dateString: proposed.date,
+                        startTimeString: proposed.startTime?.isEmpty == false ? proposed.startTime : nil,
+                        endTimeString: proposed.endTime?.isEmpty == false ? proposed.endTime : nil,
+                        isTask: proposed.isTask,
+                        note: proposed.note?.isEmpty == false ? proposed.note : nil
+                    ),
+                    conflictTitle: proposed.conflictTitle
+                )
             }
         } catch ScheduleAPIError.server(_, let code, _, _) where code == "RESOURCE_NOT_FOUND" {
             if let last = messages.indices.last, messages[last].role == .assistant {

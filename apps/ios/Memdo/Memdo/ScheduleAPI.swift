@@ -70,6 +70,7 @@ struct AgentChatTurnDTO: Codable {
 struct AgentChatRequestDTO: Encodable {
     let message: String
     let history: [AgentChatTurnDTO]
+    let model: String?
 }
 
 /// Field-for-field the same shape ProposeScheduleTool's Arguments produces
@@ -81,11 +82,21 @@ struct CloudProposedScheduleDTO: Decodable {
     let endTime: String?
     let isTask: Bool
     let note: String?
+    /// Set server-side by agent-cloud-chat's own Reflection check (see
+    /// findConflict in agent-cloud-contract.ts) -- guaranteed, unlike the
+    /// model's own optional search_schedules call.
+    let conflictTitle: String?
 }
 
-struct AgentChatResponseDTO: Decodable {
-    let message: String
+/// One line of the newline-delimited stream agent-cloud-chat responds with.
+/// Every line has exactly one of these populated: `delta` while text is
+/// still arriving, or `done`/`proposedSchedule` on the terminal line, or
+/// `error` if something failed mid-stream.
+struct AgentStreamLineDTO: Decodable {
+    let delta: String?
+    let done: Bool?
     let proposedSchedule: CloudProposedScheduleDTO?
+    let error: String?
 }
 
 struct TodoListResponseDTO: Decodable {
@@ -522,17 +533,60 @@ actor MemdoAPIClient {
         try await send(path: "agent-key", method: "DELETE", accessToken: accessToken)
     }
 
+    /// agent-cloud-chat responds with newline-delimited JSON, not a single
+    /// decodable body -- `onDelta` fires as text chunks arrive so the UI can
+    /// update live the same way the on-device path's streamResponse already
+    /// does, instead of the caller staring at a blank bubble until the whole
+    /// (possibly multi-tool-call) turn finishes server-side.
     func agentCloudChat(
         message: String,
         history: [AgentChatTurnDTO],
-        accessToken: String
-    ) async throws -> AgentChatResponseDTO {
-        try await send(
-            path: "agent-cloud-chat",
-            method: "POST",
-            body: encoder.encode(AgentChatRequestDTO(message: message, history: history)),
-            accessToken: accessToken
-        )
+        model: String?,
+        accessToken: String,
+        onDelta: @escaping @MainActor (String) -> Void
+    ) async throws -> CloudProposedScheduleDTO? {
+        let url = functionsURL.appending(path: "agent-cloud-chat")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = try encoder.encode(AgentChatRequestDTO(message: message, history: history, model: model))
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(UUID().uuidString, forHTTPHeaderField: "X-Request-ID")
+
+        let bytes: URLSession.AsyncBytes
+        let response: URLResponse
+        do {
+            (bytes, response) = try await session.bytes(for: request)
+        } catch let error as URLError where offlineURLErrorCodes.contains(error.code) {
+            throw ScheduleAPIError.offline(error)
+        }
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ScheduleAPIError.invalidResponse
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            var errorData = Data()
+            for try await byte in bytes { errorData.append(byte) }
+            let error = try? decoder.decode(ErrorEnvelope.self, from: errorData).error
+            throw ScheduleAPIError.server(
+                status: httpResponse.statusCode,
+                code: error?.code ?? "UNKNOWN",
+                message: error?.message ?? "요청을 완료하지 못했습니다.",
+                requestID: error?.requestId ?? httpResponse.value(forHTTPHeaderField: "X-Request-ID")
+            )
+        }
+
+        var proposedSchedule: CloudProposedScheduleDTO?
+        for try await line in bytes.lines {
+            guard let lineData = line.data(using: .utf8),
+                  let parsed = try? decoder.decode(AgentStreamLineDTO.self, from: lineData) else { continue }
+            if let delta = parsed.delta { await onDelta(delta) }
+            if let message = parsed.error {
+                throw ScheduleAPIError.server(status: 502, code: "INTERNAL_ERROR", message: message, requestID: nil)
+            }
+            if parsed.done == true { proposedSchedule = parsed.proposedSchedule }
+        }
+        return proposedSchedule
     }
 
     func send<Response: Decodable>(
@@ -737,9 +791,17 @@ actor ScheduleRepository {
 
     func agentCloudChat(
         message: String,
-        history: [AgentChatTurnDTO]
-    ) async throws -> AgentChatResponseDTO {
-        try await api.agentCloudChat(message: message, history: history, accessToken: accessToken())
+        history: [AgentChatTurnDTO],
+        model: String?,
+        onDelta: @escaping @MainActor (String) -> Void
+    ) async throws -> CloudProposedScheduleDTO? {
+        try await api.agentCloudChat(
+            message: message,
+            history: history,
+            model: model,
+            accessToken: accessToken(),
+            onDelta: onDelta
+        )
     }
 
     private func accessToken() async throws -> String {

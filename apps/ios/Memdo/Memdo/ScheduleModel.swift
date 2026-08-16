@@ -548,8 +548,13 @@ final class ScheduleStore {
         try await repository.deleteAgentKey()
     }
 
-    func agentCloudChat(message: String, history: [AgentChatTurnDTO]) async throws -> AgentChatResponseDTO {
-        try await repository.agentCloudChat(message: message, history: history)
+    func agentCloudChat(
+        message: String,
+        history: [AgentChatTurnDTO],
+        model: String?,
+        onDelta: @escaping @MainActor (String) -> Void
+    ) async throws -> CloudProposedScheduleDTO? {
+        try await repository.agentCloudChat(message: message, history: history, model: model, onDelta: onDelta)
     }
 
     func search(_ query: String) async throws -> [ScheduleDetail] {
