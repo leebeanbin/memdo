@@ -5,6 +5,15 @@
 > 개인정보: [개인정보·동의·AI 정책](./06-privacy-consent-ai-policy.md)  
 > 데이터 파이프라인: [데이터 파이프라인](./17-data-pipeline.md)
 
+> **실제 구현 현황(2026-08-17)**: 14절의 Phase A(Google Calendar read-only, 출처 배지, Today 통합
+> 타임라인, 통합 검색)만 실제로 배포했다. 테이블명은 `google_calendar_connections`/
+> `google_calendar_mirror_events`로 Google 전용이며(3·6절의 범용 `calendar_sources`/
+> `external_calendar_events` 명명과 다름), `change_proposals`/`proposal_operations` 테이블과
+> 승인 링크(10~12절), Google Calendar write(Phase B), Memdo Remote MCP(9절, Phase C)는 아직
+> 만들지 않았다. Slack(17~18절)은 OAuth 앱 설치 대신 사용자가 발급한 Incoming Webhook URL을
+> Keychain에 저장하는 훨씬 축소된 범위로 구현했다 — [ADR-075](./10-decisions-and-open-questions.md)
+> 참고. 아래 절은 원래 설계와 향후 확장 시 따를 계약을 남겨 두는 참고 자료로 유지한다.
+
 ## 1. 제품 목표
 
 사용자는 Memdo 앱, Google Calendar, Codex·ChatGPT 같은 외부 AI 어디에서 요청하더라도 같은 일정 문맥을 사용하고, 변경 제안을 링크로 확인한 뒤 승인할 수 있다.

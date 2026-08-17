@@ -5,6 +5,17 @@
 > 트랜잭션: [트랜잭션 경계](./19-transaction-boundaries.md)  
 > 외부 통합: [외부 API 통합](./15-external-integrations-and-naming.md)
 
+> **실제 구현 현황(2026-08-17)**: 이 문서의 "1. 선택"이 서술하는 `OpenAI Responses API +
+> 서버 오케스트레이션` 단일 경로는 [ADR-073](./10-decisions-and-open-questions.md)으로 대체됐다.
+> 실제로 배포한 구조는 (1) 기기 내 Apple FoundationModels(`LanguageModelSession`, Reflection
+> 포함, `apps/ios/Memdo/Memdo/AssistantView.swift`)를 기본 경로로 쓰고, (2) 사용자가 원할 때만
+> 자신의 OpenRouter API 키(BYOK)로 클라우드 모델을 쓰는 2트랙 구조다. 클라우드 경로는
+> `memdo-backend/supabase/functions/agent-cloud-chat`가 OpenRouter Chat Completions를 SSE로
+> 스트리밍하고, `propose_schedule` 도구 호출마다 서버가 직접 시간 충돌을 재검사한다(6절 이하가
+> 말하는 Consent Gate·Read Tools·Structured Proposal의 취지는 유지했지만 실제 도구 이름·개수·
+> Responses API 세부 계약은 이 문서와 다르다). 아래 절은 원래 설계 의도와 확장 조건을 남겨 두는
+> 참고 자료로 유지한다.
+
 ## 1. 선택
 
 MVP는 `LLM Gateway + 서버 함수 도구 + 단일 Memdo Agent`를 사용한다. production 기본 adapter는 OpenAI Responses API이고 개발·명시적 self-host adapter는 llama.cpp다.

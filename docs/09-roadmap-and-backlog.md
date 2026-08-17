@@ -73,6 +73,22 @@
 - 자체 MCP
 - 다른 AI 클라이언트 연결
 
+## 구현 현황 (2026-08-17 개발 종료 시점)
+
+- Phase 0~2: 완료.
+- Phase 3(선택적 AI): 완료. 계획 초안·자연어 일정 변환·사용자 승인 commit·AI 기능 끄기까지 온디바이스
+  Agent(FoundationModels)와 클라우드 Agent(사용자 BYOK OpenRouter) 두 경로로 구현했다. AI 데이터
+  범위 동의와 실행 기록은 서버 `agent_chat_requests` rate-limit 로그로 남는다.
+- Phase 4(뉴스): 완료. 다만 서버 파이프라인이 아니라 iOS가 RSS를 직접 수집하고 온디바이스로 요약한다
+  ([`10-decisions-and-open-questions.md`](10-decisions-and-open-questions.md) ADR-074).
+- Phase 5(외부 캘린더): Google Calendar 읽기 전용 미러만 완료(바쁜 시간·제목 읽기, 출처 배지, Today
+  통합 타임라인). EventKit(Apple Calendar) 연동과 외부 일정 쓰기는 만들지 않았다.
+- 출시 후 검토 항목(주간 회고, Apple Watch, App Shortcuts, 자체 MCP, 다른 AI 클라이언트 연결)은
+  이번 개발 범위에 포함하지 않았다. 자체 MCP는 [`21-integration-hub-google-calendar-mcp.md`](21-integration-hub-google-calendar-mcp.md)의
+  Phase C로 설계만 남아 있다.
+- Slack은 이 문서에 별도 Phase로 없었지만 실제로는 구현했다 — OAuth가 아닌 Incoming Webhook 방식
+  (ADR-075).
+
 ## 만들지 않을 것
 
 - 다중 Agent

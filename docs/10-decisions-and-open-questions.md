@@ -23,7 +23,7 @@
 | ADR-013 | 하루 요약은 로컬 알림 우선 | 오프라인 동작과 정해진 시각 처리 |
 | ADR-014 | 50명 규모에는 캐시·파티셔닝·읽기 복제본 미사용 | 데이터 규모와 운영 복잡도 불균형 |
 | ADR-015 | 일정 검색은 원본 todos + pg_trgm으로 시작 | 별도 조회 테이블과 검색 서버 불필요 |
-| ADR-016 | MVP Agent는 Responses API 직접 오케스트레이션 | 단일 Agent와 작은 도구 집합에 충분 |
+| ADR-016 | ~~MVP Agent는 Responses API 직접 오케스트레이션~~ (ADR-073으로 대체) | 단일 Agent와 작은 도구 집합에 충분 |
 | ADR-017 | Agent 도구는 조회·제안만 허용 | 실제 쓰기는 사용자 승인 Command API로 분리 |
 | ADR-018 | 기본 격리 수준은 READ COMMITTED + optimistic version | 50명 규모의 충돌 특성과 구현 단순성 |
 | ADR-019 | 외부 API 호출은 DB 트랜잭션 밖에서 수행 | 장기 lock과 장애 전파 방지 |
@@ -41,7 +41,7 @@
 | ADR-031 | 하루 요약 시간은 사용자가 직접 선택 | 임의 기본값으로 알림 피로를 만들지 않음 |
 | ADR-032 | 일부 완료는 퍼센트만 기록하고 잔여 Todo는 명시적 선택으로 생성 | 사용자 의도 없는 일정 증식을 막음 |
 | ADR-033 | 미응답 일정은 자동 실패 처리하지 않고 다음 날 미정리 영역에 유지 | 사실이 아닌 완료·실패 판정을 피함 |
-| ADR-034 | MVP 뉴스는 OpenAI Responses API의 web search 사용 | 별도 뉴스 공급자 계약·SDK 없이 출처 URL이 있는 3~5개 브리핑을 검증 |
+| ADR-034 | ~~MVP 뉴스는 OpenAI Responses API의 web search 사용~~ (ADR-074로 대체) | 별도 뉴스 공급자 계약·SDK 없이 출처 URL이 있는 3~5개 브리핑을 검증 |
 | ADR-035 | Supabase 리전은 Seoul `ap-northeast-2` | 초기 한국 사용자 지연과 데이터 위치를 단순화 |
 | ADR-036 | MVP AI 모델은 고정 평가셋을 통과한 model ID를 환경 변수 한 곳에서 고정 | 출시 시점의 가용 모델·비용·구조화 출력 품질을 확인하고 교체 범위를 제한 |
 | ADR-037 | 삭제 이력만 있고 활성·완료 Todo가 없는 날은 `needs_planning` | 별도 `cleared` 상태 없이 다시 계획할 수 있게 함 |
@@ -73,13 +73,16 @@
 | ADR-063 | Redis는 Upstash REST를 AI·MCP rate limit, 짧은 lock, 만료 상태에만 사용한다 | 원본 일정과 일반 조회 cache를 분리해 Redis 장애의 제품 영향 제한 |
 | ADR-064 | 의미 검색은 같은 PostgreSQL의 `pgvector`로 시작하고 외부 vector DB는 사용하지 않는다 | RLS·관계 필터·백업을 한 저장소에서 유지 |
 | ADR-065 | MCP는 Memdo API의 외부 어댑터이며 DB에 직접 연결하지 않는다 | iOS와 외부 AI가 같은 Query·Proposal·Command 권한 경로 공유 |
-| ADR-066 | LLM 경계는 OpenAI production adapter와 llama.cpp local adapter로 구성한다 | 모델 교체와 로컬 개발을 허용하되 API 호환성을 과장하지 않음 |
+| ADR-066 | ~~LLM 경계는 OpenAI production adapter와 llama.cpp local adapter로 구성한다~~ (ADR-073으로 대체) | 모델 교체와 로컬 개발을 허용하되 API 호환성을 과장하지 않음 |
 | ADR-067 | SQL migration을 schema 원본으로 유지하고 ORM은 trusted worker에 제한한다 | RLS·RPC·pgmq·pgvector를 ORM schema와 이중 관리하지 않음 |
 | ADR-068 | 인덱스 최적화와 데이터 송신 최적화를 별도 예산·지표로 관리한다 | 인덱스는 DB 탐색 비용을 줄이지만 payload 크기를 직접 줄이지 않음 |
 | ADR-069 | UI·Domain·DTO·DB row는 경계에서 명시적으로 변환한다 | 화면 편의를 서버 계약으로 누출하지 않고 버전 변화 격리 |
 | ADR-070 | 서버 enum은 안정 영문 code, 사용자 문구는 iOS String Catalog로 관리한다 | 한국어 raw value와 고정 timezone이 글로벌 동작을 막지 않게 함 |
 | ADR-071 | 로그인 화면은 Apple·Google·GitHub로 제한하고 계정 없는 시작과 신규 anonymous session을 제공하지 않는다 | 인증 선택과 데이터 소유권을 명확히 하고 App Store 로그인 요구사항을 충족함 |
 | ADR-072 | 앱 셸은 Apple 네이티브 컴포넌트와 공식 Design Resources를 우선하고, Memdo 커스텀 디자인은 캘린더·일정·요약·Agent 콘텐츠 계층에 집중한다 | 시스템 변화·접근성·안전 영역을 자동으로 따르면서 제품 고유 콘텐츠에 디자인 역량을 집중 |
+| ADR-073 | Agent는 온디바이스 Apple FoundationModels(Reflection 포함, 기본 경로)와 사용자 BYOK OpenRouter 클라우드(OpenAI 호환 Chat Completions, 사용자가 자기 API 키를 직접 입력) 2트랙으로 구성한다. ADR-016·ADR-066을 대체한다 | OpenAI Responses API·Agents SDK 상시 서버 오케스트레이션은 모든 요청에 Memdo가 비용을 부담해야 했다. 기존 ChatGPT Plus/Claude Pro·Max/Google AI Pro 같은 구독 재사용도 검토했으나 ChatGPT·Gemini 구독은 애초에 API 접근이 없고, Claude Pro/Max 구독 OAuth를 서드파티 도구에 쓰는 경로는 Anthropic이 2026-04-04부터 Consumer ToS 위반으로 집행 중이라 제외했다 |
+| ADR-074 | 뉴스 브리핑은 서버 pgmq 파이프라인 대신 iOS 클라이언트의 RSS 수집 + 온디바이스 FoundationModels 요약으로 구현한다. ADR-034를 대체한다 | 별도 뉴스 API 계약이나 서버 파이프라인 없이 하루 3~5개·출처 표시 요건을 클라이언트만으로 충족했고, 요약 자체에 사용자 데이터를 서버로 보내지 않는다 |
+| ADR-075 | Slack 연결은 OAuth 앱 설치·workspace 심사 대신 사용자가 Slack에서 직접 발급한 Incoming Webhook URL을 붙여넣어 iOS Keychain에 저장하는 방식으로 시작한다 | 개인 사용자가 워크스페이스 관리자 승인 없이 즉시 연결할 수 있다. 다중 채널·슬래시 커맨드가 필요해지면 섹션 17~18의 OAuth 설계로 확장한다 |
 
 ## 제품 이름
 
