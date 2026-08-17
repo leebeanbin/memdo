@@ -141,11 +141,16 @@ final class AgentScheduleProposal {
     /// reflection step (see call(arguments:)) so ProposedScheduleCard can warn
     /// before the user approves, rather than only after saving.
     var conflictTitle: String?
-    func propose(_ d: ProposedScheduleDraft, conflictTitle: String? = nil) {
+    /// True when the conflict check itself couldn't be verified server-side
+    /// (see CloudProposedScheduleDTO.conflictCheckFailed) -- shown as its own
+    /// warning rather than silently treated as "no conflict."
+    var conflictCheckFailed: Bool = false
+    func propose(_ d: ProposedScheduleDraft, conflictTitle: String? = nil, conflictCheckFailed: Bool = false) {
         draft = d
         self.conflictTitle = conflictTitle
+        self.conflictCheckFailed = conflictCheckFailed
     }
-    func clear() { draft = nil; conflictTitle = nil }
+    func clear() { draft = nil; conflictTitle = nil; conflictCheckFailed = false }
 }
 
 @available(iOS 26, *)
@@ -428,7 +433,11 @@ struct AgentSheet: View {
                 }
             }
             if let draft = proposal.draft {
-                ProposedScheduleCard(draft: draft, conflictTitle: proposal.conflictTitle) {
+                ProposedScheduleCard(
+                    draft: draft,
+                    conflictTitle: proposal.conflictTitle,
+                    conflictCheckFailed: proposal.conflictCheckFailed
+                ) {
                     confirmProposal(draft)
                 } onDecline: {
                     withAnimation(.easeOut(duration: 0.2)) { proposal.clear() }
@@ -519,7 +528,8 @@ struct AgentSheet: View {
                         isTask: proposed.isTask,
                         note: proposed.note?.isEmpty == false ? proposed.note : nil
                     ),
-                    conflictTitle: proposed.conflictTitle
+                    conflictTitle: proposed.conflictTitle,
+                    conflictCheckFailed: proposed.conflictCheckFailed ?? false
                 )
             }
         } catch ScheduleAPIError.server(_, let code, _, _) where code == "RESOURCE_NOT_FOUND" {
@@ -948,6 +958,7 @@ private struct TypingDotsView: View {
 private struct ProposedScheduleCard: View {
     let draft: ProposedScheduleDraft
     var conflictTitle: String? = nil
+    var conflictCheckFailed: Bool = false
     let onConfirm: () -> Void
     let onDecline: () -> Void
 
@@ -983,6 +994,11 @@ private struct ProposedScheduleCard: View {
                 // informed choice, not just a rubber stamp.
                 if let conflictTitle {
                     Label("같은 시간에 '\(conflictTitle)' 일정이 있어요", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                        .lineLimit(2)
+                } else if conflictCheckFailed {
+                    Label("기존 일정을 확인하지 못했어요 — 저장 전 직접 확인해주세요", systemImage: "questionmark.circle.fill")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.orange)
                         .lineLimit(2)

@@ -86,6 +86,11 @@ struct CloudProposedScheduleDTO: Decodable {
     /// findConflict in agent-cloud-contract.ts) -- guaranteed, unlike the
     /// model's own optional search_schedules call.
     let conflictTitle: String?
+    /// True when the Reflection check itself couldn't run (e.g. the existing-
+    /// schedule fetch failed) -- distinct from conflictTitle being nil, which
+    /// means the check ran and found nothing. Fail-closed: this is never
+    /// silently treated as "no conflict."
+    let conflictCheckFailed: Bool?
 }
 
 /// One line of the newline-delimited stream agent-cloud-chat responds with.
