@@ -409,6 +409,15 @@ struct AgentSheet: View {
     @State private var showsResetConfirmation = false
     @State private var proposal = AgentScheduleProposal()
     @State private var updateProposal = AgentScheduleUpdateProposal()
+    /// Tracked so a new send can cancel whatever's still in flight instead of
+    /// leaving it to keep streaming into a `messages[last]` index that's
+    /// since shifted out from under it.
+    @State private var activeTask: Task<Void, Never>?
+    /// True once we've determined the cloud path is needed (no on-device
+    /// model on this OS/device) but no OpenRouter key is connected yet --
+    /// prompts the user to connect immediately instead of only after they
+    /// send a message and hit a dead-end error.
+    @State private var needsCloudConnection = false
 
     var body: some View {
         NavigationStack {
@@ -461,7 +470,7 @@ struct AgentSheet: View {
             Text("현재 대화 내용이 삭제됩니다.")
         }
         .task {
-            if #available(iOS 26, *) {
+            if #available(iOS 26, *), case .available = SystemLanguageModel.default.availability {
                 let hadHistory = !messages.isEmpty
                 if typedSession == nil {
                     _sessionBacking = LanguageModelSession(
@@ -474,6 +483,11 @@ struct AgentSheet: View {
                     if hadHistory { showSessionGapNotice = true }
                 }
                 typedSession?.prewarm()
+            } else {
+                // No on-device model on this OS/device -- every send() call
+                // will need the cloud path, so check the connection now
+                // rather than waiting for the user to type something first.
+                needsCloudConnection = (try? await scheduleStore.agentKeyConnected()) != true
             }
         }
         .onChange(of: proposal.draft) { _, draft in
@@ -482,6 +496,9 @@ struct AgentSheet: View {
                messages[last].isStreaming, messages[last].text.isEmpty {
                 messages[last].toolHint = "일정을 제안하는 중..."
             }
+        }
+        .sheet(isPresented: $needsCloudConnection) {
+            CloudAgentConnectionSheet()
         }
         .memdoSheetPresentation([.medium, .large])
     }
@@ -542,15 +559,25 @@ struct AgentSheet: View {
         let prompt = composer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty, !isLoading else { return }
         composer = ""
+        // Set synchronously, before scheduling the Task -- sendWithCloudAgent/
+        // sendWithFoundationModels used to set this at the top of their own
+        // (async) bodies, which left a window where a second send() call in
+        // the same run loop pass would still see isLoading == false and pass
+        // the guard above. Two overlapping streams then both wrote into
+        // `messages[last]`, which shifts as each one appends its own
+        // messages -- the runaway/duplicated-output bug reported from
+        // tapping a quick action.
+        isLoading = true
         messages.append(AgentMessage(role: .user, text: prompt))
+        activeTask?.cancel()
         // On-device when this OS/device actually has it available; otherwise
         // the cloud path (BYOK via OpenRouter, see agent-cloud-chat) covers
         // both older devices and open-ended requests the fixed-shape
         // on-device tools aren't suited for.
         if #available(iOS 26, *), case .available = SystemLanguageModel.default.availability {
-            Task { await sendWithFoundationModels(prompt) }
+            activeTask = Task { await sendWithFoundationModels(prompt) }
         } else {
-            Task { await sendWithCloudAgent(prompt) }
+            activeTask = Task { await sendWithCloudAgent(prompt) }
         }
     }
 
@@ -566,12 +593,21 @@ struct AgentSheet: View {
 
     private func sendWithCloudAgent(_ prompt: String) async {
         let history = cloudHistory()
-        isLoading = true
-        messages.append(AgentMessage(role: .assistant, text: "", isStreaming: true))
+        // isLoading is already true -- send()/retry() set it synchronously
+        // before scheduling this Task.
+        let placeholder = AgentMessage(role: .assistant, text: "", isStreaming: true)
+        messages.append(placeholder)
+        let messageID = placeholder.id
+        // Every mutation below targets messageID specifically rather than
+        // "whatever's currently last" -- if this call gets cancelled by a
+        // newer send(), messages.last has since moved on to that newer
+        // call's own placeholder, and indices-last writes here would land on
+        // the wrong message (this was the actual bug behind quick actions
+        // appearing to pour out endless/duplicated text).
         defer {
             isLoading = false
-            if let last = messages.indices.last, messages[last].isStreaming {
-                messages[last].isStreaming = false
+            if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                messages[index].isStreaming = false
             }
         }
 
@@ -581,8 +617,8 @@ struct AgentSheet: View {
                 history: history,
                 model: CloudAgentModelPreference.selected
             ) { delta in
-                if let last = messages.indices.last, messages[last].role == .assistant {
-                    messages[last].text += delta
+                if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                    messages[index].text += delta
                 }
             }
             if let proposed = result.proposedSchedule {
@@ -612,19 +648,28 @@ struct AgentSheet: View {
                 )
             }
         } catch ScheduleAPIError.server(_, let code, _, _) where code == "RESOURCE_NOT_FOUND" {
-            if let last = messages.indices.last, messages[last].role == .assistant {
-                messages[last].text = "이 기기에서 Agent를 쓰려면 클라우드 연결이 필요해요. 설정 > 클라우드 Agent에서 연결해 주세요."
-                messages[last].isError = true
+            if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                messages[index].text = "이 기기에서 Agent를 쓰려면 클라우드 연결이 필요해요."
+                messages[index].isError = true
             }
+            // Open the connect sheet right here instead of leaving the user
+            // to find Settings > 클라우드 Agent on their own.
+            needsCloudConnection = true
+        } catch is CancellationError {
+            // A newer send()/resetConversation() cancelled this one -- its
+            // own placeholder gets cleaned up by its own defer/error path,
+            // not this one. Silently stop.
         } catch {
-            if let last = messages.indices.last, messages[last].role == .assistant {
-                messages[last].text = "오류가 발생했어요. 다시 시도해주세요."
-                messages[last].isError = true
+            if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                messages[index].text = "오류가 발생했어요. 다시 시도해주세요."
+                messages[index].isError = true
             }
         }
     }
 
     private func resetConversation() {
+        activeTask?.cancel()
+        activeTask = nil
         composer = ""
         messages = []
         _sessionBacking = nil
@@ -694,10 +739,12 @@ struct AgentSheet: View {
         guard !isLoading else { return }
         guard let lastUserMsg = messages.dropLast().last(where: { $0.role == .user }) else { return }
         messages.removeLast()
+        isLoading = true  // synchronous, same reasoning as send() above
+        activeTask?.cancel()
         if #available(iOS 26, *), case .available = SystemLanguageModel.default.availability {
-            Task { await sendWithFoundationModels(lastUserMsg.text) }
+            activeTask = Task { await sendWithFoundationModels(lastUserMsg.text) }
         } else {
-            Task { await sendWithCloudAgent(lastUserMsg.text) }
+            activeTask = Task { await sendWithCloudAgent(lastUserMsg.text) }
         }
     }
 
@@ -729,6 +776,14 @@ struct AgentSheet: View {
 
     @available(iOS 26, *)
     private func sendWithFoundationModels(_ prompt: String) async {
+        // isLoading is already true -- send()/retry() set it synchronously
+        // before scheduling this Task. Reset unconditionally on every exit
+        // path, including the early-return guards below (previously this was
+        // set *after* those guards, which was fine when it lived here -- now
+        // that the caller sets it before dispatch, this function must be the
+        // one to always clear it again).
+        defer { isLoading = false }
+
         let model = SystemLanguageModel.default
         guard case .available = model.availability else {
             messages.append(AgentMessage(
@@ -749,27 +804,37 @@ struct AgentSheet: View {
         }
         guard let session = typedSession else { return }
 
-        isLoading = true
-        messages.append(AgentMessage(role: .assistant, text: "", isStreaming: true))
-
+        let placeholder = AgentMessage(role: .assistant, text: "", isStreaming: true)
+        messages.append(placeholder)
+        let messageID = placeholder.id
+        // Targets messageID specifically, not "whatever's currently last" --
+        // see the matching comment in sendWithCloudAgent for why.
         defer {
-            isLoading = false
-            if let last = messages.indices.last, messages[last].isStreaming {
-                messages[last].isStreaming = false
+            if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                messages[index].isStreaming = false
             }
         }
 
         do {
             let stream = session.streamResponse(to: prompt)
             for try await snapshot in stream {
-                if let last = messages.indices.last, messages[last].role == .assistant {
-                    messages[last].text = snapshot.content
+                // FoundationModels' own tool-calling loop has no iteration
+                // cap we control (unlike the cloud path's MAX_TOOL_ITERATIONS)
+                // -- this is the only place a stuck/looping generation can be
+                // stopped, via a new send() or resetConversation() cancelling
+                // this Task.
+                if Task.isCancelled { break }
+                if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                    messages[index].text = snapshot.content
                 }
             }
+        } catch is CancellationError {
+            // Cancelled by a newer send()/resetConversation() -- nothing to
+            // report, this placeholder is being torn down or superseded.
         } catch {
-            if let last = messages.indices.last, messages[last].role == .assistant {
-                messages[last].text = "오류가 발생했어요. 다시 시도해주세요."
-                messages[last].isError = true
+            if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                messages[index].text = "오류가 발생했어요. 다시 시도해주세요."
+                messages[index].isError = true
             }
         }
     }
