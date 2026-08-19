@@ -561,7 +561,7 @@ final class ScheduleStore {
         history: [AgentChatTurnDTO],
         model: String?,
         onDelta: @escaping @MainActor (String) -> Void
-    ) async throws -> CloudProposedScheduleDTO? {
+    ) async throws -> AgentCloudChatResult {
         try await repository.agentCloudChat(message: message, history: history, model: model, onDelta: onDelta)
     }
 
@@ -966,7 +966,11 @@ final class ScheduleStore {
         save(schedules[index])
     }
 
-    func move(id: UUID, to date: Date) {
+    /// `startAt`/`endAt` override the moved time explicitly (e.g. an Agent
+    /// propose_schedule_update reschedule with a new time, not just a new
+    /// day) -- when both are nil, the original time-of-day is preserved on
+    /// the new date, same as a plain drag-to-a-different-day move.
+    func move(id: UUID, to date: Date, startAt: Date? = nil, endAt: Date? = nil) {
         guard !pendingWriteIDs.contains(id) else { return }
         guard let index = schedules.firstIndex(where: { $0.id == id }) else { return }
         let original = schedules[index]
@@ -975,7 +979,10 @@ final class ScheduleStore {
         let oldDate = moved.scheduledDate
         moved.scheduledDate = calendar.startOfDay(for: date)
 
-        if let oldStart = moved.startAt, let oldEnd = moved.endAt {
+        if let startAt, let endAt {
+            moved.startAt = startAt
+            moved.endAt = endAt
+        } else if let oldStart = moved.startAt, let oldEnd = moved.endAt {
             let duration = oldEnd.timeIntervalSince(oldStart)
             let time = calendar.dateComponents([.hour, .minute, .second], from: oldStart)
             guard let newStart = calendar.date(

@@ -52,6 +52,43 @@ enum AgentContext {
 
 // MARK: - Schedule Proposal (Tool result)
 
+/// Resolves an agent-supplied date token ("today" | "tomorrow" | "yyyy-MM-dd")
+/// to a local calendar day. Shared by ProposedScheduleDraft and
+/// AgentScheduleUpdateProposal so the two proposal kinds agree on what these
+/// tokens mean.
+func resolveAgentDateToken(_ token: String) -> Date {
+    let cal = Calendar.current
+    switch token {
+    case "today":    return cal.startOfDay(for: .now)
+    case "tomorrow": return cal.startOfDay(for: cal.date(byAdding: .day, value: 1, to: .now) ?? .now)
+    default:
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        return f.date(from: token).map { cal.startOfDay(for: $0) } ?? cal.startOfDay(for: .now)
+    }
+}
+
+/// Parses an agent-supplied "HH:mm" time onto the given day.
+func parseAgentTime(_ s: String, on date: Date) -> Date? {
+    let parts = s.split(separator: ":").compactMap { Int($0) }
+    guard parts.count >= 2 else { return nil }
+    return Calendar.current.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: date)
+}
+
+/// "오늘"/"내일"/"M월 d일" for an agent-supplied date token. Shared by
+/// ProposedScheduleDraft and AgentScheduleUpdateProposal so both proposal
+/// kinds render dates identically.
+func displayAgentDateToken(_ token: String) -> String {
+    switch token {
+    case "today":    return "오늘"
+    case "tomorrow": return "내일"
+    default:
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ko_KR")
+        f.dateFormat = "M월 d일"
+        return f.string(from: resolveAgentDateToken(token))
+    }
+}
+
 struct ProposedScheduleDraft: Sendable, Equatable {
     let title: String
     let dateString: String          // "today" | "tomorrow" | "yyyy-MM-dd"
@@ -60,17 +97,7 @@ struct ProposedScheduleDraft: Sendable, Equatable {
     let isTask: Bool
     let note: String?
 
-    var displayDate: String {
-        switch dateString {
-        case "today":    return "오늘"
-        case "tomorrow": return "내일"
-        default:
-            let f = DateFormatter()
-            f.locale = Locale(identifier: "ko_KR")
-            f.dateFormat = "M월 d일"
-            return f.string(from: scheduledDate())
-        }
-    }
+    var displayDate: String { displayAgentDateToken(dateString) }
 
     var displayTime: String {
         if isTask { return "할 일" }
@@ -78,21 +105,12 @@ struct ProposedScheduleDraft: Sendable, Equatable {
         return start + (endTimeString.map { " – \($0)" } ?? "")
     }
 
-    func scheduledDate() -> Date {
-        let cal = Calendar.current
-        switch dateString {
-        case "today":    return cal.startOfDay(for: .now)
-        case "tomorrow": return cal.startOfDay(for: cal.date(byAdding: .day, value: 1, to: .now) ?? .now)
-        default:
-            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-            return f.date(from: dateString).map { cal.startOfDay(for: $0) } ?? cal.startOfDay(for: .now)
-        }
-    }
+    func scheduledDate() -> Date { resolveAgentDateToken(dateString) }
 
     func toScheduleDetail(calendar: ScheduleCalendar) -> ScheduleDetail {
         let date    = scheduledDate()
-        let startAt = startTimeString.flatMap { parseTime($0, on: date) }
-        let endAt   = endTimeString.flatMap   { parseTime($0, on: date) }
+        let startAt = startTimeString.flatMap { parseAgentTime($0, on: date) }
+        let endAt   = endTimeString.flatMap   { parseAgentTime($0, on: date) }
         return ScheduleDetail(
             scheduledDate: date,
             startAt: startAt, endAt: endAt,
@@ -110,15 +128,9 @@ struct ProposedScheduleDraft: Sendable, Equatable {
     func resolvedInterval() -> (start: Date, end: Date)? {
         guard !isTask, let startTimeString else { return nil }
         let date = scheduledDate()
-        guard let start = parseTime(startTimeString, on: date) else { return nil }
-        let end = endTimeString.flatMap { parseTime($0, on: date) } ?? start.addingTimeInterval(3_600)
+        guard let start = parseAgentTime(startTimeString, on: date) else { return nil }
+        let end = endTimeString.flatMap { parseAgentTime($0, on: date) } ?? start.addingTimeInterval(3_600)
         return (start, end)
-    }
-
-    private func parseTime(_ s: String, on date: Date) -> Date? {
-        let parts = s.split(separator: ":").compactMap { Int($0) }
-        guard parts.count >= 2 else { return nil }
-        return Calendar.current.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: date)
     }
 }
 
@@ -140,6 +152,71 @@ final class AgentScheduleProposal {
         self.conflictCheckFailed = conflictCheckFailed
     }
     func clear() { draft = nil; conflictTitle = nil; conflictCheckFailed = false }
+}
+
+/// Pending state for an Agent proposal to complete, move, or delete an
+/// EXISTING item (propose_schedule_update), mirroring AgentScheduleProposal's
+/// shape for creates. `id` is the real todos.id the server echoed back from
+/// search_schedules, not a client-generated value. Cloud-only for now --
+/// propose_schedule_update has no on-device tool equivalent yet.
+@MainActor
+@Observable
+final class AgentScheduleUpdateProposal {
+    var id: String?
+    var action: String?           // "complete" | "reschedule" | "delete"
+    var title: String?
+    var dateString: String?       // reschedule only
+    var startTimeString: String?  // reschedule only
+    var endTimeString: String?    // reschedule only
+    var conflictTitle: String?
+    var conflictCheckFailed: Bool = false
+
+    var isPending: Bool { id != nil }
+
+    var displayActionLabel: String {
+        switch action {
+        case "complete":   return "완료 처리"
+        case "reschedule": return "일정 변경"
+        case "delete":     return "삭제"
+        default:           return "변경"
+        }
+    }
+
+    var displayDate: String? {
+        guard action == "reschedule", let dateString else { return nil }
+        return displayAgentDateToken(dateString)
+    }
+
+    func propose(
+        id: String,
+        action: String,
+        title: String,
+        dateString: String?,
+        startTimeString: String?,
+        endTimeString: String?,
+        conflictTitle: String?,
+        conflictCheckFailed: Bool
+    ) {
+        self.id = id
+        self.action = action
+        self.title = title
+        self.dateString = dateString
+        self.startTimeString = startTimeString
+        self.endTimeString = endTimeString
+        self.conflictTitle = conflictTitle
+        self.conflictCheckFailed = conflictCheckFailed
+    }
+
+    func clear() {
+        id = nil
+        action = nil
+        title = nil
+        dateString = nil
+        startTimeString = nil
+        endTimeString = nil
+        conflictTitle = nil
+        conflictCheckFailed = false
+    }
 }
 
 @available(iOS 26, *)
@@ -331,6 +408,7 @@ struct AgentSheet: View {
     @State private var showSessionGapNotice = false
     @State private var showsResetConfirmation = false
     @State private var proposal = AgentScheduleProposal()
+    @State private var updateProposal = AgentScheduleUpdateProposal()
 
     var body: some View {
         NavigationStack {
@@ -498,7 +576,7 @@ struct AgentSheet: View {
         }
 
         do {
-            let proposedSchedule = try await scheduleStore.agentCloudChat(
+            let result = try await scheduleStore.agentCloudChat(
                 message: prompt,
                 history: history,
                 model: CloudAgentModelPreference.selected
@@ -507,7 +585,7 @@ struct AgentSheet: View {
                     messages[last].text += delta
                 }
             }
-            if let proposed = proposedSchedule {
+            if let proposed = result.proposedSchedule {
                 proposal.propose(
                     ProposedScheduleDraft(
                         title: proposed.title,
@@ -519,6 +597,18 @@ struct AgentSheet: View {
                     ),
                     conflictTitle: proposed.conflictTitle,
                     conflictCheckFailed: proposed.conflictCheckFailed ?? false
+                )
+            }
+            if let proposedUpdate = result.proposedScheduleUpdate {
+                updateProposal.propose(
+                    id: proposedUpdate.id,
+                    action: proposedUpdate.action,
+                    title: proposedUpdate.title,
+                    dateString: proposedUpdate.date,
+                    startTimeString: proposedUpdate.startTime?.isEmpty == false ? proposedUpdate.startTime : nil,
+                    endTimeString: proposedUpdate.endTime?.isEmpty == false ? proposedUpdate.endTime : nil,
+                    conflictTitle: proposedUpdate.conflictTitle,
+                    conflictCheckFailed: proposedUpdate.conflictCheckFailed ?? false
                 )
             }
         } catch ScheduleAPIError.server(_, let code, _, _) where code == "RESOURCE_NOT_FOUND" {
@@ -541,6 +631,7 @@ struct AgentSheet: View {
         isLoading = false
         showSessionGapNotice = false
         proposal.clear()
+        updateProposal.clear()
     }
 
     private func confirmProposal(_ draft: ProposedScheduleDraft) {
@@ -551,6 +642,52 @@ struct AgentSheet: View {
             messages.append(AgentMessage(role: .assistant, text: "'\(draft.title)' 일정을 저장했어요 ✓"))
         }
         withAnimation(.easeOut(duration: 0.2)) { proposal.clear() }
+    }
+
+    /// Applies an approved propose_schedule_update by dispatching to the
+    /// same ScheduleModel entry points the manual UI already uses (toggle/
+    /// move/delete) -- this never talks to the network directly, so it picks
+    /// up the exact same offline-outbox/optimistic-rollback/version-conflict
+    /// handling those already have, instead of a second, divergent path.
+    private func confirmScheduleUpdateProposal() {
+        guard let idString = updateProposal.id, let id = UUID(uuidString: idString),
+              let action = updateProposal.action else { return }
+        let title = updateProposal.title ?? "일정"
+
+        switch action {
+        case "complete":
+            // toggleDone silently no-ops for a non-task item (events have no
+            // completion state in this app) -- check first so the confirmation
+            // message never claims a change that didn't happen.
+            if scheduleStore.schedules.first(where: { $0.id == id })?.kind == .task {
+                scheduleStore.toggleDone(id: id)
+                messages.append(AgentMessage(role: .assistant, text: "'\(title)' 완료 처리했어요 ✓"))
+            } else {
+                messages.append(AgentMessage(role: .assistant, text: "'\(title)'은(는) 완료 처리할 수 없는 일정이에요.", isError: true))
+            }
+        case "reschedule":
+            let day = resolveAgentDateToken(updateProposal.dateString ?? "today")
+            var startAt: Date?
+            var endAt: Date?
+            if let startString = updateProposal.startTimeString,
+               let start = parseAgentTime(startString, on: day) {
+                startAt = start
+                endAt = updateProposal.endTimeString.flatMap { parseAgentTime($0, on: day) }
+                    ?? start.addingTimeInterval(3_600)
+            }
+            scheduleStore.move(id: id, to: day, startAt: startAt, endAt: endAt)
+            messages.append(AgentMessage(role: .assistant, text: "'\(title)' 일정을 옮겼어요 ✓"))
+        case "delete":
+            scheduleStore.delete(id: id)
+            messages.append(AgentMessage(role: .assistant, text: "'\(title)' 일정을 삭제했어요 ✓"))
+        default:
+            break
+        }
+        withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
+    }
+
+    private func declineScheduleUpdateProposal() {
+        withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
     }
 
     private func retry() {
