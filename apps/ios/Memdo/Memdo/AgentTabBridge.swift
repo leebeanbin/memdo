@@ -43,6 +43,10 @@ struct AgentTabBridge: UIViewRepresentable {
             scheduleUpdate()
         }
 
+        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+            false
+        }
+
         func scheduleUpdate() {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
@@ -52,11 +56,12 @@ struct AgentTabBridge: UIViewRepresentable {
     }
 
     @MainActor
-    final class Coordinator: NSObject {
+    final class Coordinator: NSObject, UITabBarControllerDelegate {
         var targetFrame: Binding<CGRect>
         var onTap: () -> Void
         private weak var tabButton: UIView?
-        private weak var tabBar: UITabBar?
+        private weak var tabBarController: UITabBarController?
+        private weak var forwardedDelegate: (any UITabBarControllerDelegate)?
         private let overlay = AgentHitControl()
 
         init(targetFrame: Binding<CGRect>, onTap: @escaping () -> Void) {
@@ -67,8 +72,6 @@ struct AgentTabBridge: UIViewRepresentable {
             overlay.isAccessibilityElement = true
             overlay.accessibilityLabel = "Memdo Agent 열기"
             overlay.accessibilityTraits = .button
-            overlay.addTarget(self, action: #selector(pressed), for: .touchDown)
-            overlay.addTarget(self, action: #selector(cancelled), for: [.touchCancel, .touchDragExit])
             overlay.addTarget(self, action: #selector(activated), for: .touchUpInside)
         }
 
@@ -76,7 +79,7 @@ struct AgentTabBridge: UIViewRepresentable {
             guard let window = probe.window,
                   let tabBar = findTabBar(in: window)
             else { return }
-            self.tabBar = tabBar
+            installSelectionInterceptor(in: window)
 
             let resolved: CGRect
             if let agentButton = tabButtons(in: tabBar).last {
@@ -84,8 +87,10 @@ struct AgentTabBridge: UIViewRepresentable {
                     overlay.removeFromSuperview()
                     tabBar.addSubview(overlay)
                 }
+                tabButton?.isUserInteractionEnabled = true
                 tabButton?.accessibilityElementsHidden = false
                 tabButton = agentButton
+                agentButton.isUserInteractionEnabled = false
                 agentButton.accessibilityElementsHidden = true
                 overlay.targetView = agentButton
                 overlay.frame = tabBar.bounds
@@ -96,8 +101,8 @@ struct AgentTabBridge: UIViewRepresentable {
             } else {
                 // Newer tab bars don't always expose per-item UIControls. Estimate
                 // the trailing item's slice from the bar itself so the coach mark
-                // still lands on Agent; taps keep working through the regular tab
-                // selection binding in AppShellView.
+                // still lands on Agent; the controller delegate continues to
+                // intercept selection before SwiftUI changes content.
                 let itemCount = max(tabBar.items?.count ?? AppTab.allCases.count, 1)
                 let itemWidth = tabBar.bounds.width / CGFloat(itemCount)
                 let slice = CGRect(
@@ -114,22 +119,55 @@ struct AgentTabBridge: UIViewRepresentable {
         }
 
         func removeOverlay() {
-            tabButton?.alpha = 1
+            tabButton?.isUserInteractionEnabled = true
             tabButton?.accessibilityElementsHidden = false
             overlay.removeFromSuperview()
-        }
-
-        @objc private func pressed() {
-            tabButton?.alpha = 0.55
-        }
-
-        @objc private func cancelled() {
-            tabButton?.alpha = 1
+            if tabBarController?.delegate === self {
+                tabBarController?.delegate = forwardedDelegate
+            }
         }
 
         @objc private func activated() {
-            tabButton?.alpha = 1
             onTap()
+        }
+
+        func tabBarController(
+            _ tabBarController: UITabBarController,
+            shouldSelect viewController: UIViewController
+        ) -> Bool {
+            guard viewController === tabBarController.viewControllers?.last else {
+                return forwardedDelegate?.tabBarController?(tabBarController, shouldSelect: viewController) ?? true
+            }
+            onTap()
+            return false
+        }
+
+        override func responds(to selector: Selector!) -> Bool {
+            super.responds(to: selector) || forwardedDelegate?.responds(to: selector) == true
+        }
+
+        override func forwardingTarget(for selector: Selector!) -> Any? {
+            if forwardedDelegate?.responds(to: selector) == true {
+                return forwardedDelegate
+            }
+            return super.forwardingTarget(for: selector)
+        }
+
+        private func installSelectionInterceptor(in window: UIWindow) {
+            guard let controller = findTabBarController(in: window.rootViewController) else { return }
+            tabBarController = controller
+            guard controller.delegate !== self else { return }
+            forwardedDelegate = controller.delegate
+            controller.delegate = self
+        }
+
+        private func findTabBarController(in controller: UIViewController?) -> UITabBarController? {
+            guard let controller else { return nil }
+            if let tabController = controller as? UITabBarController { return tabController }
+            for child in controller.children {
+                if let tabController = findTabBarController(in: child) { return tabController }
+            }
+            return nil
         }
 
         private func findTabBar(in view: UIView) -> UITabBar? {
