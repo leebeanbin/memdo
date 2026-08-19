@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		00D267B5D29A0D25FE6E98FA /* MemdoTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F29F2315ADA3175E0D4A894C /* MemdoTheme.swift */; };
+		048C8F30632F364BD0918E91 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 54A9DCC8471814155094BAFF /* AppIcon.icon */; };
 		05A16520EDB91AFE6AA6B061 /* ShareWorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9BC3B0CEFE2D4C6854CE6D /* ShareWorkoutView.swift */; };
 		07C63312BBCA02E3A38CDA86 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 592EA12B6FF1AB799EF6869C /* ShareViewController.swift */; };
 		08DE99AB607725B2E3D52207 /* MemdoShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7E846EC17F4BCC9B7757596E /* MemdoShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -112,6 +113,7 @@
 		3CB5605FC7B8059A8343A9D8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		420E092EB2A4627375577F43 /* SlackNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackNotifier.swift; sourceTree = "<group>"; };
 		42994A317F898780763B33D4 /* MemdoComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoComponents.swift; sourceTree = "<group>"; };
+		54A9DCC8471814155094BAFF /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		592EA12B6FF1AB799EF6869C /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		5DE3D42537298C53BC842A35 /* WorkoutViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutViews.swift; sourceTree = "<group>"; };
 		6561C352731005322618C740 /* DailySummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySummaryView.swift; sourceTree = "<group>"; };
@@ -206,6 +208,7 @@
 			isa = PBXGroup;
 			children = (
 				DC83A92A9DA90179F3E5254E /* AgentTabBridge.swift */,
+				54A9DCC8471814155094BAFF /* AppIcon.icon */,
 				B4D119A0D929FA9AE7D47773 /* AppShellView.swift */,
 				25993FA0A6C348E04CC8573E /* AppShortcuts.swift */,
 				A5FCF0E385E87960B56A11F4 /* Assets.xcassets */,
@@ -377,6 +380,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				048C8F30632F364BD0918E91 /* AppIcon.icon in Resources */,
 				78FEB722CFF3DC8EE7034FBD /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

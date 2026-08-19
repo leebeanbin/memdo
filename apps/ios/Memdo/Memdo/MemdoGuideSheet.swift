@@ -88,11 +88,11 @@ struct MemdoGuideSheet: View {
                     Button("닫기") { dismiss() }
                 }
             }
-            .sheet(isPresented: $showsWallpaperPreview) {
-                WallpaperPreviewSheet()
-            }
         }
         .memdoSheetPresentation([.large])
+        .fullScreenCover(isPresented: $showsWallpaperPreview) {
+            WallpaperPreviewSheet { showsWallpaperPreview = false }
+        }
         .onChange(of: hideWidgetContent) { _, value in
             WidgetCenter.shared.reloadAllTimelines()
             guard session.preferencesStore?.preferences?.hideWidgetContent != value else { return }
