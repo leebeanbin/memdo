@@ -1,3 +1,4 @@
+import Observation
 import SwiftUI
 
 enum AppTab: String, CaseIterable {
@@ -38,6 +39,7 @@ struct AppShellView: View {
     @State private var showCalendarSearch = false
     @State private var calendarTargetDate: Date?
     @State private var presentedSheet: AppSheetDestination?
+    @State private var agentSheetRouter = AgentSheetRouter()
     @State private var agentComposer = ""
     @State private var agentMessages: [AgentMessage] = []
     @State private var coachMarkTour: CoachMarkTour?
@@ -60,11 +62,16 @@ struct AppShellView: View {
             .modifier(
                 AppShellBehavior(
                     presentedSheet: $presentedSheet,
-                    agentComposer: $agentComposer,
-                    agentMessages: $agentMessages,
                     onStartCoachMarkTour: startCoachMarks
                 )
             )
+            .background {
+                AgentSheetPresenter(
+                    router: agentSheetRouter,
+                    composer: $agentComposer,
+                    messages: $agentMessages
+                )
+            }
             .environment(scheduleStore)
             .task { await scheduleStore.load() }
             .task { await workoutStore.load() }
@@ -194,7 +201,6 @@ struct AppShellView: View {
         }
         .overlay {
             AgentTabBridge(targetFrame: $agentTabFrame, onTap: openAgent)
-                .allowsHitTesting(false)
         }
         .overlay {
             if !agentTabFrame.isEmpty {
@@ -268,11 +274,10 @@ struct AppShellView: View {
     }
 
     private func openAgent() {
-        if session.phase == .guest {
-            presentedSheet = .guestLoginGate
-        } else {
-            presentedSheet = .agent(lastContentTab.agentContext)
-        }
+        agentSheetRouter.present(
+            lastContentTab.agentContext,
+            requiresLogin: session.phase == .guest
+        )
     }
 
     // Creates a schedule from an App Intent-driven capture. Uses the first
@@ -363,44 +368,75 @@ private extension URL {
 }
 
 private enum AppSheetDestination: Identifiable {
-    case agent(AgentContext)
     case guide
     case summary
-    case guestLoginGate
 
     var id: String {
         switch self {
-        case .agent: "agent"
         case .guide: "guide"
         case .summary: "summary"
-        case .guestLoginGate: "guestLoginGate"
         }
     }
 }
 
 private struct AppShellBehavior: ViewModifier {
     @Binding var presentedSheet: AppSheetDestination?
-    @Binding var agentComposer: String
-    @Binding var agentMessages: [AgentMessage]
     let onStartCoachMarkTour: (CoachMarkTour) -> Void
 
     func body(content: Content) -> some View {
         content.sheet(item: $presentedSheet) { destination in
             switch destination {
-            case .agent(let context):
-                AgentSheet(
-                    composer: $agentComposer,
-                    messages: $agentMessages,
-                    context: context
-                )
             case .guide:
                 MemdoGuideSheet(onStartCoachMarkTour: onStartCoachMarkTour)
             case .summary:
                 DailySummaryView()
-            case .guestLoginGate:
-                GuestLoginGateSheet()
             }
         }
+    }
+}
+
+@MainActor
+@Observable
+private final class AgentSheetRouter {
+    var destination: AgentSheetDestination?
+
+    func present(_ context: AgentContext, requiresLogin: Bool) {
+        destination = requiresLogin ? .guestLoginGate : .agent(context)
+    }
+}
+
+private enum AgentSheetDestination: Identifiable {
+    case agent(AgentContext)
+    case guestLoginGate
+
+    var id: String {
+        switch self {
+        case .agent: "agent"
+        case .guestLoginGate: "guestLoginGate"
+        }
+    }
+}
+
+private struct AgentSheetPresenter: View {
+    @Bindable var router: AgentSheetRouter
+    @Binding var composer: String
+    @Binding var messages: [AgentMessage]
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .sheet(item: $router.destination) { destination in
+                switch destination {
+                case .agent(let context):
+                    AgentSheet(
+                        composer: $composer,
+                        messages: $messages,
+                        context: context
+                    )
+                case .guestLoginGate:
+                    GuestLoginGateSheet()
+                }
+            }
     }
 }
 
