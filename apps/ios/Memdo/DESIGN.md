@@ -101,8 +101,9 @@ flowchart LR
 | Accent | `label` | 선택과 주요 행동의 흑백 대비 |
 | On Accent | `systemBackground` | 선택 면 위 전경 |
 | Accent Soft | `tertiarySystemFill` | 선택 전 보조 표면 |
-| Brand | Light `#5C4DB8`, Dark `#B8ABFF` | 로고·eyebrow·할 일·Agent 근거 |
-| Brand Soft | appearance별 저채도 variant | 브랜드 아이콘의 작은 배경 |
+| Brand | Light `#FEB926`, Dark `#FFC759` | 로고·eyebrow·할 일·Agent 근거 |
+| On Brand | `black` | Brand 면 위의 접근성 전경 |
+| Brand Soft | Light `#FFF7DE`, Dark `#473814` | 브랜드 아이콘의 작은 배경 |
 
 화면 면적은 무채색 90%, 재질과 구분 8%, 브랜드 포인트 2%를 기준으로 한다. 색상은 의미의 유일한 전달 수단으로 사용하지 않으며 선택 상태에는 형태·아이콘·텍스트를 함께 사용한다.
 
@@ -323,6 +324,8 @@ Apple SF Symbols를 기본 아이콘 세트로 사용한다. 한 화면에서 �
 | 날짜 변경 | 선택 날짜의 일정·완료 수·빈 상태·추가 대상 날짜를 함께 갱신 |
 
 ### 7.4 하단 버튼
+
+해당 없음. 오늘 화면에는 고정 하단 버튼을 두지 않는다. 새 일정은 일정 섹션의 `44×44pt` `+` 아이콘과 날짜 길게 누르기로 시작하고, 완료·이동처럼 일정별 행동은 해당 행의 문맥 안에서 제공한다. 하단은 시스템 탭 바의 탐색·Agent 액션 영역으로만 사용한다.
 
 ### 7.5 일정 탐색과 상세 흐름
 
@@ -665,6 +668,10 @@ AI가 제안한 일정도 사용자가 승인한 뒤에는 일반 일정과 동�
 | Summary History Row | 지난 기간의 완료 작업과 놓친 작업 표시 |
 | `MemdoChoiceButton` | 2–5개의 짧은 선택 항목, 체크 아이콘, 선택 접근성 상태 |
 | `MemdoIconButtonLabel` | 아이콘 버튼의 `44×44pt` 터치 영역 |
+| `MemdoPrimaryActionButtonStyle` | 저장·연결·확인처럼 화면의 핵심 긍정 행동을 Brand 면과 On Brand 전경으로 표시 |
+| `MemdoSecondaryActionButtonStyle` | 다시 시도·취소·보조 행동을 Secondary Ink와 낮은 대비 표면으로 표시 |
+| `MemdoDestructiveActionButtonStyle` | 삭제·연결 해제처럼 파괴적 행동을 system red semantic 토큰으로 표시 |
+| `MemdoIconButtonStyle` | `MemdoIconButtonLabel`의 `44×44pt` 영역과 누름 피드백을 공통 적용 |
 | `MemdoScheduleCountDots` | 오늘·월간 캘린더의 일정 수를 같은 1–3개 밀도 점으로 표시 |
 | `memdoFloatingSurface` | 검색·필터·헤더 액션·composer의 interactive Glass와 구버전 material fallback |
 | `memdoRowGroup` | 반복 콘텐츠의 상하 Divider 경계를 한 곳에서 적용 |

@@ -1022,10 +1022,15 @@ private struct CloudAgentConnectionSheet: View {
     @State private var isConnected: Bool?
     @State private var draftKey = ""
     @State private var isBusy = false
+    @State private var isLoadingDetails = false
     @State private var errorMessage: String?
+    @State private var detailErrorMessage: String?
     @State private var showDisconnectConfirm = false
+    @State private var models: [AgentModelDTO] = []
+    @State private var usage: AgentUsageResponseDTO?
     @State private var selectedModel = CloudAgentModelPreference.selected
-        ?? CloudAgentModelPreference.options[0].id
+        ?? CloudAgentModelPreference.defaultID
+    @AppStorage("memdo.v1.agentShowsActualCost") private var showsActualCost = false
 
     private var canConnect: Bool {
         draftKey.trimmingCharacters(in: .whitespacesAndNewlines).count >= 20
@@ -1034,41 +1039,16 @@ private struct CloudAgentConnectionSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    MCPToolIdentityRow(
-                        icon: .system("cloud"),
-                        title: "클라우드 Agent",
-                        summary: "OpenRouter API 키로 온디바이스가 못 하는 일(일정 검색 등)을 처리해요."
-                    )
-                } header: {
-                    Text("클라우드 Agent")
-                }
-                Section("연결하면 가능한 일") {
-                    Label("과거·예정 일정을 검색해 답변", systemImage: "magnifyingglass")
-                    Label("Apple Intelligence 미지원 기기에서도 사용", systemImage: "iphone")
-                }
-                Section("권한 원칙") {
-                    Label("승인 전에는 아무것도 저장·변경하지 않음", systemImage: "checkmark.shield")
-                    Label("일정 검색 결과만 모델에 전달, 다른 데이터는 안 보냄", systemImage: "lock")
-                }
-
                 if isConnected == true {
-                    Section {
-                        Picker("모델", selection: $selectedModel) {
-                            ForEach(CloudAgentModelPreference.options, id: \.id) { option in
-                                Text(option.label).tag(option.id)
-                            }
+                    Section("API 키") {
+                        LabeledContent("OpenRouter") {
+                            Label("연결됨", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(MemdoTheme.brand)
                         }
-                        .onChange(of: selectedModel) { _, value in
-                            CloudAgentModelPreference.selected = value
-                        }
-                    } footer: {
-                        Text("대화가 조금 더 정교해질 수 있어요. 요금은 OpenRouter 계정으로 청구돼요.")
-                    }
-                    Section {
                         Button("연결 해제", role: .destructive) {
                             showDisconnectConfirm = true
                         }
+                        .buttonStyle(MemdoDestructiveActionButtonStyle())
                         .disabled(isBusy)
                     }
                 } else if isConnected == false {
@@ -1089,11 +1069,16 @@ private struct CloudAgentConnectionSheet: View {
                                 Text("연결")
                             }
                         }
+                        .buttonStyle(MemdoPrimaryActionButtonStyle())
                         .disabled(!canConnect || isBusy)
                     } header: {
-                        Text("OpenRouter API 키")
+                        Text("API 키")
                     } footer: {
                         Text("openrouter.ai에서 계정을 만들고 API 키를 발급받아 붙여넣으세요.")
+                    }
+                } else {
+                    Section("API 키") {
+                        ProgressView("연결 상태 확인 중")
                     }
                 }
 
@@ -1101,7 +1086,65 @@ private struct CloudAgentConnectionSheet: View {
                     Section {
                         Text(errorMessage)
                             .font(.caption)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(MemdoTheme.destructive)
+                    }
+                }
+
+                Section {
+                    if isConnected == true {
+                        if models.isEmpty {
+                            loadingRow(isLoadingDetails ? "모델을 불러오는 중" : "모델을 불러오지 못했어요")
+                        } else {
+                            ForEach(models) { model in
+                                modelRow(model)
+                            }
+                        }
+                    } else if isConnected == false {
+                        disconnectedRow
+                    } else {
+                        ProgressView("연결 상태 확인 중")
+                    }
+                } header: {
+                    Text("모델 선택")
+                } footer: {
+                    if isConnected == true {
+                        Text("가격은 OpenRouter의 현재 1M 토큰당 요금이에요.")
+                    }
+                }
+
+                Section("사용량") {
+                    if isConnected == true {
+                        Toggle("실제 비용 표시", isOn: $showsActualCost)
+                            .memdoToggle()
+                        if let usage {
+                            LabeledContent("이번 30일", value: "\(usage.totalRequests)회")
+                            if showsActualCost {
+                                LabeledContent("실제 비용", value: usageCost(usage.totalCostUsd))
+                                    .monospacedDigit()
+                            }
+                            ForEach(usage.recent) { item in
+                                usageRow(item)
+                            }
+                        } else {
+                            loadingRow(isLoadingDetails ? "사용량을 불러오는 중" : "사용량을 불러오지 못했어요")
+                        }
+                    } else if isConnected == false {
+                        disconnectedRow
+                    } else {
+                        ProgressView("연결 상태 확인 중")
+                    }
+                }
+
+                if let detailErrorMessage, isConnected == true {
+                    Section {
+                        Label(detailErrorMessage, systemImage: "exclamationmark.circle")
+                            .font(.caption)
+                            .foregroundStyle(MemdoTheme.destructive)
+                        Button("다시 시도") {
+                            Task { await loadConnectedContent() }
+                        }
+                        .buttonStyle(MemdoSecondaryActionButtonStyle())
+                        .disabled(isLoadingDetails)
                     }
                 }
             }
@@ -1126,8 +1169,91 @@ private struct CloudAgentConnectionSheet: View {
         .task { await loadStatus() }
     }
 
+    private var disconnectedRow: some View {
+        Label("먼저 연결하세요", systemImage: "link")
+            .foregroundStyle(MemdoTheme.secondaryInk)
+            .frame(minHeight: MemdoMetrics.touchTarget)
+    }
+
+    @ViewBuilder
+    private func loadingRow(_ title: String) -> some View {
+        if isLoadingDetails {
+            ProgressView(title)
+                .frame(minHeight: MemdoMetrics.touchTarget)
+        } else {
+            Label(title, systemImage: "exclamationmark.circle")
+                .foregroundStyle(MemdoTheme.secondaryInk)
+                .frame(minHeight: MemdoMetrics.touchTarget)
+        }
+    }
+
+    private func modelRow(_ model: AgentModelDTO) -> some View {
+        Button {
+            selectedModel = model.id
+            CloudAgentModelPreference.selected = model.id
+        } label: {
+            HStack(spacing: MemdoMetrics.rowSpacing) {
+                Group {
+                    if selectedModel == model.id {
+                        Image(systemName: "checkmark")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                }
+                .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
+                .accessibilityHidden(true)
+                Text(model.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MemdoTheme.ink)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text(modelPrice(model))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .padding(.horizontal, MemdoMetrics.rowInset)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(.init())
+        .accessibilityLabel("\(model.name), \(modelPrice(model))")
+        .accessibilityAddTraits(selectedModel == model.id ? .isSelected : [])
+    }
+
+    private func usageRow(_ item: AgentUsageItemDTO) -> some View {
+        HStack(spacing: MemdoMetrics.rowSpacing) {
+            Image(systemName: "clock.arrow.circlepath")
+                .foregroundStyle(MemdoTheme.secondaryInk)
+                .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(models.first(where: { $0.id == item.model })?.name ?? item.model)
+                    .font(.subheadline)
+                    .lineLimit(1)
+                Text(usageDate(item.createdAt))
+                    .font(.caption2)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+            Spacer(minLength: 8)
+            if showsActualCost {
+                Text(usageCost(item.costUsd))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+        }
+        .padding(.horizontal, MemdoMetrics.rowInset)
+        .listRowInsets(.init())
+    }
+
     private func loadStatus() async {
-        isConnected = (try? await scheduleStore.agentKeyConnected()) == true
+        do {
+            isConnected = try await scheduleStore.agentKeyConnected()
+            if isConnected == true { await loadConnectedContent() }
+        } catch {
+            isConnected = false
+            errorMessage = "연결 상태를 확인하지 못했어요."
+        }
     }
 
     private func connect() async {
@@ -1138,6 +1264,7 @@ private struct CloudAgentConnectionSheet: View {
             try await scheduleStore.saveAgentKey(draftKey.trimmingCharacters(in: .whitespacesAndNewlines))
             draftKey = ""
             isConnected = true
+            await loadConnectedContent()
         } catch {
             errorMessage = "연결하지 못했어요. 키를 확인해 주세요."
         }
@@ -1150,9 +1277,54 @@ private struct CloudAgentConnectionSheet: View {
         do {
             try await scheduleStore.deleteAgentKey()
             isConnected = false
+            models = []
+            usage = nil
         } catch {
             errorMessage = "연결 해지에 실패했어요. 잠시 후 다시 시도해 주세요."
         }
+    }
+
+    private func loadConnectedContent() async {
+        isLoadingDetails = true
+        detailErrorMessage = nil
+        defer { isLoadingDetails = false }
+
+        do {
+            models = try await scheduleStore.agentModels()
+            if !models.contains(where: { $0.id == selectedModel }), let first = models.first {
+                selectedModel = first.id
+                CloudAgentModelPreference.selected = first.id
+            }
+        } catch {
+            models = []
+            detailErrorMessage = "모델 목록을 불러오지 못했어요."
+        }
+
+        do {
+            usage = try await scheduleStore.agentUsage()
+        } catch {
+            usage = nil
+            detailErrorMessage = [detailErrorMessage, "사용량을 불러오지 못했어요."]
+                .compactMap { $0 }
+                .joined(separator: " ")
+        }
+    }
+
+    private func modelPrice(_ model: AgentModelDTO) -> String {
+        "in \(usd(model.promptPricePerM, digits: 2)) · out \(usd(model.completionPricePerM, digits: 2)) /1M"
+    }
+
+    private func usageCost(_ cost: Double) -> String {
+        usd(cost, digits: 6)
+    }
+
+    private func usd(_ value: Double, digits: Int) -> String {
+        "$" + String(format: "%.*f", locale: Locale(identifier: "en_US_POSIX"), digits, value)
+    }
+
+    private func usageDate(_ value: String) -> String {
+        guard let date = ISO8601DateFormatter().date(from: value) else { return value }
+        return date.formatted(.dateTime.month().day().hour().minute())
     }
 }
 

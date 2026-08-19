@@ -548,6 +548,14 @@ final class ScheduleStore {
         try await repository.deleteAgentKey()
     }
 
+    func agentModels() async throws -> [AgentModelDTO] {
+        try await repository.agentModels()
+    }
+
+    func agentUsage(days: Int = 30) async throws -> AgentUsageResponseDTO {
+        try await repository.agentUsage(days: days)
+    }
+
     func agentCloudChat(
         message: String,
         history: [AgentChatTurnDTO],
