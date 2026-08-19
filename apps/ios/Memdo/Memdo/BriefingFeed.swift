@@ -270,7 +270,7 @@ actor BriefingRepository {
 
     // MARK: - On-device AI Summary
 
-    private static let summaryCacheKey = "briefing-summary-cache"
+    private static let summaryCacheKey = "briefing-summary-cache-v5"
 
     /// Generates a Korean trend summary from the top articles using the on-device model.
     /// Returns a cached result for the same day + same category/keyword combination.
@@ -298,9 +298,9 @@ actor BriefingRepository {
         }.joined(separator: "\n")
 
         let session = LanguageModelSession(
-            instructions: "너는 한국어 뉴스 요약 전문가야. 관심 분야 뉴스 헤드라인을 받아서 2–3문장의 핵심 트렌드 요약을 작성해. 인사말 없이 바로 시작해."
+            instructions: "관심 분야 뉴스에서 연결되는 구체적인 변화 하나를 한국어 편집 헤드라인으로 써. 숫자·기업명·기술명 중 하나를 반드시 포함하고, 독자가 다음 내용을 궁금해하게 만들어. 과장과 낚시는 금지해. 22~36자, 최대 두 줄, 마침표 없이 제목만 출력해. '미치는 영향', '전망', '동향', '주목', '가속화', '혁신' 같은 추상 표현은 쓰지 마."
         )
-        let prompt = "오늘의 주요 뉴스:\n\(headlines)\n\n핵심 트렌드를 2–3문장으로 요약해줘."
+        let prompt = "오늘의 주요 뉴스:\n\(headlines)\n\n기사 사이의 연결이 보이는 구체적인 제목 하나를 써줘."
 
         guard let response = try? await session.respond(to: prompt) else { return nil }
         let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)

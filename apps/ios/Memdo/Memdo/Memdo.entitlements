@@ -2,8 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- com.apple.developer.healthkit requires a paid Apple Developer Program
+	     membership and can't be provisioned under a free personal-team
+	     signing identity, which blocks real-device builds entirely. Commented
+	     out (not deleted) for local device testing -- restore before any
+	     build that needs the workout HealthKit import feature. -->
+	<!--
 	<key>com.apple.developer.healthkit</key>
 	<true/>
+	-->
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.memdo.ios</string>

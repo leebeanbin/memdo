@@ -16,21 +16,10 @@ struct AgentMessage: Identifiable, Equatable {
 
 // MARK: - Cloud model preference
 
-/// Which OpenRouter model the cloud path requests. Must stay in sync with
-/// ALLOWED_OPENROUTER_MODELS in agent-cloud-contract.ts -- the server
-/// re-validates this list itself rather than trusting the client, so a
-/// stale/tampered value here just gets rejected, not silently forwarded.
+/// The selected model id comes from the authenticated agent-models endpoint.
+/// The backend remains the source of truth and validates this value again.
 enum CloudAgentModelPreference {
-    // Verified live against https://openrouter.ai/api/v1/models on
-    // 2026-08-16 -- must stay in sync with ALLOWED_OPENROUTER_MODELS in
-    // agent-cloud-contract.ts by hand. The server re-validates regardless,
-    // so a stale entry here just gets rejected rather than forwarded.
-    static let options: [(id: String, label: String)] = [
-        ("openai/gpt-5.4-mini", "GPT-5.4 mini (기본, 빠름)"),
-        ("openai/gpt-5.6-sol", "GPT-5.6 Sol"),
-        ("anthropic/claude-sonnet-5", "Claude Sonnet 5"),
-        ("google/gemini-3.5-flash", "Gemini 3.5 Flash"),
-    ]
+    static let defaultID = "openai/gpt-5.4-mini"
     private static let key = "memdo.v1.cloudAgentModel"
 
     static var selected: String? {

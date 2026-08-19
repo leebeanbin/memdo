@@ -15,7 +15,6 @@ struct SettingsView: View {
     let coachMarkTarget: CoachMarkTarget?
     let onStartCoachMarkTour: ((CoachMarkTour) -> Void)?
     @Environment(MemdoSession.self) private var session
-    @Environment(ScheduleStore.self) private var scheduleStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showKeywordHint = false
     @State private var dailySummary = true
@@ -28,11 +27,7 @@ struct SettingsView: View {
     @State private var customKeywords: [String]
     @State private var briefingCategories: Set<String>
     @State private var presentedSheet: SettingsSheet?
-    @State private var googleCalendarConnected: Bool? = nil
-    @State private var cloudAgentConnected: Bool? = nil
-    // Keychain-backed (see SlackNotifier), refreshed on appear and whenever
-    // the Slack sheet is dismissed -- @AppStorage can't watch Keychain.
-    @State private var slackConnected = false
+    @State private var showsWallpaperPreview = false
     @State private var showsSignOutConfirmation = false
     @State private var summaryTimePushTask: Task<Void, Never>?
     @State private var promptTimePushTask: Task<Void, Never>?
@@ -66,8 +61,8 @@ struct SettingsView: View {
     var body: some View {
         MemdoPage(
             title: "설정",
-            subtitle: "Memdo를 나에게 맞게 조정하세요",
-            eyebrow: "나만의 Memdo",
+            subtitle: "",
+            eyebrow: "",
             bottomClearance: coachMarkTarget == nil
                 ? MemdoMetrics.tabBarClearance
                 : MemdoMetrics.tabBarClearance + 280,
@@ -85,7 +80,7 @@ struct SettingsView: View {
                 .buttonStyle(.plain)
             }
 
-            SettingsGroup(title: "하루") {
+            SettingsGroup(title: "하루", icon: "sun.max") {
                 Toggle("오늘 요약", isOn: $dailySummary)
                     .memdoToggle()
                     .memdoSettingsRow()
@@ -112,8 +107,8 @@ struct SettingsView: View {
             .id(CoachMarkTarget.settingsDay)
             .coachMarkTarget(.settingsDay)
 
-            SettingsGroup(title: "위젯") {
-                Button { presentedSheet = .wallpaperPreview } label: {
+            SettingsGroup(title: "위젯", icon: "rectangle.grid.2x2") {
+                Button { showsWallpaperPreview = true } label: {
                     SettingsDisclosureRow(title: "전체 달력 배경화면", value: "미리보기 · 저장")
                 }
                 .buttonStyle(.plain)
@@ -121,67 +116,16 @@ struct SettingsView: View {
             .id(CoachMarkTarget.settingsWidget)
             .coachMarkTarget(.settingsWidget)
 
-            SettingsGroup(
-                title: "내 Agent 연결",
-                subtitle: "서비스는 MCP 도구로 연결되고, 실행은 항상 내 확인을 거쳐요."
-            ) {
-                Button { presentedSheet = .googleCalendar } label: {
-                    AgentConnectionRow(
-                        icon: .asset("GoogleCalendar"),
-                        title: "Google Calendar",
-                        capability: "일정 읽기 전용",
-                        status: googleCalendarConnected == nil ? "확인 중" : googleCalendarConnected == true ? "연결됨" : "미연결",
-                        badge: nil
-                    )
-                }
-                .buttonStyle(.plain)
-                Divider()
-                Button { presentedSheet = .slack } label: {
-                    AgentConnectionRow(
-                        icon: .asset("Slack"),
-                        title: "Slack",
-                        capability: "새 일정·완료 알림",
-                        status: slackConnected ? "연결됨" : "미연결",
-                        badge: nil
-                    )
-                }
-                .buttonStyle(.plain)
-                Divider()
-                Button { presentedSheet = .cloudAgent } label: {
-                    AgentConnectionRow(
-                        icon: .system("cloud"),
-                        title: "클라우드 Agent",
-                        capability: "일정 검색 · 빈 시간 찾기",
-                        status: cloudAgentConnected == nil ? "확인 중" : cloudAgentConnected == true ? "연결됨" : "미연결",
-                        badge: nil
-                    )
-                }
-                .buttonStyle(.plain)
-                Divider()
-                Button { presentedSheet = .aiConsent } label: {
-                    AgentConnectionRow(
-                        icon: .memdo,
-                        title: "Memdo Agent",
-                        capability: "일정 제목 · 시간만 사용",
-                        status: "범위 설정"
-                    )
-                }
-                .buttonStyle(.plain)
-                Divider()
-                Button { presentedSheet = .privacy } label: {
-                    AgentConnectionRow(
-                        icon: .system("hand.raised.fill"),
-                        title: "데이터 관리",
-                        capability: "보관 · 철회 · 연결 해제",
-                        status: "확인"
-                    )
+            SettingsGroup(title: "Agent", icon: "sparkles") {
+                Button { presentedSheet = .agentSettings } label: {
+                    SettingsDisclosureRow(title: "연결 및 권한", value: "관리")
                 }
                 .buttonStyle(.plain)
             }
             .id(CoachMarkTarget.settingsConnections)
             .coachMarkTarget(.settingsConnections)
 
-            SettingsGroup(title: "계정") {
+            SettingsGroup(title: "계정", icon: "person.crop.circle") {
                 if session.phase == .guest {
                     GuestUpgradeRow(onUpgrade: { presentedSheet = .guestUpgrade })
                     Divider()
@@ -210,9 +154,6 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(session.accountLabel)
                                 .font(.subheadline.weight(.semibold))
-                            Text(session.providerLabel)
-                                .font(.caption)
-                                .foregroundStyle(MemdoTheme.secondaryInk)
                         }
                         Spacer()
                         Button { showsSignOutConfirmation = true } label: {
@@ -236,7 +177,7 @@ struct SettingsView: View {
             }
 
             if let onStartCoachMarkTour {
-                SettingsGroup(title: "도움말") {
+                SettingsGroup(title: "도움말", icon: "questionmark.circle") {
                     Button {
                         onStartCoachMarkTour(.app)
                     } label: {
@@ -272,27 +213,20 @@ struct SettingsView: View {
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
-            case .aiConsent:
-                AIConsentSheet()
+            case .agentSettings:
+                AgentSettingsSheet()
             case .briefingKeywords:
                 BriefingKeywordsSheet(
                     selectedCategories: $briefingCategories,
                     selectedKeywords: $briefingKeywords,
                     customKeywords: $customKeywords
                 )
-            case .privacy:
-                PrivacySheet()
-            case .slack:
-                SlackConnectionSheet()
-            case .googleCalendar:
-                GoogleCalendarConnectionSheet()
-            case .cloudAgent:
-                CloudAgentConnectionSheet()
             case .guestUpgrade:
                 GuestUpgradeSheet()
-            case .wallpaperPreview:
-                WallpaperPreviewSheet()
             }
+        }
+        .fullScreenCover(isPresented: $showsWallpaperPreview) {
+            WallpaperPreviewSheet { showsWallpaperPreview = false }
         }
         .sensoryFeedback(.selection, trigger: briefingKeywords)
         .sensoryFeedback(.selection, trigger: briefingCategories)
@@ -306,17 +240,9 @@ struct SettingsView: View {
             UserDefaults.standard.set(Array(value).sorted(), forKey: Self.selectedCategoriesKey)
         }
         .task { await loadPreferences() }
-        .task { await loadGoogleCalendarStatus() }
-        .task { await loadCloudAgentStatus() }
-        .task { slackConnected = !SlackNotifier.webhookURL.isEmpty }
         .onChange(of: presentedSheet) { oldSheet, sheet in
-            guard sheet == nil else { return }
-            if oldSheet == .briefingKeywords {
-                withAnimation(reduceMotion ? nil : .easeIn) { showKeywordHint = true }
-            }
-            Task { await loadGoogleCalendarStatus() }
-            Task { await loadCloudAgentStatus() }
-            slackConnected = !SlackNotifier.webhookURL.isEmpty
+            guard sheet == nil, oldSheet == .briefingKeywords else { return }
+            withAnimation(reduceMotion ? nil : .easeIn) { showKeywordHint = true }
         }
         .overlay(alignment: .bottom) { keywordHint }
         .onChange(of: dailySummary) { _, value in
@@ -376,14 +302,6 @@ struct SettingsView: View {
     private func push(_ transform: @escaping (inout UserPreferences) -> Void) {
         guard session.preferencesStore != nil else { return }
         Task { await session.preferencesStore?.update(transform) }
-    }
-
-    private func loadGoogleCalendarStatus() async {
-        googleCalendarConnected = (try? await scheduleStore.googleCalendarStatus())?.connected == true
-    }
-
-    private func loadCloudAgentStatus() async {
-        cloudAgentConnected = (try? await scheduleStore.agentKeyConnected()) == true
     }
 
     @ViewBuilder
@@ -449,6 +367,7 @@ private struct AgentConnectionRow: View {
     let capability: String
     let status: String
     var badge: String?
+    var showsChevron = true
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -486,10 +405,12 @@ private struct AgentConnectionRow: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
-            Image(systemName: "chevron.right")
-                .font(.caption.bold())
-                .foregroundStyle(MemdoTheme.secondaryInk)
-                .accessibilityHidden(true)
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+                    .accessibilityHidden(true)
+            }
         }
         .multilineTextAlignment(.leading)
         .padding(.vertical, 4)
@@ -567,14 +488,9 @@ private struct SettingsTimePicker: View {
 }
 
 private enum SettingsSheet: String, Identifiable {
-    case aiConsent
+    case agentSettings
     case briefingKeywords
-    case cloudAgent
-    case googleCalendar
     case guestUpgrade
-    case privacy
-    case slack
-    case wallpaperPreview
     var id: String { rawValue }
 }
 
@@ -605,63 +521,75 @@ private struct BriefingKeywordsSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
+                VStack(alignment: .leading, spacing: 28) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        sectionHeader(
+                            title: "관심 분야",
+                            count: "\(selectedCategories.count)/\(BriefingFeedCategory.allCases.count)"
+                        )
+                        Text("선택한 분야의 RSS 소스에서 뉴스를 가져와요.")
+                            .font(.subheadline)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
 
-                    // MARK: Category selection (primary)
-                    Text("관심 분야를 선택하면 해당 RSS 뉴스를 가져와요.")
-                        .font(.subheadline)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
-
-                    MemdoSection(title: "관심 분야") {
-                        LazyVGrid(
-                            columns: [GridItem(.adaptive(minimum: 96), spacing: 8)],
-                            alignment: .leading,
-                            spacing: 8
-                        ) {
+                        ScrollView(.horizontal) {
+                            LazyHStack(spacing: 8) {
                             ForEach(BriefingFeedCategory.allCases) { category in
                                 MemdoChoiceButton(
                                     title: category.rawValue,
+                                    systemImage: category.systemImage,
                                     isSelected: selectedCategories.contains(category.rawValue),
                                     action: { toggleCategory(category) }
                                 )
                             }
                         }
-                        .padding(.horizontal, MemdoMetrics.rowInset)
-                        .padding(.vertical, 12)
-                    }
-
-                    // MARK: Keyword refinement (optional)
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("키워드 (선택 사항)")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(MemdoTheme.secondaryInk)
-                        Text("키워드를 추가하면 해당 단어가 포함된 기사만 표시돼요.")
-                            .font(.caption)
-                            .foregroundStyle(MemdoTheme.secondaryInk)
-                    }
-
-                    HStack(spacing: 8) {
-                        TextField("키워드 입력", text: $draft)
-                            .submitLabel(.done)
-                            .onSubmit(addKeyword)
-                        Button(action: addKeyword) {
-                            MemdoIconButtonLabel(systemImage: "plus")
                         }
-                        .buttonStyle(.plain)
-                        .disabled(!canAddKeyword)
-                        .accessibilityLabel("브리핑 키워드 추가")
+                        .scrollIndicators(.hidden)
+                        .scrollClipDisabled()
                     }
-                    .padding(.leading, 12)
-                    .padding(.trailing, 4)
-                    .frame(minHeight: MemdoMetrics.touchTarget)
-                    .memdoFloatingSurface()
 
-                    MemdoSection(title: "키워드", trailing: "\(selectedKeywords.count)/\(SettingsDefaults.keywordMaxCount)") {
-                        LazyVGrid(
-                            columns: [GridItem(.adaptive(minimum: 88), spacing: 8)],
-                            alignment: .leading,
-                            spacing: 8
-                        ) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        sectionHeader(
+                            title: "키워드",
+                            count: "\(selectedKeywords.count)/\(SettingsDefaults.keywordMaxCount)"
+                        )
+                        Text("선택한 단어가 포함된 기사를 우선 표시해요. 최대 5개까지 선택할 수 있어요.")
+                            .font(.subheadline)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+
+                        HStack(spacing: 0) {
+                            TextField(
+                                selectedKeywords.count == SettingsDefaults.keywordMaxCount
+                                    ? "키워드를 선택 해제해 주세요"
+                                    : "새 키워드",
+                                text: $draft
+                            )
+                            .padding(.leading, 12)
+                            .submitLabel(.done)
+                            .disabled(selectedKeywords.count == SettingsDefaults.keywordMaxCount)
+                            .onSubmit(addKeyword)
+
+                            Divider()
+                                .frame(height: 20)
+
+                            Button(action: addKeyword) {
+                                MemdoIconButtonLabel(systemImage: "plus")
+                            }
+                            .buttonStyle(MemdoIconButtonStyle())
+                            .disabled(!canAddKeyword)
+                            .accessibilityLabel("브리핑 키워드 추가")
+                        }
+                        .frame(height: MemdoMetrics.touchTarget)
+                        .background(
+                            MemdoTheme.surface,
+                            in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous)
+                                .stroke(MemdoTheme.controlOutline.opacity(0.45), lineWidth: 0.5)
+                        }
+
+                        ScrollView(.horizontal) {
+                            LazyHStack(spacing: 8) {
                             ForEach(keywordOptions, id: \.self) { keyword in
                                 MemdoChoiceButton(
                                     title: keyword,
@@ -670,10 +598,17 @@ private struct BriefingKeywordsSheet: View {
                                 )
                             }
                         }
+                        }
+                        .scrollIndicators(.hidden)
+                        .scrollClipDisabled()
                     }
                 }
-                .padding(MemdoMetrics.pagePadding)
+                .padding(.horizontal, MemdoMetrics.pagePadding)
+                .padding(.top, 12)
+                .padding(.bottom, 28)
             }
+            .scrollDismissesKeyboard(.interactively)
+            .scrollBounceBehavior(.basedOnSize)
             .background(MemdoTheme.background)
             .navigationTitle("브리핑 관심사")
             .navigationBarTitleDisplayMode(.inline)
@@ -683,7 +618,18 @@ private struct BriefingKeywordsSheet: View {
                 }
             }
         }
-        .memdoSheetPresentation([.large])
+        .memdoSheetPresentation([.medium, .large])
+    }
+
+    private func sectionHeader(title: String, count: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.headline)
+            Spacer()
+            Text(count)
+                .font(.caption.monospacedDigit().weight(.semibold))
+                .foregroundStyle(MemdoTheme.secondaryInk)
+        }
     }
 
     private func toggleCategory(_ category: BriefingFeedCategory) {
@@ -719,6 +665,158 @@ private final class GoogleCalendarAuthPresentationContext: NSObject,
     ASWebAuthenticationPresentationContextProviding {
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         ASPresentationAnchor()
+    }
+}
+
+private enum AgentSettingsDestination: String, Identifiable {
+    case aiConsent
+    case cloudAgent
+    case googleCalendar
+    case privacy
+    case slack
+
+    var id: String { rawValue }
+}
+
+private struct AgentSettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(ScheduleStore.self) private var scheduleStore
+    @State private var presentedSheet: AgentSettingsDestination?
+    @State private var googleCalendarConnected: Bool?
+    @State private var cloudAgentConnected: Bool?
+    @State private var slackConnected = false
+    @State private var showsServices = false
+    @State private var showsData = false
+
+    private var serviceStatus: String {
+        guard let googleCalendarConnected else { return "확인 중" }
+        let count = (googleCalendarConnected ? 1 : 0) + (slackConnected ? 1 : 0)
+        return "\(count)/2 연결"
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Button { presentedSheet = .cloudAgent } label: {
+                        AgentConnectionRow(
+                            icon: .system("cloud"),
+                            title: "모델 및 사용량",
+                            capability: "OpenRouter · 모델 · 비용",
+                            status: connectionStatus(cloudAgentConnected)
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    DisclosureGroup(isExpanded: $showsServices) {
+                        VStack(spacing: 0) {
+                            Button { presentedSheet = .googleCalendar } label: {
+                                AgentConnectionRow(
+                                    icon: .asset("GoogleCalendar"),
+                                    title: "Google Calendar",
+                                    capability: "일정 읽기 전용",
+                                    status: connectionStatus(googleCalendarConnected),
+                                    badge: nil
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            Divider()
+                            Button { presentedSheet = .slack } label: {
+                                AgentConnectionRow(
+                                    icon: .asset("Slack"),
+                                    title: "Slack",
+                                    capability: "새 일정·완료 알림",
+                                    status: slackConnected ? "연결됨" : "미연결",
+                                    badge: nil
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } label: {
+                        AgentConnectionRow(
+                            icon: .system("link"),
+                            title: "연결된 서비스",
+                            capability: "Google Calendar · Slack",
+                            status: serviceStatus,
+                            showsChevron: false
+                        )
+                    }
+
+                    DisclosureGroup(isExpanded: $showsData) {
+                        VStack(spacing: 0) {
+                            Button { presentedSheet = .aiConsent } label: {
+                                AgentConnectionRow(
+                                    icon: .memdo,
+                                    title: "Agent 사용 범위",
+                                    capability: "일정 제목 · 시간",
+                                    status: "설정"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            Divider()
+                            Button { presentedSheet = .privacy } label: {
+                                AgentConnectionRow(
+                                    icon: .system("hand.raised.fill"),
+                                    title: "데이터 관리",
+                                    capability: "보관 · 철회 · 연결 해제",
+                                    status: "확인"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } label: {
+                        AgentConnectionRow(
+                            icon: .memdo,
+                            title: "데이터 및 권한",
+                            capability: "사용 범위 · 보관 · 철회",
+                            status: "관리",
+                            showsChevron: false
+                        )
+                    }
+                } footer: {
+                    Text("Agent는 일정을 변경하기 전에 항상 확인을 요청해요.")
+                }
+            }
+            .memdoSystemList()
+            .navigationTitle("Agent")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("닫기") { dismiss() }
+                }
+            }
+        }
+        .sheet(item: $presentedSheet) { destination in
+            switch destination {
+            case .aiConsent:
+                AIConsentSheet()
+            case .cloudAgent:
+                CloudAgentConnectionSheet()
+            case .googleCalendar:
+                GoogleCalendarConnectionSheet()
+            case .privacy:
+                PrivacySheet()
+            case .slack:
+                SlackConnectionSheet()
+            }
+        }
+        .memdoSheetPresentation([.medium, .large])
+        .task { await loadStatuses() }
+        .onChange(of: presentedSheet) { _, destination in
+            guard destination == nil else { return }
+            Task { await loadStatuses() }
+        }
+    }
+
+    private func connectionStatus(_ isConnected: Bool?) -> String {
+        guard let isConnected else { return "확인 중" }
+        return isConnected ? "연결됨" : "미연결"
+    }
+
+    private func loadStatuses() async {
+        googleCalendarConnected = (try? await scheduleStore.googleCalendarStatus())?.connected == true
+        cloudAgentConnected = (try? await scheduleStore.agentKeyConnected()) == true
+        slackConnected = !SlackNotifier.webhookURL.isEmpty
     }
 }
 
@@ -1022,10 +1120,15 @@ private struct CloudAgentConnectionSheet: View {
     @State private var isConnected: Bool?
     @State private var draftKey = ""
     @State private var isBusy = false
+    @State private var isLoadingDetails = false
     @State private var errorMessage: String?
+    @State private var detailErrorMessage: String?
     @State private var showDisconnectConfirm = false
+    @State private var models: [AgentModelDTO] = []
+    @State private var usage: AgentUsageResponseDTO?
     @State private var selectedModel = CloudAgentModelPreference.selected
-        ?? CloudAgentModelPreference.options[0].id
+        ?? CloudAgentModelPreference.defaultID
+    @AppStorage("memdo.v1.agentShowsActualCost") private var showsActualCost = false
 
     private var canConnect: Bool {
         draftKey.trimmingCharacters(in: .whitespacesAndNewlines).count >= 20
@@ -1033,101 +1136,278 @@ private struct CloudAgentConnectionSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    MCPToolIdentityRow(
-                        icon: .system("cloud"),
-                        title: "클라우드 Agent",
-                        summary: "OpenRouter API 키로 온디바이스가 못 하는 일(일정 검색 등)을 처리해요."
-                    )
-                } header: {
-                    Text("클라우드 Agent")
-                }
-                Section("연결하면 가능한 일") {
-                    Label("과거·예정 일정을 검색해 답변", systemImage: "magnifyingglass")
-                    Label("Apple Intelligence 미지원 기기에서도 사용", systemImage: "iphone")
-                }
-                Section("권한 원칙") {
-                    Label("승인 전에는 아무것도 저장·변경하지 않음", systemImage: "checkmark.shield")
-                    Label("일정 검색 결과만 모델에 전달, 다른 데이터는 안 보냄", systemImage: "lock")
-                }
-
-                if isConnected == true {
+            Group {
+                if isConnected == false {
+                    disconnectedContent
+                } else if isConnected == nil {
+                    ProgressView("연결 상태 확인 중")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
                     Section {
-                        Picker("모델", selection: $selectedModel) {
-                            ForEach(CloudAgentModelPreference.options, id: \.id) { option in
-                                Text(option.label).tag(option.id)
-                            }
-                        }
-                        .onChange(of: selectedModel) { _, value in
-                            CloudAgentModelPreference.selected = value
-                        }
-                    } footer: {
-                        Text("대화가 조금 더 정교해질 수 있어요. 요금은 OpenRouter 계정으로 청구돼요.")
-                    }
-                    Section {
-                        Button("연결 해제", role: .destructive) {
-                            showDisconnectConfirm = true
-                        }
-                        .disabled(isBusy)
-                    }
-                } else if isConnected == false {
-                    Section {
-                        SecureField("sk-or-v1-…", text: $draftKey)
-                            .font(.caption.monospacedDigit())
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                        Button {
-                            Task { await connect() }
-                        } label: {
-                            if isBusy {
-                                HStack(spacing: 8) {
-                                    ProgressView().scaleEffect(0.8)
-                                    Text("연결 중")
-                                }
-                            } else {
-                                Text("연결")
-                            }
-                        }
-                        .disabled(!canConnect || isBusy)
+                        LabeledContent("상태", value: connectionStatus)
                     } header: {
-                        Text("OpenRouter API 키")
-                    } footer: {
-                        Text("openrouter.ai에서 계정을 만들고 API 키를 발급받아 붙여넣으세요.")
+                        Label("OpenRouter", systemImage: "cloud")
                     }
-                }
+                    if let errorMessage {
+                        Section {
+                            Label(errorMessage, systemImage: "exclamationmark.circle")
+                                .font(.caption)
+                                .foregroundStyle(MemdoTheme.destructive)
+                        }
+                    }
 
-                if let errorMessage {
                     Section {
-                        Text(errorMessage)
-                            .font(.caption)
-                            .foregroundStyle(.red)
+                        if models.isEmpty {
+                            loadingRow(isLoadingDetails ? "모델을 불러오는 중" : "모델을 불러오지 못했어요")
+                        } else {
+                            ForEach(models) { model in
+                                modelRow(model)
+                            }
+                        }
+                    } header: {
+                        Text("모델")
+                    } footer: {
+                        Text("가격은 OpenRouter의 현재 1M 토큰당 요금이에요.")
                     }
+
+                    Section("최근 30일") {
+                        Toggle("실제 비용 표시", isOn: $showsActualCost)
+                            .memdoToggle()
+                        if let usage {
+                            LabeledContent("요청", value: "\(usage.totalRequests)회")
+                            if showsActualCost {
+                                LabeledContent("비용", value: usageCost(usage.totalCostUsd))
+                                    .monospacedDigit()
+                            }
+                            ForEach(usage.recent) { item in
+                                usageRow(item)
+                            }
+                        } else {
+                            loadingRow(isLoadingDetails ? "사용량을 불러오는 중" : "사용량을 불러오지 못했어요")
+                        }
+                    }
+
+                    if let detailErrorMessage {
+                        Section {
+                            Label(detailErrorMessage, systemImage: "exclamationmark.circle")
+                                .font(.caption)
+                                .foregroundStyle(MemdoTheme.destructive)
+                            Button("다시 시도") {
+                                Task { await loadConnectedContent() }
+                            }
+                            .buttonStyle(MemdoSecondaryActionButtonStyle())
+                            .disabled(isLoadingDetails)
+                        }
+                    }
+                    }
+                    .memdoSystemList()
                 }
             }
-            .memdoSystemList()
-            .navigationTitle("클라우드 Agent")
+            .background(MemdoTheme.background)
+            .navigationTitle("클라우드 모델")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if isConnected == true {
+                        Button {
+                            showDisconnectConfirm = true
+                        } label: {
+                            Image(systemName: "ellipsis")
+                        }
+                        .accessibilityLabel("연결 관리")
+                        .disabled(isBusy)
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("닫기") { dismiss() }
                 }
             }
         }
         .confirmationDialog(
-            "클라우드 Agent 연결을 해제할까요?",
+            "OpenRouter 연결을 해제할까요?",
             isPresented: $showDisconnectConfirm,
             titleVisibility: .visible
         ) {
             Button("연결 해제", role: .destructive) { Task { await disconnect() } }
             Button("취소", role: .cancel) {}
         }
-        .memdoSheetPresentation([.large])
+        .memdoSheetPresentation([.height(350), .large])
         .task { await loadStatus() }
     }
 
+    private var disconnectedContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(spacing: 12) {
+                    Image(systemName: "cloud")
+                        .font(.body.weight(.medium))
+                        .frame(width: 36, height: 36)
+                        .background(MemdoTheme.accentSoft, in: Circle())
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("OpenRouter")
+                            .font(.headline)
+                        Text("내 API 키로 클라우드 모델 사용")
+                            .font(.caption)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                    }
+                    Spacer(minLength: 8)
+                    Text("미연결")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("API 키")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                    HStack(spacing: 8) {
+                        SecureField("sk-or-v1-…", text: $draftKey)
+                            .font(.subheadline.monospacedDigit())
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .textContentType(.password)
+                            .padding(.horizontal, 12)
+                            .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
+                            .background(
+                                MemdoTheme.surface,
+                                in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous)
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous)
+                                    .stroke(MemdoTheme.controlOutline, lineWidth: 0.5)
+                            }
+                        pasteButton
+                    }
+
+                    if let errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.circle")
+                            .font(.caption)
+                            .foregroundStyle(MemdoTheme.destructive)
+                    }
+                }
+
+                connectButton
+
+                Label("키는 암호화해 저장하며 앱에 다시 표시하지 않아요.", systemImage: "lock")
+                    .font(.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+            .padding(MemdoMetrics.pagePadding)
+        }
+    }
+
+    private var pasteButton: some View {
+        PasteButton(payloadType: String.self) { values in
+            draftKey = values.first?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        }
+        .labelStyle(.iconOnly)
+        .buttonBorderShape(.roundedRectangle)
+        .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+        .accessibilityLabel("API 키 붙여넣기")
+    }
+
+    private var connectButton: some View {
+        Button {
+            Task { await connect() }
+        } label: {
+            if isBusy {
+                ProgressView()
+            } else {
+                Text("OpenRouter 연결")
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .buttonBorderShape(.roundedRectangle)
+        .tint(MemdoTheme.accent)
+        .foregroundStyle(MemdoTheme.onAccent)
+        .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
+        .disabled(!canConnect || isBusy)
+    }
+
+    private var connectionStatus: String {
+        guard let isConnected else { return "확인 중" }
+        return isConnected ? "연결됨" : "미연결"
+    }
+
+    @ViewBuilder
+    private func loadingRow(_ title: String) -> some View {
+        if isLoadingDetails {
+            ProgressView(title)
+                .frame(minHeight: MemdoMetrics.touchTarget)
+        } else {
+            Label(title, systemImage: "exclamationmark.circle")
+                .foregroundStyle(MemdoTheme.secondaryInk)
+                .frame(minHeight: MemdoMetrics.touchTarget)
+        }
+    }
+
+    private func modelRow(_ model: AgentModelDTO) -> some View {
+        Button {
+            selectedModel = model.id
+            CloudAgentModelPreference.selected = model.id
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: selectedModel == model.id ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(selectedModel == model.id ? MemdoTheme.brand : MemdoTheme.secondaryInk)
+                    .frame(width: 24, height: MemdoMetrics.touchTarget)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(model.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.ink)
+                        .lineLimit(1)
+                    Text(modelPrice(model))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(model.name), \(modelPrice(model))")
+        .accessibilityAddTraits(selectedModel == model.id ? .isSelected : [])
+    }
+
+    private func usageRow(_ item: AgentUsageItemDTO) -> some View {
+        HStack(spacing: MemdoMetrics.rowSpacing) {
+            Image(systemName: "clock.arrow.circlepath")
+                .foregroundStyle(MemdoTheme.secondaryInk)
+                .frame(width: 24, height: MemdoMetrics.touchTarget)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(models.first(where: { $0.id == item.model })?.name ?? item.model)
+                    .font(.subheadline)
+                    .lineLimit(1)
+                Text(usageDate(item.createdAt))
+                    .font(.caption2)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+            Spacer(minLength: 8)
+            if showsActualCost {
+                Text(usageCost(item.costUsd))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+        }
+        .frame(minHeight: 52)
+    }
+
     private func loadStatus() async {
-        isConnected = (try? await scheduleStore.agentKeyConnected()) == true
+        do {
+            isConnected = try await scheduleStore.agentKeyConnected()
+            if isConnected == true { await loadConnectedContent() }
+        } catch {
+            isConnected = false
+            errorMessage = "연결 상태를 확인하지 못했어요."
+        }
     }
 
     private func connect() async {
@@ -1138,6 +1418,7 @@ private struct CloudAgentConnectionSheet: View {
             try await scheduleStore.saveAgentKey(draftKey.trimmingCharacters(in: .whitespacesAndNewlines))
             draftKey = ""
             isConnected = true
+            await loadConnectedContent()
         } catch {
             errorMessage = "연결하지 못했어요. 키를 확인해 주세요."
         }
@@ -1150,9 +1431,54 @@ private struct CloudAgentConnectionSheet: View {
         do {
             try await scheduleStore.deleteAgentKey()
             isConnected = false
+            models = []
+            usage = nil
         } catch {
             errorMessage = "연결 해지에 실패했어요. 잠시 후 다시 시도해 주세요."
         }
+    }
+
+    private func loadConnectedContent() async {
+        isLoadingDetails = true
+        detailErrorMessage = nil
+        defer { isLoadingDetails = false }
+
+        do {
+            models = try await scheduleStore.agentModels()
+            if !models.contains(where: { $0.id == selectedModel }), let first = models.first {
+                selectedModel = first.id
+                CloudAgentModelPreference.selected = first.id
+            }
+        } catch {
+            models = []
+            detailErrorMessage = "모델 목록을 불러오지 못했어요."
+        }
+
+        do {
+            usage = try await scheduleStore.agentUsage()
+        } catch {
+            usage = nil
+            detailErrorMessage = [detailErrorMessage, "사용량을 불러오지 못했어요."]
+                .compactMap { $0 }
+                .joined(separator: " ")
+        }
+    }
+
+    private func modelPrice(_ model: AgentModelDTO) -> String {
+        "in \(usd(model.promptPricePerM, digits: 2)) · out \(usd(model.completionPricePerM, digits: 2)) /1M"
+    }
+
+    private func usageCost(_ cost: Double) -> String {
+        usd(cost, digits: 6)
+    }
+
+    private func usd(_ value: Double, digits: Int) -> String {
+        "$" + String(format: "%.*f", locale: Locale(identifier: "en_US_POSIX"), digits, value)
+    }
+
+    private func usageDate(_ value: String) -> String {
+        guard let date = ISO8601DateFormatter().date(from: value) else { return value }
+        return date.formatted(.dateTime.month().day().hour().minute())
     }
 }
 
@@ -1327,21 +1653,36 @@ private struct GuestUpgradeSheet: View {
 
 private struct SettingsGroup<Content: View>: View {
     let title: String
+    let icon: String?
     let subtitle: String?
     @ViewBuilder let content: Content
 
     init(
         title: String,
+        icon: String? = nil,
         subtitle: String? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
+        self.icon = icon
         self.subtitle = subtitle
         self.content = content()
     }
 
     var body: some View {
-        MemdoSection(title: title) {
+        VStack(alignment: .leading, spacing: MemdoMetrics.sectionContentSpacing) {
+            HStack(spacing: 8) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .frame(width: 16)
+                        .accessibilityHidden(true)
+                }
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MemdoTheme.ink)
+            }
             VStack(alignment: .leading, spacing: 8) {
                 if let subtitle {
                     Text(subtitle)
@@ -1350,7 +1691,14 @@ private struct SettingsGroup<Content: View>: View {
                 }
                 VStack(spacing: 0) { content }
                     .padding(.horizontal, 12)
-                    .memdoRowGroup()
+                    .background(
+                        MemdoTheme.surface,
+                        in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                            .stroke(MemdoTheme.outline.opacity(0.35), lineWidth: 0.5)
+                    }
             }
         }
     }

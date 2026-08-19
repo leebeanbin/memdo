@@ -24,6 +24,9 @@ enum MemdoTheme {
                 : UIColor(red: 1.0, green: 0.97, blue: 0.87, alpha: 1)    // light amber cream
         }
     )
+    static let onBrand = Color.black
+    static let destructive = Color(uiColor: .systemRed)
+    static let onDestructive = Color.white
     static let mine = ink
     static let mineSoft = Color(uiColor: .secondarySystemFill)
     static let google = secondaryInk

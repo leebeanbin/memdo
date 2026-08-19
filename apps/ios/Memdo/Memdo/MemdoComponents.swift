@@ -118,15 +118,19 @@ struct MemdoPageHeader: View {
 
     private var titleGroup: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(eyebrow)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(MemdoTheme.brand)
+            if !eyebrow.isEmpty {
+                Text(eyebrow)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(MemdoTheme.brand)
+            }
             Text(title)
                 .font(.system(.title2, design: .rounded, weight: .bold))
                 .foregroundStyle(MemdoTheme.ink)
-            Text(subtitle)
-                .font(.subheadline)
-                .foregroundStyle(MemdoTheme.secondaryInk)
+            if !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
         }
     }
 
@@ -237,6 +241,80 @@ struct MemdoIconButtonLabel: View {
     }
 }
 
+struct MemdoPrimaryActionButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .lineLimit(1)
+            .foregroundStyle(MemdoTheme.onBrand)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
+            .background(
+                MemdoTheme.brand,
+                in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous)
+            )
+            .opacity(isEnabled ? (configuration.isPressed ? 0.72 : 1) : 0.42)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+    }
+}
+
+struct MemdoSecondaryActionButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .lineLimit(1)
+            .foregroundStyle(MemdoTheme.secondaryInk)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
+            .background(
+                MemdoTheme.accentSoft,
+                in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous)
+            )
+            .opacity(isEnabled ? (configuration.isPressed ? 0.72 : 1) : 0.42)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+    }
+}
+
+struct MemdoDestructiveActionButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .lineLimit(1)
+            .foregroundStyle(MemdoTheme.onDestructive)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
+            .background(
+                MemdoTheme.destructive,
+                in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous)
+            )
+            .opacity(isEnabled ? (configuration.isPressed ? 0.72 : 1) : 0.42)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+    }
+}
+
+struct MemdoIconButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(MemdoTheme.ink)
+            .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+            .contentShape(Rectangle())
+            .opacity(isEnabled ? (configuration.isPressed ? 0.55 : 1) : 0.35)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.94 : 1)
+    }
+}
+
 struct MemdoScheduleCountDots: View {
     let count: Int
     let isEmphasized: Bool
@@ -256,6 +334,7 @@ struct MemdoScheduleCountDots: View {
 
 struct MemdoChoiceButton: View {
     let title: String
+    var systemImage: String? = nil
     let isSelected: Bool
     let action: () -> Void
 
@@ -265,18 +344,23 @@ struct MemdoChoiceButton: View {
                 if isSelected {
                     Image(systemName: "checkmark")
                         .accessibilityHidden(true)
+                } else if let systemImage {
+                    Image(systemName: systemImage)
+                        .accessibilityHidden(true)
                 }
                 Text(title)
                     .lineLimit(1)
             }
-                .font(.caption.bold())
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(isSelected ? MemdoTheme.onAccent : MemdoTheme.ink)
                 .padding(.horizontal, 12)
-                .frame(minHeight: MemdoMetrics.touchTarget)
-                .background(isSelected ? MemdoTheme.accent : MemdoTheme.surface, in: Capsule())
-                .overlay(Capsule().stroke(isSelected ? Color.clear : MemdoTheme.controlOutline))
+                .frame(height: 36)
+                .background(isSelected ? MemdoTheme.accent : MemdoTheme.accentSoft, in: Capsule())
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .fixedSize()
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityValue(isSelected ? "선택됨" : "선택 안 됨")
     }

@@ -11,8 +11,8 @@ enum WallpaperStyleStorage {
 }
 
 struct WallpaperPreviewSheet: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(ScheduleStore.self) private var scheduleStore
+    let onClose: () -> Void
     @AppStorage(
         WallpaperStyleStorage.calendarKey,
         store: UserDefaults(suiteName: MemdoWidgetStorage.suiteName)
@@ -20,7 +20,7 @@ struct WallpaperPreviewSheet: View {
     @AppStorage(
         WallpaperStyleStorage.backdropKey,
         store: UserDefaults(suiteName: MemdoWidgetStorage.suiteName)
-    ) private var backdrop = WallpaperBackdropStyle.aurora
+    ) private var backdrop = WallpaperBackdropStyle.graphite
     @AppStorage(
         WallpaperStyleStorage.glassKey,
         store: UserDefaults(suiteName: MemdoWidgetStorage.suiteName)
@@ -50,60 +50,85 @@ struct WallpaperPreviewSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            WallpaperCanvas(
-                month: .now,
-                titlesByDay: previewTitles,
-                calendarStyle: calendarStyle,
-                backdrop: backdrop,
-                glassStrength: glassStrength,
-                isExport: false
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 44, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 44, style: .continuous)
-                    .stroke(.white.opacity(0.16), lineWidth: 1)
-            }
-            .aspectRatio(393 / 852, contentMode: .fit)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(12)
-            .background(.black)
-            .safeAreaInset(edge: .bottom) { saveBar }
-            .navigationTitle("달력 배경화면")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        Picker("캘린더", selection: $calendarStyle) {
-                            ForEach(WallpaperCalendarStyle.allCases) { style in
-                                Text(style.title).tag(style)
-                            }
-                        }
-                        Picker("배경", selection: $backdrop) {
-                            ForEach(WallpaperBackdropStyle.allCases) { style in
-                                Text(style.title).tag(style)
-                            }
-                        }
-                        Picker("Glass", selection: $glassStrength) {
-                            ForEach(WallpaperGlassStrength.allCases) { strength in
-                                Text(strength.title).tag(strength)
-                            }
-                        }
-                        Toggle("밀도 예시", isOn: $showsDensitySample)
-                    } label: {
-                        Image(systemName: "slider.horizontal.3")
-                    }
-                    .accessibilityLabel("배경화면 시안 설정")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("닫기") { dismiss() }
+        GeometryReader { proxy in
+            ZStack {
+                WallpaperCanvas(
+                    month: .now,
+                    titlesByDay: previewTitles,
+                    calendarStyle: calendarStyle,
+                    backdrop: backdrop,
+                    glassStrength: glassStrength,
+                    isExport: false
+                )
+                .frame(width: proxy.size.width, height: proxy.size.height)
+
+                VStack {
+                    topControls
+                        .padding(.horizontal, MemdoMetrics.pagePadding)
+                        .padding(.top, 10)
+                    Spacer()
+                    saveControl
+                        .padding(.bottom, 24)
                 }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .memdoSheetPresentation([.large])
+        .ignoresSafeArea()
+        .background(.black)
+        .statusBarHidden(true)
     }
 
-    private var saveBar: some View {
+    @ViewBuilder
+    private var topControls: some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 12) { topControlRow }
+        } else {
+            topControlRow
+        }
+    }
+
+    private var topControlRow: some View {
+        HStack {
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .memdoFloatingSurface(cornerRadius: MemdoMetrics.touchTarget / 2)
+            .accessibilityLabel("닫기")
+
+            Spacer()
+
+            Menu {
+                Picker("캘린더", selection: $calendarStyle) {
+                    ForEach(WallpaperCalendarStyle.allCases) { style in
+                        Text(style.title).tag(style)
+                    }
+                }
+                Picker("배경", selection: $backdrop) {
+                    ForEach(WallpaperBackdropStyle.allCases) { style in
+                        Text(style.title).tag(style)
+                    }
+                }
+                Picker("Glass", selection: $glassStrength) {
+                    ForEach(WallpaperGlassStrength.allCases) { strength in
+                        Text(strength.title).tag(strength)
+                    }
+                }
+                Toggle("밀도 예시", isOn: $showsDensitySample)
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .memdoFloatingSurface(cornerRadius: MemdoMetrics.touchTarget / 2)
+            .accessibilityLabel("배경화면 시안 설정")
+        }
+    }
+
+    private var saveControl: some View {
         VStack(spacing: 8) {
             Button(action: saveToPhotos) {
                 Group {
@@ -116,13 +141,16 @@ struct WallpaperPreviewSheet: View {
                     case .saved:
                         Label("사진에 저장됨", systemImage: "checkmark")
                     case .idle, .failed:
-                        Text("사진에 저장")
+                        Label("사진에 저장", systemImage: "square.and.arrow.down")
                     }
                 }
                 .font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .padding(.horizontal, 18)
+                .frame(minHeight: MemdoMetrics.touchTarget)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .memdoFloatingSurface(cornerRadius: MemdoMetrics.touchTarget / 2)
             .disabled(saveState == .saving)
 
             if case .failed(let message) = saveState {
@@ -130,15 +158,7 @@ struct WallpaperPreviewSheet: View {
                     .font(.caption)
                     .foregroundStyle(.red)
             }
-
-            Text("단축어 앱의 ‘Memdo 달력 배경화면 만들기’ 액션을 ‘배경화면 사진 설정’과 연결하면 매일 자동으로 갱신할 수 있어요.")
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.6))
-                .multilineTextAlignment(.center)
         }
-        .padding(.horizontal, MemdoMetrics.pagePadding)
-        .padding(.vertical, 12)
-        .background(.black)
     }
 
     private func saveToPhotos() {
@@ -211,9 +231,8 @@ enum WallpaperImageExporter {
     }
 }
 
-/// The wallpaper artwork itself. The preview draws a fake lock-screen clock and
-/// quick actions for context; exports keep their layout space empty because the
-/// real lock screen provides them.
+/// The wallpaper artwork itself. Preview-only clock content is hidden from the
+/// exported image because the real lock screen provides it.
 struct WallpaperCanvas: View {
     let month: Date
     let titlesByDay: [Date: [String]]
@@ -226,7 +245,7 @@ struct WallpaperCanvas: View {
         ZStack {
             WallpaperBackdrop(style: backdrop)
             VStack(spacing: 0) {
-                WallpaperClock(date: month)
+                WallpaperClock()
                     .opacity(isExport ? 0 : 1)
                 Spacer(minLength: 20)
                 WallpaperCalendarPanel(
@@ -237,13 +256,14 @@ struct WallpaperCanvas: View {
                     isExport: isExport
                 )
                 Spacer(minLength: 18)
-                WallpaperSystemActions()
-                    .opacity(isExport ? 0 : 1)
+                Color.clear
+                    .frame(height: MemdoMetrics.touchTarget)
             }
-            .padding(.top, 36)
+            .padding(.top, 60)
             .padding(.bottom, 18)
             .padding(.horizontal, 18)
         }
+        .dynamicTypeSize(.medium)
     }
 }
 
@@ -347,39 +367,39 @@ private struct WallpaperBackdrop: View {
                 endPoint: .bottomTrailing
             )
             Circle()
-                .fill(style.topGlow.opacity(0.8))
+                .fill(style.topGlow.opacity(0.46))
                 .frame(width: 330, height: 330)
                 .blur(radius: 48)
                 .offset(x: 120, y: -250)
             Circle()
-                .fill(style.bottomGlow.opacity(0.62))
+                .fill(style.bottomGlow.opacity(0.34))
                 .frame(width: 360, height: 360)
                 .blur(radius: 56)
                 .offset(x: -150, y: 250)
             Color.black.opacity(0.08)
         }
-        .ignoresSafeArea()
+        .clipped()
     }
 }
 
 private extension WallpaperBackdropStyle {
     var baseColors: [Color] {
         switch self {
-        case .aurora: [Color(red: 0.04, green: 0.06, blue: 0.15), Color(red: 0.08, green: 0.22, blue: 0.30)]
+        case .aurora: [Color(red: 0.03, green: 0.04, blue: 0.09), Color(red: 0.06, green: 0.14, blue: 0.17)]
         case .graphite: [Color(red: 0.04, green: 0.04, blue: 0.05), Color(red: 0.22, green: 0.24, blue: 0.28)]
         case .dusk: [Color(red: 0.10, green: 0.08, blue: 0.22), Color(red: 0.36, green: 0.16, blue: 0.24)]
         }
     }
     var topGlow: Color {
         switch self {
-        case .aurora: Color(red: 0.38, green: 0.28, blue: 0.82)
+        case .aurora: Color(red: 0.30, green: 0.28, blue: 0.55)
         case .graphite: Color.white.opacity(0.26)
         case .dusk: Color(red: 0.76, green: 0.28, blue: 0.48)
         }
     }
     var bottomGlow: Color {
         switch self {
-        case .aurora: Color(red: 0.05, green: 0.65, blue: 0.70)
+        case .aurora: Color(red: 0.12, green: 0.43, blue: 0.46)
         case .graphite: Color(red: 0.30, green: 0.34, blue: 0.42)
         case .dusk: Color(red: 0.96, green: 0.48, blue: 0.25)
         }
@@ -387,27 +407,32 @@ private extension WallpaperBackdropStyle {
 }
 
 private struct WallpaperClock: View {
-    let date: Date
-
     var body: some View {
-        VStack(spacing: -4) {
-            Text(dateTitle)
-                .font(.subheadline.weight(.semibold))
-            Text("9:41")
-                .font(.system(size: 76, weight: .thin, design: .rounded))
-                .monospacedDigit()
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            VStack(spacing: -4) {
+                Text(dateTitle(context.date))
+                    .font(.subheadline.weight(.semibold))
+                Text(timeTitle(context.date))
+                    .font(.system(size: 76, weight: .thin, design: .rounded))
+                    .monospacedDigit()
+            }
         }
         .foregroundStyle(.white.opacity(0.92))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("잠금화면 시스템 시계 미리보기")
     }
 
-    private var dateTitle: String {
+    private func dateTitle(_ date: Date) -> String {
         let calendar = Calendar.current
         let month = calendar.component(.month, from: date)
         let day = calendar.component(.day, from: date)
         let weekday = ["일", "월", "화", "수", "목", "금", "토"][calendar.component(.weekday, from: date) - 1]
         return "\(month)월 \(day)일 \(weekday)요일"
+    }
+
+    private func timeTitle(_ date: Date) -> String {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return String(format: "%d:%02d", components.hour ?? 0, components.minute ?? 0)
     }
 }
 
@@ -532,53 +557,14 @@ private struct WallpaperCalendarDay: View {
     }
 }
 
-private struct WallpaperSystemActions: View {
-    var body: some View {
-        HStack {
-            systemButton("flashlight.off.fill")
-            Spacer()
-            systemButton("camera.fill")
-        }
-        .padding(.horizontal, 28)
-        .accessibilityHidden(true)
-    }
-
-    private func systemButton(_ image: String) -> some View {
-        Image(systemName: image)
-            .font(.body.weight(.semibold))
-            .foregroundStyle(.white)
-            .frame(width: 44, height: 44)
-            .background(.black.opacity(0.32), in: Circle())
-    }
-}
-
 private extension View {
     @ViewBuilder
-    func wallpaperGlassSurface(tintOpacity: Double, isExport: Bool) -> some View {
-        if isExport {
-            // ImageRenderer can't rasterize materials or glass effects, so
-            // exports use a flat translucent fill over the backdrop instead.
-            background(
-                .black.opacity(0.24 + tintOpacity),
-                in: RoundedRectangle(cornerRadius: MemdoMetrics.widgetRadius, style: .continuous)
-            )
-            .overlay { wallpaperGlassStroke }
-        } else if #available(iOS 26.0, *) {
-            glassEffect(
-                .regular.tint(.black.opacity(tintOpacity)),
-                in: .rect(cornerRadius: MemdoMetrics.widgetRadius)
-            )
-            .overlay { wallpaperGlassStroke }
-        } else {
-            background(
-                .ultraThinMaterial,
-                in: RoundedRectangle(cornerRadius: MemdoMetrics.widgetRadius, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: MemdoMetrics.widgetRadius, style: .continuous)
-                    .stroke(.white.opacity(0.18), lineWidth: 0.75)
-            }
-        }
+    func wallpaperGlassSurface(tintOpacity: Double, isExport _: Bool) -> some View {
+        background(
+            .black.opacity(0.20 + tintOpacity),
+            in: RoundedRectangle(cornerRadius: MemdoMetrics.widgetRadius, style: .continuous)
+        )
+        .overlay { wallpaperGlassStroke }
     }
 
     var wallpaperGlassStroke: some View {

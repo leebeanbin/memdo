@@ -1,0 +1,1735 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>Memdo — 개발 포트폴리오</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    /* True neutral grey/white base -- no warm or cool cast of its own, so the
+       page doesn't read as an overall "brown" or "blue" wash. Amber is the
+       one deliberate color in the system and stays isolated as an accent
+       (fills/dots/borders with dark ink on top), never diluted into the
+       neutral tones themselves. */
+    --bg: #f5f5f4;
+    --surface: #ffffff;
+    --surface-2: #eeeeec;
+    --line: #e2e2df;
+    --line-strong: #cdccc8;
+    --ink: #18181b;
+    --ink-2: #3f3d3a;
+    --muted: #68655f;
+    --faint: #6f6c65;
+    /* Deep teal accent -- one color, works directly as text, as a fill with
+       white on top, and as a border/dot, without needing a separate darker
+       "text-safe" shade the way the amber attempt did. */
+    --accent: #0a7a68;
+    --accent-bg: #d7efe8;
+    --accent-strong: #06584b;
+    --accent-line: #6fb8a8;
+    --good-bg: #dcefd4;
+    --good-fg: #2f5c20;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
+      "Pretendard Variable", Pretendard, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Menlo", "Roboto Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { color-scheme: light; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.62;
+    word-break: keep-all;
+    overflow-wrap: normal;
+  }
+  code, pre { overflow-wrap: break-word; }
+
+  .wrap { max-width: 64rem; margin: 0 auto; padding: 0 1.75rem; }
+
+  h1, h2, h3 { font-weight: 700; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+
+  a { color: inherit; }
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    padding: 0.05rem 0.35rem;
+  }
+
+  ::selection { background: var(--accent-bg); color: var(--accent-strong); }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-strong);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 1.4rem;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--accent);
+    display: inline-block;
+  }
+
+  .divider {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    max-width: 26rem;
+    margin: 0 auto;
+    padding: 0 1.75rem;
+  }
+  .divider span { height: 3px; border-radius: 2px; background: var(--line-strong); }
+  .divider span:nth-child(3) { background: var(--accent); }
+
+  .section-gap { height: 5rem; }
+  .section-gap.sm { height: 2.75rem; }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 4.5rem 0 3.5rem; }
+  .hero-grid { display: grid; grid-template-columns: 1.08fr 0.92fr; gap: 3.2rem; align-items: center; }
+  .hero h1 {
+    font-size: clamp(1.95rem, 3.6vw, 2.7rem);
+    line-height: 1.28;
+    margin-top: 1rem;
+  }
+  .hero h1 em {
+    font-style: normal; color: var(--ink);
+    box-shadow: inset 0 -0.22em 0 var(--accent);
+  }
+  .hero-sub { margin-top: 1.2rem; max-width: 33rem; color: var(--muted); font-size: 1.03rem; }
+  .hero-meta {
+    margin-top: 1.9rem;
+    display: flex; flex-wrap: wrap; gap: 0.55rem;
+  }
+  .hero-meta span {
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    color: var(--ink-2);
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 99px;
+    padding: 0.32rem 0.75rem;
+  }
+
+  .phone-mount { position: relative; display: flex; justify-content: center; }
+  .phone-card {
+    width: min(16.5rem, 80vw);
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 1.6rem;
+    padding: 0.5rem;
+    box-shadow: 0 1.6rem 2.6rem -1.2rem rgba(24, 24, 27, 0.35), 0 0.6rem 2.6rem -1.1rem rgba(10, 122, 104, 0.16);
+  }
+  .phone-card img { display: block; width: 100%; border-radius: 1.15rem; }
+
+  /* ---------- stat strip ---------- */
+  .stat-strip {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px;
+    background: var(--line);
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  }
+  .stat { padding: 1.4rem 1.1rem; background: var(--surface); }
+  .stat .n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.5rem; color: var(--accent-strong); font-weight: 600; }
+  .stat .l { margin-top: 0.25rem; font-size: 0.78rem; color: var(--muted); }
+
+  /* ---------- table of contents ---------- */
+  .skip-link {
+    position: absolute; left: -999px; top: 0; z-index: 100; background: var(--accent); color: #ffffff;
+    padding: 0.7rem 1.1rem; border-radius: 0 0 0.5rem 0; font-size: 0.85rem; font-weight: 600;
+  }
+  .skip-link:focus { left: 0; }
+  .toc { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .toc::-webkit-scrollbar { display: none; }
+  .toc ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 0.5rem; width: max-content; }
+  .toc a {
+    display: inline-block; font-family: var(--font-mono); font-size: 0.76rem; color: var(--ink-2);
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 99px;
+    padding: 0.4rem 0.85rem; text-decoration: none; white-space: nowrap; scroll-margin-top: 4.5rem;
+  }
+  .toc a:hover, .toc a:focus-visible { border-color: var(--accent); color: var(--accent-strong); }
+  .toc a:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  [id^="s-"] { scroll-margin-top: 4.5rem; }
+
+  /* ---------- section shell ---------- */
+  section { position: relative; }
+  .section-head { max-width: 38rem; margin-bottom: 2.2rem; }
+  .section-head h2 { font-size: clamp(1.4rem, 2.2vw, 1.85rem); margin-top: 0.75rem; }
+  .section-head p { color: var(--muted); margin-top: 0.65rem; font-size: 0.97rem; }
+
+  .prose { max-width: 39rem; color: var(--ink-2); font-size: 1rem; }
+  .prose strong { color: var(--ink); font-weight: 700; }
+  .prose + .prose { margin-top: 0.9rem; }
+
+  /* ---------- stack grid ---------- */
+  .stack-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+  .stack-card { background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; padding: 1.3rem 1.4rem; }
+  .stack-card h3 { font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; }
+  .stack-card h3 .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--accent); flex: none; }
+  .stack-card ul { list-style: none; margin: 0.85rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.55rem; }
+  .stack-card li { font-size: 0.87rem; color: var(--ink-2); display: flex; gap: 0.5rem; }
+  .stack-card li b { color: var(--ink); font-family: var(--font-mono); font-size: 0.83rem; font-weight: 600; flex: none; }
+  .stack-card li .why { color: var(--muted); }
+
+  /* ---------- architecture diagram ---------- */
+  .diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 1rem; padding: 2rem 1.7rem 1.7rem; }
+  .tier-label { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); margin-bottom: 0.65rem; }
+  .tier { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.65rem; }
+  .node { background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: 0.6rem; padding: 0.68rem 0.8rem; font-size: 0.82rem; }
+  .node b { display: block; color: var(--ink); font-weight: 700; margin-bottom: 0.12rem; }
+  .node span { color: var(--muted); font-size: 0.76rem; }
+  .node.ext { border-style: dashed; }
+  .node.accent { border-color: var(--accent); background: var(--accent-bg); }
+  .node.accent span { color: var(--accent-strong); }
+
+  .flow { display: flex; align-items: center; justify-content: center; gap: 0.6rem; margin: 1rem 0; font-family: var(--font-mono); font-size: 0.71rem; color: var(--accent-strong); }
+  .flow .rule { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--accent-line), transparent); }
+
+  .bypass-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin-top: 1.3rem; padding-top: 1.3rem; border-top: 1px dashed var(--line-strong); }
+  .bypass { font-size: 0.8rem; color: var(--ink-2); display: flex; gap: 0.6rem; }
+  .bypass svg { flex: none; margin-top: 0.15rem; color: var(--accent-strong); }
+  .bypass b { color: var(--ink); display: block; font-weight: 700; font-size: 0.83rem; margin-bottom: 0.15rem; }
+
+  /* ---------- screenshot gallery ---------- */
+  .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.3rem 1.1rem; }
+  .shot { background: var(--surface); border: 1px solid var(--line); border-radius: 1rem; padding: 1rem 1rem 1.15rem; }
+  .shot .frame { background: var(--surface-2); border: 1px solid var(--line); border-radius: 0.7rem; padding: 0.4rem; margin-bottom: 0.85rem; }
+  .shot .frame img { display: block; width: 100%; border-radius: 0.45rem; }
+  .shot .tag { font-family: var(--font-mono); font-size: 0.67rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent-strong); }
+  .shot h3 { font-size: 0.98rem; margin-top: 0.35rem; }
+  .shot p { margin: 0.4rem 0 0; font-size: 0.84rem; color: var(--muted); }
+
+  /* ---------- troubleshooting ---------- */
+  .bugs { display: flex; flex-direction: column; gap: 1rem; }
+  .bug { background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; overflow: hidden; }
+  .bug-head { padding: 1.1rem 1.3rem; display: flex; align-items: baseline; gap: 0.8rem; }
+  .bug-head .num { font-family: var(--font-mono); color: var(--faint); font-size: 0.78rem; }
+  .bug-head h3 { font-size: 1rem; }
+  .bug-body { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid var(--line); }
+  .bug-col { padding: 1rem 1.3rem 1.2rem; border-left: 1px solid var(--line); }
+  .bug-col:first-child { border-left: none; }
+  .bug-col .k { font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--faint); margin-bottom: 0.4rem; }
+  .bug-col p { margin: 0; font-size: 0.85rem; color: var(--ink-2); }
+
+  /* ---------- decisions ---------- */
+  .decisions { display: flex; flex-direction: column; }
+  .decision { display: grid; grid-template-columns: 6.2rem 1fr; gap: 1.5rem; padding: 1.5rem 0; border-top: 1px solid var(--line); }
+  .decision:last-child { border-bottom: 1px solid var(--line); }
+  .decision .id { font-family: var(--font-mono); font-size: 0.74rem; color: var(--faint); padding-top: 0.15rem; }
+  .decision h3 { font-size: 1rem; }
+  .decision p { margin: 0.45rem 0 0; color: var(--muted); font-size: 0.9rem; max-width: 37rem; }
+
+  /* ---------- design system narrative ---------- */
+  .design-note { background: var(--surface); border: 1px solid var(--line); border-radius: 1rem; padding: 1.8rem 1.9rem; }
+  .design-note .prose { max-width: none; }
+  .design-timeline { margin-top: 1.4rem; display: flex; flex-direction: column; gap: 0.9rem; }
+  .design-step { display: grid; grid-template-columns: 6.2rem 1fr; gap: 1rem; font-size: 0.87rem; }
+  .design-step .id { font-family: var(--font-mono); font-size: 0.72rem; color: var(--faint); padding-top: 0.1rem; }
+  .design-step .body b { color: var(--ink); }
+  .design-step .body span { color: var(--muted); display: block; margin-top: 0.15rem; }
+
+  /* ---------- practice grid ---------- */
+  .practice-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+  .practice { border: 1px solid var(--line); background: var(--surface); border-radius: 0.9rem; padding: 1.25rem 1.3rem 1.35rem; }
+  .practice .n { font-family: var(--font-mono); color: var(--accent-strong); font-size: 0.74rem; }
+  .practice h3 { font-size: 0.96rem; margin-top: 0.45rem; }
+  .practice p { margin: 0.45rem 0 0; font-size: 0.84rem; color: var(--muted); }
+
+  /* ---------- status table ---------- */
+  /* ---------- status board: chips, not sentences ---------- */
+  .status-board { background: var(--surface); border: 1px solid var(--line); border-radius: 0.9rem; padding: 1.4rem 1.5rem 1.5rem; }
+  .status-row + .status-row { margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--line); }
+  .status-row-head { display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.75rem; }
+  .status-row-head svg { flex: none; }
+  .status-row-head .done { color: var(--good-fg); }
+  .status-row-head .todo { color: var(--faint); }
+  .status-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .status-chip {
+    display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.82rem;
+    padding: 0.4rem 0.75rem; border-radius: 99px; border: 1px solid;
+  }
+  .status-chip svg { flex: none; }
+  .status-chip.done { background: var(--good-bg); border-color: transparent; color: var(--good-fg); }
+  .status-chip.todo { background: transparent; border-color: var(--line-strong); border-style: dashed; color: var(--muted); }
+  .status-note { margin-top: 1.1rem; padding-top: 1rem; border-top: 1px dashed var(--line-strong); font-size: 0.82rem; color: var(--muted); }
+
+  /* ---------- pipeline diagram ---------- */
+  .pipeline { display: flex; align-items: flex-start; padding-top: 0.3rem; }
+  .pipeline-step { flex: 1; position: relative; text-align: center; padding-top: 1rem; }
+  .pipeline-step::before, .pipeline-step::after { content: ""; position: absolute; top: 0.6rem; height: 1px; background: var(--line-strong); }
+  .pipeline-step::before { left: 0; right: 50%; }
+  .pipeline-step::after { left: 50%; right: 0; }
+  .pipeline-step:first-child::before, .pipeline-step:last-child::after { display: none; }
+  .pipeline-step .dot { position: absolute; top: 0.35rem; left: 50%; transform: translateX(-50%); width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--surface); }
+  .pipeline-step .label { font-family: var(--font-mono); font-size: 0.74rem; font-weight: 600; color: var(--ink); }
+  .pipeline-step .sub { font-size: 0.7rem; color: var(--muted); margin-top: 0.25rem; }
+  .pipeline-note { margin-top: 1.1rem; padding-top: 1rem; border-top: 1px dashed var(--line-strong); font-size: 0.83rem; color: var(--muted); }
+
+  .footer-cta { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; }
+  .footer-cta a {
+    display: inline-flex; align-items: center; gap: 0.4rem; font-family: var(--font-mono); font-size: 0.78rem;
+    color: var(--ink-2); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 99px;
+    padding: 0.42rem 0.85rem; min-height: 2.1rem; text-decoration: none; transition: border-color 0.15s, color 0.15s;
+  }
+  .footer-cta a:hover, .footer-cta a:focus-visible { border-color: var(--accent); color: var(--accent-strong); }
+  .footer-cta a:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  .footer-cta svg { flex: none; }
+
+  footer { padding: 3.2rem 0 4rem; border-top: 1px solid var(--line); margin-top: 1rem; }
+  .footer-grid { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1.5rem; }
+  .stack-tags { display: flex; flex-wrap: wrap; gap: 0.5rem; max-width: 32rem; }
+  .stack-tags span { font-family: var(--font-mono); font-size: 0.71rem; color: var(--ink-2); border: 1px solid var(--line-strong); background: var(--surface); border-radius: 99px; padding: 0.28rem 0.7rem; }
+  .footer-note { font-family: var(--font-mono); font-size: 0.75rem; color: var(--faint); text-align: right; }
+
+  @media (max-width: 880px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 2.2rem; }
+    .phone-card { width: min(16.5rem, 58vw); }
+    .stat-strip { grid-template-columns: repeat(3, 1fr); }
+    .gallery { grid-template-columns: 1fr 1fr; }
+    .stack-grid { grid-template-columns: 1fr; }
+    .bug-body { grid-template-columns: 1fr; }
+    .bug-col { border-left: none; border-top: 1px solid var(--line); }
+    .bug-col:first-child { border-top: none; }
+    .practice-grid { grid-template-columns: 1fr; }
+    .bypass-row, .erd-callouts { grid-template-columns: 1fr; }
+    .decision, .design-step { grid-template-columns: 1fr; gap: 0.35rem; }
+    .footer-grid { flex-direction: column; align-items: flex-start; }
+    .footer-note { text-align: left; }
+  }
+  @media (max-width: 560px) {
+    .gallery { grid-template-columns: 1fr; }
+    .tier { grid-template-columns: 1fr 1fr; }
+    .pipeline-step .sub { display: none; }
+    .stat-strip { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* ---------- scroll progress ---------- */
+  .progress-bar { position: fixed; top: 0; left: 0; height: 3px; width: 0%; background: var(--accent); z-index: 60; }
+
+  /* ---------- language toggle ----------
+     Opaque + blurred backdrop so it reads as intentional chrome rather than
+     a collision when a heading scrolls underneath it (fixed position). */
+  .lang-toggle {
+    position: fixed; top: 0.7rem; right: 0.9rem; z-index: 60;
+    display: flex; background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4);
+    border: 1px solid var(--line-strong);
+    border-radius: 99px; padding: 0.2rem; box-shadow: 0 0.4rem 1rem -0.4rem rgba(24,24,27,0.28);
+    font-family: var(--font-mono);
+  }
+  .lang-toggle button {
+    appearance: none; border: none; background: transparent; cursor: pointer;
+    font-family: inherit; font-size: 0.74rem; font-weight: 600; letter-spacing: 0.04em;
+    color: var(--muted); border-radius: 99px;
+    min-width: 2.75rem; min-height: 2.75rem; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .lang-toggle button[aria-pressed="true"] { background: var(--accent); color: #ffffff; font-weight: 700; }
+  .lang-toggle button:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  /* ---------- scroll reveal (JS-driven, progressive enhancement) ----------
+     Default: fully visible, so content never hides if JS doesn't run.
+     Only once <html class="js"> is set does the hidden/animated state apply. */
+  .js .reveal { opacity: 0; transform: translateY(8px); transition: opacity 0.28s ease-out, transform 0.28s ease-out; transition-delay: var(--d, 0ms); }
+  .js .reveal.is-visible { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .js .reveal { opacity: 1; transform: none; transition: none; }
+  }
+
+  /* ---------- animated diagram flow ---------- */
+  .flow .rule { position: relative; overflow: visible; }
+  .flow .rule::after {
+    content: ""; position: absolute; top: 50%; left: 0; width: 6px; height: 6px; margin-top: -3px;
+    border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px var(--accent-line);
+    animation: flowdot 2.2s ease-in-out 3;
+    animation-fill-mode: forwards;
+  }
+  @keyframes flowdot { 0% { left: 0%; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .flow .rule::after { animation: none; opacity: 0; } }
+
+  /* ---------- ERD / data model ---------- */
+  .erd-callouts { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin-top: 1.3rem; padding-top: 1.3rem; border-top: 1px dashed var(--line-strong); }
+  .erd-callouts .bypass svg { color: var(--accent-strong); }
+
+  /* ---------- sync flow stepper ---------- */
+  .flow-steps { position: relative; padding-left: 2.4rem; }
+  .flow-steps::before { content: ""; position: absolute; left: 0.85rem; top: 0.6rem; bottom: 0.6rem; width: 1px; background: var(--line-strong); }
+  .flow-step { position: relative; padding-bottom: 1.7rem; }
+  .flow-step:last-child { padding-bottom: 0; }
+  .flow-step::before {
+    content: attr(data-step); position: absolute; left: -2.4rem; top: -0.1rem; width: 1.7rem; height: 1.7rem;
+    border-radius: 50%; background: var(--surface); border: 1px solid var(--line-strong);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 0.72rem; color: var(--accent-strong); font-weight: 600;
+  }
+  .flow-step.accent::before { border-color: var(--accent); background: var(--accent-bg); }
+  .flow-step h3 { font-size: 0.95rem; }
+  .flow-step p { margin: 0.35rem 0 0; font-size: 0.87rem; color: var(--muted); max-width: 36rem; }
+
+  @media (max-width: 880px) {
+    .erd-callouts { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 560px) {
+    .tier { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<script>document.documentElement.classList.add("js");</script>
+
+<a class="skip-link" href="#s-why-ko">본문으로 건너뛰기 · Skip to content</a>
+
+<div class="progress-bar" id="scroll-progress"></div>
+
+<div class="lang-toggle" role="group" aria-label="Language / 언어">
+  <button type="button" id="lang-btn-ko" aria-pressed="true">KO</button>
+  <button type="button" id="lang-btn-en" aria-pressed="false">EN</button>
+</div>
+
+<div id="content-ko" lang="ko">
+
+<header>
+<div class="wrap hero">
+  <div class="hero-grid">
+    <div class="reveal" style="--d:0ms">
+      <span class="eyebrow">개인 프로젝트 · iOS 앱 + 백엔드 · 2026</span>
+      <h1>AI 비서는 채팅창이 아니라,<br /><em>당신의 하루</em> 안에 있어야 한다</h1>
+      <p class="hero-sub">
+        개인형 AI Agent는 빠르게 일상 깊숙이 들어오고 있지만, 여전히 대부분 별도의 대화창에 갇혀 있습니다.
+        Memdo는 반대 방향을 시도한 개인 프로젝트입니다 — Agent를 독립된 화면이 아니라, 이미 매일 열어보는
+        <strong>캘린더 그 자체의 형태</strong>로 만들었습니다. SwiftUI 클라이언트, Supabase 백엔드,
+        온디바이스·클라우드 이중 AI Agent까지 혼자 설계하고 구현했습니다.
+      </p>
+      <div class="hero-meta">
+        <span>SwiftUI · Swift 6</span>
+        <span>Supabase · PostgreSQL · Deno</span>
+        <span>Apple FoundationModels + OpenRouter</span>
+        <span>문맥형 Agent · 별도 채팅 탭 없음</span>
+      </div>
+      <div class="footer-cta" style="margin-top: 1.1rem;">
+        <a href="https://github.com/leebeanbin/memdo" target="_blank" rel="noopener">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+        <a href="mailto:muzidea0808@gmail.com">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M2 4.5l6 4.5 6-4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          muzidea0808@gmail.com
+        </a>
+      </div>
+    </div>
+    <div class="phone-mount">
+      <div class="phone-card"><img src="{{IMG_TODAY}}" alt="Memdo 오늘 화면 스크린샷" /></div>
+    </div>
+  </div>
+</div>
+
+<div class="stat-strip">
+  <div class="stat"><div class="n" data-value="19" data-decimals="0">19</div><div class="l">Edge Functions</div></div>
+  <div class="stat"><div class="n" data-value="14" data-decimals="0">14</div><div class="l">RLS 적용 테이블</div></div>
+  <div class="stat"><div class="n" data-value="75" data-decimals="0">75</div><div class="l">설계 결정 기록 (ADR)</div></div>
+  <div class="stat"><div class="n" data-value="191" data-decimals="0">191</div><div class="l">전체 커밋</div></div>
+  <div class="stat"><div class="n" data-value="15.5" data-decimals="1" data-suffix="k">15.5k</div><div class="l">Swift LOC</div></div>
+  <div class="stat"><div class="n" data-value="4.3" data-decimals="1" data-suffix="k">4.3k</div><div class="l">Edge Function TS LOC</div></div>
+</div>
+</header>
+
+<nav class="toc wrap" aria-label="목차" style="margin-top: 1.4rem;">
+  <ul>
+    <li><a href="#s-why-ko">왜</a></li>
+    <li><a href="#s-stack-ko">기술 스택</a></li>
+    <li><a href="#s-arch-ko">아키텍처</a></li>
+    <li><a href="#s-data-ko">데이터 모델</a></li>
+    <li><a href="#s-screens-ko">화면</a></li>
+    <li><a href="#s-sync-ko">동기화 흐름</a></li>
+    <li><a href="#s-bugs-ko">트러블슈팅</a></li>
+    <li><a href="#s-adr-ko">설계 결정</a></li>
+    <li><a href="#s-design-ko">디자인 시스템</a></li>
+    <li><a href="#s-practice-ko">개발 습관</a></li>
+    <li><a href="#s-status-ko">지금 상태</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-why-ko">
+    <span class="eyebrow">제품 관점</span>
+    <h2>왜 채팅이 아니라 캘린더인가</h2>
+    <p>사용자가 일부러 앱을 열고, 대화를 시작하고, 맥락을 다시 설명해야 하는 Agent는 결국 잘 안 쓰게
+    됩니다. Memdo는 Agent를 그 자리에 두는 대신, 이미 매일 보는 화면 위로 옮겼습니다.</p>
+  </div>
+  <div class="prose reveal">
+    처음엔 이 프로젝트에도 AI 전용 탭이 있었습니다. 하지만 실제로 써보니 탭을 하나 더 만드는 건
+    "Agent를 또 다른 대화창에 가두는 것"과 다르지 않았습니다. 그래서 AI 전용 페이지를 없애고, 오늘·
+    캘린더·설정 옆에 <strong>문맥형 Agent 액션</strong>만 남겼습니다(ADR-060) — 탭을 눌러 새 화면으로
+    이동하는 대신, 지금 보고 있는 일정 위에서 바로 제안을 받는 방식입니다.
+  </div>
+  <div class="prose reveal">
+    이 방향을 지키기 위한 규칙도 하나 있습니다 — 일정 완료 여부는 AI가 추측하지 않고, 사용자가 정한
+    시간에 사용자의 응답으로만 바뀝니다. 반복 일정과 알림은 AI 없이도 완결된 기본 기능이고, AI는
+    계획 초안·자연어 입력·빈 시간 탐색처럼 <strong>선택적으로</strong> 쓰는 보조 도구입니다. Agent는
+    무엇이든 제안만 하고, 실제 쓰기는 항상 사용자가 승인한 뒤 일반 API를 통해서만 일어납니다.
+  </div>
+</div>
+
+<div class="section-gap"></div>
+<div class="wrap"><div class="divider"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-stack-ko">
+    <span class="eyebrow">기술 스택</span>
+    <h2>무엇을, 왜 골랐는가</h2>
+    <p>익숙한 선택보다 요구사항에 맞는 선택을 우선했습니다. 각 항목 옆에 고른 이유를 적었습니다.</p>
+  </div>
+  <div class="stack-grid">
+    <div class="stack-card reveal">
+      <h3><span class="dot"></span>클라이언트</h3>
+      <ul>
+        <li><b>Swift 6</b><span class="why">strict concurrency로 actor·MainActor 경계를 컴파일 타임에 강제</span></li>
+        <li><b>SwiftUI</b><span class="why">Today·Calendar·Settings 전 화면과 위젯을 하나의 선언형 코드베이스로</span></li>
+        <li><b>WidgetKit / ActivityKit</b><span class="why">홈·잠금화면 위젯과 Dynamic Island Live Activity</span></li>
+        <li><b>Apple FoundationModels</b><span class="why">iOS 26 온디바이스 LLM, 네트워크 없이 대화·제안·Reflection</span></li>
+        <li><b>HealthKit / Share Extension</b><span class="why">운동 기록 자동 가져오기, 외부 앱에서 공유 받기</span></li>
+      </ul>
+    </div>
+    <div class="stack-card reveal">
+      <h3><span class="dot"></span>백엔드</h3>
+      <ul>
+        <li><b>Supabase</b><span class="why">Postgres + Auth + Edge Functions + Vault + Cron을 한 플랫폼에서, 50명 규모 파일럿에 과설계 없이</span></li>
+        <li><b>PostgreSQL + RLS</b><span class="why">사용자 격리를 애플리케이션 코드가 아니라 DB 정책으로 강제</span></li>
+        <li><b>Deno / TypeScript</b><span class="why">Edge Function 19개, npm 의존성 그대로 사용</span></li>
+        <li><b>SQL migration</b><span class="why">ORM 없이 스키마 원본을 SQL로 유지, RLS·cron·view 이중 관리 방지</span></li>
+        <li><b>GitHub Actions</b><span class="why">typecheck+test 통과 후에만 migration push·함수 배포</span></li>
+      </ul>
+    </div>
+    <div class="stack-card reveal">
+      <h3><span class="dot"></span>AI / Agent</h3>
+      <ul>
+        <li><b>OpenRouter</b><span class="why">사용자가 자기 API 키(BYOK)를 넣는 클라우드 경로, 특정 벤더에 고정되지 않음</span></li>
+        <li><b>SSE Streaming</b><span class="why">Chat Completions 응답을 토큰 단위로 스트리밍, tool_call 델타를 누적 파싱</span></li>
+        <li><b>서버 사이드 Reflection</b><span class="why">모델의 "충돌 없음" 주장을 서버가 DB로 재검증</span></li>
+        <li><b>Hourly Rate Limit</b><span class="why">agent_chat_requests 로그 테이블로 사용량 제한</span></li>
+      </ul>
+    </div>
+    <div class="stack-card reveal">
+      <h3><span class="dot"></span>외부 연동</h3>
+      <ul>
+        <li><b>Google Calendar API</b><span class="why">읽기 전용 미러, 로그인과 분리된 별도 동의, refresh token은 Vault</span></li>
+        <li><b>Slack Incoming Webhook</b><span class="why">OAuth 앱 심사 없이 사용자가 직접 발급한 URL로 즉시 연결</span></li>
+        <li><b>Google / GitHub 로그인</b><span class="why">Supabase Auth OAuth, 실기기 로그인·세션 복원 검증 완료</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-arch-ko">
+    <span class="eyebrow">아키텍처</span>
+    <h2>세 계층, 그리고 백엔드를 거치지 않는 두 경로</h2>
+    <p>iOS 클라이언트, Supabase 위의 19개 Edge Function, 그리고 Postgres·외부 서비스로 이어지는 구조입니다.
+    Agent 온디바이스 추론과 Slack 알림은 의도적으로 백엔드를 우회합니다.</p>
+  </div>
+
+  <div class="diagram reveal">
+    <div class="tier-label">01 · iOS 클라이언트 (SwiftUI, Swift 6)</div>
+    <div class="tier">
+      <div class="node"><b>오늘 · 캘린더 · 설정</b><span>일정 CRUD, 반복, 위젯, Live Activity</span></div>
+      <div class="node accent"><b>온디바이스 Agent</b><span>Apple FoundationModels + Reflection</span></div>
+      <div class="node"><b>오프라인 Outbox</b><span>NWPathMonitor, 재연결 시 자동 재전송</span></div>
+      <div class="node"><b>공유 확장 · 위젯 · 알림</b><span>App Group snapshot 공유</span></div>
+    </div>
+
+    <div class="flow"><span class="rule"></span>HTTPS + Bearer Token (Supabase Auth)<span class="rule"></span></div>
+
+    <div class="tier-label">02 · Supabase Edge Functions (Deno/TypeScript, 19개)</div>
+    <div class="tier">
+      <div class="node"><b>todos · days · sync · rules</b><span>CRUD, 원자적 재예약, 증분 cursor</span></div>
+      <div class="node"><b>search · reviews · summaries</b><span>pg_trgm 검색, 하루 리뷰, 기간 요약</span></div>
+      <div class="node"><b>categories · workout-logs</b><span>사용자 정의 분류, 운동 기록</span></div>
+      <div class="node"><b>google-calendar-*</b><span>OAuth, 상태, 증분 sync (5개 함수)</span></div>
+      <div class="node accent"><b>agent-key · agent-cloud-chat</b><span>BYOK vault, SSE streaming, rate limit</span></div>
+    </div>
+
+    <div class="flow"><span class="rule"></span>SQL · RLS · Vault RPC<span class="rule"></span></div>
+
+    <div class="tier-label">03 · 데이터 &amp; 외부 서비스</div>
+    <div class="tier">
+      <div class="node"><b>PostgreSQL</b><span>owner RLS, optimistic version, pg_cron</span></div>
+      <div class="node"><b>Supabase Vault</b><span>refresh token · API 키, service-role 전용</span></div>
+      <div class="node ext"><b>Google Calendar API</b><span>읽기 전용 미러, 외부</span></div>
+      <div class="node ext"><b>OpenRouter</b><span>사용자 BYOK 키로 호출, 외부</span></div>
+    </div>
+
+    <div class="bypass-row">
+      <div class="bypass">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h9m0 0-3.5-3.5M11 8l-3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>온디바이스 Agent는 네트워크를 타지 않습니다</b>기기 안의 Apple FoundationModels로 대화·제안·Reflection을 전부 처리하고, 이 백엔드를 거치지 않습니다.</div>
+      </div>
+      <div class="bypass">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h9m0 0-3.5-3.5M11 8l-3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>Slack 알림도 백엔드를 우회합니다</b>사용자가 발급한 Incoming Webhook URL을 Keychain에 저장해 두고, iOS가 Slack에 직접 전송합니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-data-ko">
+    <span class="eyebrow">데이터 모델</span>
+    <h2>실제 스키마에 남아있는 결정들</h2>
+    <p>14개 테이블 중 핵심 관계만 추렸습니다. 외래키 하나하나가 위 ADR의 결과입니다 — 설계 문서가 아니라
+    실제 migration에서 그대로 가져왔습니다.</p>
+  </div>
+
+  <div class="diagram reveal">
+    <div class="tier-label">핵심 일정 도메인</div>
+    <div class="tier">
+      <div class="node"><b>users</b><span>Supabase Auth 사용자, 1행</span></div>
+      <div class="node"><b>user_calendars</b><span>가입 시 개인·업무 2개 자동 생성</span></div>
+      <div class="node accent"><b>todos</b><span>(calendar_id, user_id) 복합 FK로 소유 캘린더 고정</span></div>
+    </div>
+
+    <div class="tier-label" style="margin-top:1.2rem;">확장 도메인 — 전부 users에서 갈라짐</div>
+    <div class="tier">
+      <div class="node"><b>schedule_rules</b><span>todos.schedule_rule_id가 참조, 반복 발생분의 원본 규칙</span></div>
+      <div class="node"><b>user_categories</b><span>사용자 정의 분류</span></div>
+      <div class="node"><b>workout_logs → workout_log_details</b><span>1:1 상세 확장 테이블</span></div>
+      <div class="node"><b>daily_reviews · user_preferences</b><span>하루 리뷰 로그, 설정 1행</span></div>
+    </div>
+
+    <div class="tier-label" style="margin-top:1.2rem;">연동 & 보안 — 별도 격리</div>
+    <div class="tier">
+      <div class="node"><b>google_calendar_connections</b><span>→ oauth_states, mirror_events로 확장</span></div>
+      <div class="node"><b>user_api_keys</b><span>secret_id만 저장, 실제 값은 Vault</span></div>
+      <div class="node"><b>agent_chat_requests</b><span>service-role 전용, rate limit 집계용</span></div>
+    </div>
+
+    <div class="erd-callouts">
+      <div class="bypass">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h9m0 0-3.5-3.5M11 8l-3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>todos.rescheduled_from_id → todos (자기 참조)</b>재예약할 때마다 원본 id를 그대로 남겨, 이력을 따라가면 한 일정이 몇 번 옮겨졌는지 그대로 추적됩니다.</div>
+      </div>
+      <div class="bypass">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h9m0 0-3.5-3.5M11 8l-3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>todos ↔ google_calendar_mirror_events: FK 없음</b>ADR-020대로 완전히 분리된 테이블입니다. 두 도메인을 합치는 조인은 애플리케이션 레이어(Query Service)에서만 일어납니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+<div class="wrap"><div class="divider"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-screens-ko">
+    <span class="eyebrow">화면</span>
+    <h2>실제로 동작하는 6개 화면</h2>
+    <p>목업이 아니라 iOS 시뮬레이터에서 직접 캡처한 화면입니다. 각 화면 아래에는 화면 뒤에서 실제로
+    일어나는 일을 적었습니다.</p>
+  </div>
+
+  <div class="gallery">
+    <div class="shot reveal">
+      <div class="frame"><img src="{{IMG_TODAY}}" alt="오늘 화면" /></div>
+      <span class="tag">오늘</span>
+      <h3>오늘의 방향 + 브리핑</h3>
+      <p>완료율은 사용자 응답으로만 바뀝니다. 브리핑은 서버가 아니라 iOS가 RSS를 직접 모아 온디바이스로
+      요약합니다.</p>
+    </div>
+    <div class="shot reveal">
+      <div class="frame"><img src="{{IMG_NEW_EVENT}}" alt="새 일정 만들기 화면" /></div>
+      <span class="tag">새 일정</span>
+      <h3>붙여넣기로 채우기</h3>
+      <p>텍스트를 붙여넣으면 온디바이스 Agent가 제목·시간·장소를 채웁니다. 저장 전 값은 전부 수정
+      가능합니다.</p>
+    </div>
+    <div class="shot reveal">
+      <div class="frame"><img src="{{IMG_EVENT_DETAIL}}" alt="일정 상세 화면" /></div>
+      <span class="tag">일정 상세</span>
+      <h3>낙관적 동시성</h3>
+      <p>모든 수정은 <code>version</code> 필드로 충돌을 검사합니다. 재예약은 원본 종료와 새 일정 생성을
+      하나의 Postgres 함수로 묶은 원자적 command입니다.</p>
+    </div>
+    <div class="shot reveal">
+      <div class="frame"><img src="{{IMG_CALENDAR}}" alt="캘린더 월간 화면" /></div>
+      <span class="tag">캘린더</span>
+      <h3>온디맨드 반복 일정</h3>
+      <p>반복 일정을 미리 다 만들어두지 않고, 조회 시점에 필요한 발생분만 계산합니다. DST·월말·단일
+      예외까지 검증했습니다.</p>
+    </div>
+    <div class="shot reveal">
+      <div class="frame"><img src="{{IMG_SETTINGS}}" alt="설정 화면" /></div>
+      <span class="tag">설정</span>
+      <h3>연결은 명시적으로</h3>
+      <p>Google Calendar·Slack 연결은 로그인과 분리된 별도 동의입니다. 실제 사용 범위(읽기·승인 후 쓰기)를
+      화면에 그대로 노출합니다.</p>
+    </div>
+    <div class="shot reveal">
+      <div class="frame"><img src="{{IMG_AGENT}}" alt="Agent 대화 시트" /></div>
+      <span class="tag">Agent</span>
+      <h3>제안만 하고, 쓰지 않는다</h3>
+      <p>Agent는 조회와 제안까지만 합니다. 실제 저장은 사용자가 승인한 뒤 일반 Command API가 수행합니다.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-sync-ko">
+    <span class="eyebrow">동기화 흐름</span>
+    <h2>지하철에서 일정을 수정해도 잃어버리지 않는 이유</h2>
+    <p>오프라인 중 만든 변경이 재연결 후 서버와 안전하게 수렴하는 전체 경로입니다. iOS <code>OutboxQueue.swift</code>와
+    백엔드 <code>sync</code> Edge Function이 나눠서 맡습니다.</p>
+  </div>
+  <div class="diagram reveal">
+    <div class="flow-steps">
+      <div class="flow-step" data-step="1">
+        <h3>오프라인 상태에서 생성·수정·삭제</h3>
+        <p>네트워크 요청이 실패하면 <code>ScheduleAPIError.offline</code>로 분류하고, 변경 내용을 버리지 않습니다.</p>
+      </div>
+      <div class="flow-step" data-step="2">
+        <h3><code>OutboxStore</code> actor가 디스크에 큐잉</h3>
+        <p>작업을 JSON으로 직렬화해 로컬에 순서대로 저장합니다. 앱이 종료돼도 큐는 남습니다.</p>
+      </div>
+      <div class="flow-step" data-step="3">
+        <h3><code>NWPathMonitor</code>가 복귀를 감지</h3>
+        <p>네트워크가 돌아오는 순간을 폴링이 아니라 이벤트로 받아, 불필요한 재시도를 하지 않습니다.</p>
+      </div>
+      <div class="flow-step accent" data-step="4">
+        <h3>큐를 순서대로 재전송, 원래 Idempotency-Key 재사용</h3>
+        <p>같은 요청이 중복 도착해도 서버가 같은 키로 한 번만 반영하도록, 큐에 넣을 때 만든 키를 그대로 씁니다.</p>
+      </div>
+      <div class="flow-step" data-step="5">
+        <h3>서버가 idempotency·version으로 충돌을 검사</h3>
+        <p>재연결 사이 다른 기기에서 먼저 바뀐 값이 있으면 409를 반환하고, 클라이언트는 무작정 덮어쓰지 않습니다.</p>
+      </div>
+      <div class="flow-step" data-step="6">
+        <h3>재시도할 가치가 있는 실패만 큐에 남긴다</h3>
+        <p>여전히 오프라인이면 그 자리에서 멈추고 나머지를 큐에 남깁니다. 서버가 실제로 거부한 요청(예: 충돌)은 큐에서 빼고 사용자에게 에러로 보여준 뒤 <code>refresh()</code>로 서버 상태와 다시 맞춥니다 — 의미 없는 재시도를 무한 반복하지 않습니다.</p>
+      </div>
+      <div class="flow-step" data-step="7">
+        <h3><code>(updatedAt, id)</code> 커서로 증분 반영</h3>
+        <p>다음 <code>sync</code> 호출부터는 깊은 OFFSET 없이 바뀐 것과 삭제 tombstone만 내려받습니다.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+<div class="wrap"><div class="divider"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-bugs-ko">
+    <span class="eyebrow">트러블슈팅</span>
+    <h2>실제로 겪고 고친 문제들</h2>
+    <p>결과 화면보다 더 많은 시간을 여기에 썼습니다. 증상 → 원인 → 해결 순으로 정리했습니다.</p>
+  </div>
+  <div class="bugs">
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">01</span><h3>로컬은 통과, CI는 실패하는 타임존 버그</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">증상</div><p>반복 일정 충돌 검사 테스트가 로컬(KST)에서는 통과하는데 GitHub Actions(UTC)에서는 실패했습니다.</p></div>
+        <div class="bug-col"><div class="k">원인</div><p>날짜 계산 함수가 <code>setHours</code>(로컬 타임존)와 <code>toISOString()</code>(UTC)을 섞어 썼습니다. 소스를 고친 뒤에도 테스트 픽스처가 오프셋 없는 문자열(<code>'2026-08-16T14:00:00'</code>)을 써서 같은 모호함이 재발했습니다.</p></div>
+        <div class="bug-col"><div class="k">해결</div><p><code>Date.UTC()</code> + 명시적 분 단위 오프셋으로 재작성하고, 테스트 픽스처도 프로덕션 함수로 만들도록 바꿔 <code>TZ=UTC</code>/<code>TZ=America/New_York</code>로 교차 검증했습니다.</p></div>
+      </div>
+    </div>
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">02</span><h3>컴파일러가 엉뚱한 곳을 지목한 SwiftUI 에러</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">증상</div><p>운동 기록 편집 화면에서 <code>ForEach</code>·<code>Range&lt;Int&gt;</code> 관련 캐스케이딩 컴파일 에러가 났는데, 정작 그 코드는 건드리지 않았습니다.</p></div>
+        <div class="bug-col"><div class="k">원인</div><p>바로 위에 추가한 <code>.frame(width: 76, minHeight: 64)</code> 한 줄이 원인이었습니다. SwiftUI엔 이 조합의 <code>frame</code> 오버로드가 없어 타입 추론이 실패하며 엉뚱한 위치를 에러로 보고했습니다.</p></div>
+        <div class="bug-col"><div class="k">해결</div><p><code>.frame(width: 76).frame(minHeight: 64)</code>로 체이닝을 분리해 해결했습니다. 이후 원인 불명 컴파일 에러는 최근에 수정한 한 줄부터 의심하는 습관이 생겼습니다.</p></div>
+      </div>
+    </div>
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">03</span><h3>버전 관리 없이 운영에 이미 배포돼 있던 기능</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">증상</div><p>운동 기록 테이블과 Edge Function이 migration 이력 없이 이미 운영 DB에 존재했습니다.</p></div>
+        <div class="bug-col"><div class="k">원인</div><p>CI 타입체크 스크립트가 함수 목록을 하드코딩하고 있어서, 나중에 추가된 함수 6개가 조용히 타입체크에서 빠지고 있었습니다.</p></div>
+        <div class="bug-col"><div class="k">해결</div><p>하드코딩 목록을 <code>deno check supabase/functions/*/index.ts</code> 글롭으로 바꾸고, 기존 스키마를 migration으로 되돌려 버전 관리에 편입시켰습니다.</p></div>
+      </div>
+    </div>
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">04</span><h3>에러 메시지가 클라이언트에서 조용히 사라짐</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">증상</div><p>Google Calendar 미연결 상태로 Agent를 호출하면 사용자에게 아무 안내도 뜨지 않고 그냥 실패했습니다.</p></div>
+        <div class="bug-col"><div class="k">원인</div><p>서버는 세부 코드를 <code>details.code</code>에 중첩해서 내려줬는데, iOS 에러 파서는 최상위 <code>error.code</code>만 읽고 있었습니다. 문서에는 맞았지만 실제 파싱 코드와는 어긋난 계약이었습니다.</p></div>
+        <div class="bug-col"><div class="k">해결</div><p>이미 클라이언트가 읽는 최상위 <code>ErrorCode</code>(<code>RESOURCE_NOT_FOUND</code>)로 통일했습니다. 이후 에러 계약은 문서가 아니라 실제 파싱 코드 기준으로 맞추게 됐습니다.</p></div>
+      </div>
+    </div>
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">05</span><h3>모델이 "충돌 없다"고 말해도 믿지 않기</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">증상</div><p>클라우드 Agent가 새 일정을 제안할 때, 모델이 시간 충돌이 없다고 답했는데 실제로는 기존 일정과 겹치는 경우가 있었습니다.</p></div>
+        <div class="bug-col"><div class="k">원인</div><p>LLM의 자연어 판단을 검증 없이 그대로 실행에 반영하면, 사실과 다른 주장이 그대로 커밋될 수 있습니다.</p></div>
+        <div class="bug-col"><div class="k">해결</div><p><code>propose_schedule</code> 호출마다 서버가 기존 일정과의 시간 겹침을 직접 재계산하는 Reflection 단계를 추가해, 모델 주장과 무관하게 서버가 사실을 재확인하도록 했습니다.</p></div>
+      </div>
+    </div>
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">06</span><h3>문서 요약을 믿지 않고 API를 직접 호출해 검증</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">증상</div><p>OpenRouter 모델 allowlist에 넣어둔 모델 일부가 실제로는 더 이상 서빙되지 않는 상태였습니다. 웹 문서 요약은 여전히 최신인 것처럼 그럴듯한 목록을 보여줬습니다.</p></div>
+        <div class="bug-col"><div class="k">원인</div><p>페이지 요약은 실제 API 응답을 대신하지 않습니다. "문서를 읽었다"가 "지금 이 모델이 존재한다"를 보장하지 않았습니다.</p></div>
+        <div class="bug-col"><div class="k">해결</div><p><code>curl https://openrouter.ai/api/v1/models</code>로 원본 JSON을 직접 받아 413개 모델을 확인하고, 실제 서빙 중인 모델만 allowlist에 남겼습니다. 이후 외부 API 스펙은 요약이 아니라 직접 호출로 확인합니다.</p></div>
+      </div>
+    </div>
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">07</span><h3>Reflection이 검사 실패를 "충돌 없음"으로 착각한 fail-open 버그</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">증상</div><p>이 포트폴리오를 검토받던 중 지적받았습니다 — Reflection이 "항상 DB로 재검증한다"고 적어놨는데, 실제로는 그 조회 자체가 실패하면 충돌 없음으로 넘어가는 코드였습니다.</p></div>
+        <div class="bug-col"><div class="k">원인</div><p><code>fetchSchedules(...).catch(() => [])</code> — 조회 실패를 빈 배열로 바꿔치기해서, 뒤따르는 충돌 검사가 항상 "겹치는 일정 없음"으로 통과했습니다. fail-closed여야 할 안전장치가 fail-open이었습니다.</p></div>
+        <div class="bug-col"><div class="k">해결</div><p>조회 실패를 별도 <code>conflictCheckFailed</code> 플래그로 서버→클라이언트까지 끝까지 흘려보내, 실패 시 "충돌 없음"이 아니라 "확인 못 함" 경고를 사용자에게 보여주도록 백엔드와 iOS를 함께 고쳤습니다.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+<div class="wrap"><div class="divider"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-adr-ko">
+    <span class="eyebrow">설계 결정</span>
+    <h2>75개 ADR 중 7개</h2>
+    <p>모든 비자명한 선택을 Architecture Decision Record로 남겼습니다. 이유를 남기면, 나중에
+    "왜 이렇게 했더라"를 다시 겪지 않습니다.</p>
+  </div>
+  <div class="decisions">
+    <div class="decision reveal">
+      <div class="id">ADR-039</div>
+      <div><h3>재예약은 전용 원자적 command</h3><p>날짜 이동 중 원본만 사라지는 부분 성공을 막기 위해, 원본
+      종료와 새 일정 생성을 하나의 PostgreSQL 함수 안에서 처리합니다.</p></div>
+    </div>
+    <div class="decision reveal">
+      <div class="id">ADR-011 / B4</div>
+      <div><h3>키셋 커서 동기화 + 오프라인 Outbox</h3><p>깊은 OFFSET 대신 <code>(updatedAt, id)</code> 커서로
+      증분 pull을 하고, 오프라인 중 생성·수정·삭제는 iOS 로컬 큐에 쌓았다가 재연결 시 재전송합니다.</p></div>
+    </div>
+    <div class="decision reveal">
+      <div class="id">ADR-020</div>
+      <div><h3>Google 이벤트는 Todo가 아니라 별도 미러</h3><p>외부 캘린더를 내 할 일 테이블에 그대로 합치지
+      않고, 출처·권한·완료 상태 책임을 분리한 읽기 전용 미러 테이블로 저장합니다.</p></div>
+    </div>
+    <div class="decision reveal">
+      <div class="id">ADR-073</div>
+      <div><h3>Agent는 온디바이스 우선, 클라우드는 BYOK</h3><p>상시 서버 오케스트레이션 대신 기기 내
+      Apple FoundationModels를 기본으로 쓰고, 원할 때만 사용자 자신의 OpenRouter 키로 더 강한 모델을
+      씁니다. 기존 AI 구독 재사용은 API 미제공이거나 서드파티 도구에 대한 이용약관 위반이라 채택하지
+      않았습니다.</p></div>
+    </div>
+    <div class="decision reveal">
+      <div class="id">B10 · Reflection</div>
+      <div><h3>모델의 주장을 그대로 믿지 않는다 — 검사 실패도 fail-closed</h3><p><code>propose_schedule</code> 호출마다 서버가 기존
+      일정과의 시간 충돌을 직접 재검사합니다. 모델이 "충돌 없음"이라고 답해도 서버가 다시 확인하고,
+      그 재검사 자체가 실패하면(예: DB 조회 오류) "충돌 없음"으로 넘기지 않고 확인 실패를 사용자에게
+      그대로 보여줍니다(트러블슈팅 07).</p></div>
+    </div>
+    <div class="decision reveal">
+      <div class="id">ADR-018</div>
+      <div><h3>READ COMMITTED + optimistic version</h3><p>50명 규모 파일럿에서는 무거운 격리 수준이나
+      비관적 lock 대신, <code>version</code> 필드 기반 낙관적 동시성으로 충분하다고 판단했습니다.</p></div>
+    </div>
+    <div class="decision reveal">
+      <div class="id">ADR-060</div>
+      <div><h3>AI 전용 탭을 없애고 문맥형 Agent 액션으로</h3><p>독립된 Agent 화면 대신 오늘·캘린더·설정
+      옆에 Agent 액션을 둬, 탭 전환 없이 현재 콘텐츠 위에서 바로 제안을 받게 했습니다. 이 프로젝트의
+      핵심 제품 결정입니다.</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-design-ko">
+    <span class="eyebrow">디자인 시스템</span>
+    <h2>이 프로젝트에서 처음으로 디자인 시스템을 만들어봤다</h2>
+    <p>기능을 하나씩 쌓는 게 아니라, 색상·타이포·모션 같은 "결정"을 토큰으로 만들고 근거를 남기는
+    작업을 이번에 처음 제대로 해봤습니다.</p>
+  </div>
+  <div class="design-note reveal">
+    <div class="prose">
+      처음에는 커스텀 컴포넌트를 직접 만드는 데 익숙했지만, 화면이 늘어날수록 색상과 모션이 화면마다
+      제각각 정해지는 문제를 겪었습니다. 그래서 임의로 정한 값 대신 <strong>재사용 가능한 토큰</strong>
+      (색상 프리셋, 타이포 스케일, 모션 지속시간)으로 디자인 결정을 코드와 동등하게 문서화하기
+      시작했습니다. 아래는 실제로 뒤집힌 결정들입니다 — 디자인 시스템을 처음 운영하면서 "한 번에
+      완성되지 않는다"는 걸 직접 겪었습니다.
+    </div>
+    <div class="design-timeline">
+      <div class="design-step"><div class="id">ADR-050</div><div class="body"><b>커스텀 FloatingTabBar + 색상 프리셋으로 v1 확정</b><span>직접 만든 하단 탭바와 여러 색상 프리셋으로 시작</span></div></div>
+      <div class="design-step"><div class="id">ADR-053</div><div class="body"><b>네이티브 TabView + iOS 26 Liquid Glass로 교체</b><span>시스템 안전 영역·축소 동작·접근성을 직접 재구현하지 않기로 결정 — 커스텀 컴포넌트를 걷어냄</span></div></div>
+      <div class="design-step"><div class="id">ADR-058</div><div class="body"><b>화려한 색상 프리셋 → semantic 흑백 + 단일 브랜드 색</b><span>기본 면은 흑백, 브랜드 색(앰버)은 로고·강조·Agent 근거에만 쓰도록 범위를 좁힘</span></div></div>
+      <div class="design-step"><div class="id">ADR-072</div><div class="body"><b>Apple 공식 컴포넌트 우선, 커스텀은 콘텐츠 계층에 집중</b><span>디자인 역량을 시스템이 대신 해주는 부분이 아니라 제품 고유 화면에 쓰기로 최종 정리</span></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-practice-ko">
+    <span class="eyebrow">개발 습관</span>
+    <h2>혼자 만들지만, 팀처럼 검증</h2>
+  </div>
+  <div class="practice-grid">
+    <div class="practice reveal">
+      <div class="n">01</div>
+      <h3>Migration이 곧 진실</h3>
+      <p>ORM 없이 SQL migration을 schema의 원본으로 유지합니다. RLS·cron·view를 이중 관리하지 않기
+      위한 선택입니다.</p>
+    </div>
+    <div class="practice reveal">
+      <div class="n">02</div>
+      <h3>RLS는 예외 없이</h3>
+      <p>모든 사용자 테이블에 <code>(select auth.uid())</code> 기반 owner 정책을 걸고, service-role
+      전용 쓰기가 필요한 테이블(Vault 참조, rate limit 로그)은 <code>authenticated</code> 쓰기 권한을
+      아예 부여하지 않습니다.</p>
+    </div>
+    <div class="practice reveal">
+      <div class="n">03</div>
+      <h3>AI를 페어 프로그래머로, 검증은 직접</h3>
+      <p>Claude Code와 함께 설계·구현했지만, 주장은 항상 실제 코드·API 응답으로 재검증했습니다. 예를
+      들어 이 포트폴리오 초안에 있던 "Google Calendar는 MCP로 연결된다"는 문구도, 백엔드에 실제 MCP
+      서버가 없다는 걸 직접 확인하고 "읽기 전용 OAuth 미러"로 고쳤습니다.</p>
+    </div>
+  </div>
+
+  <div class="section-gap sm"></div>
+
+  <div class="diagram reveal">
+    <div class="tier-label">코드가 배포되기까지</div>
+    <div class="pipeline">
+      <div class="pipeline-step"><div class="dot"></div><div class="label">커밋</div><div class="sub">feat/fix/chore/docs</div></div>
+      <div class="pipeline-step"><div class="dot"></div><div class="label">push</div><div class="sub">main 또는 PR</div></div>
+      <div class="pipeline-step"><div class="dot"></div><div class="label">CI</div><div class="sub">typecheck + 44 test, TZ 교차</div></div>
+      <div class="pipeline-step"><div class="dot"></div><div class="label">배포</div><div class="sub">migration + 함수</div></div>
+    </div>
+    <div class="pipeline-note">초기엔 <code>feat/*</code> 브랜치로 작업해 PR 리뷰 후 병합했습니다(#1~#5). CI 게이트가 안전망이 된 뒤로는 작은 변경을 <code>main</code>에 직접 커밋합니다 — 이 게이트가 실제로 CI 전용 실패(트러블슈팅 01)를 잡아냈습니다.</div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-status-ko">
+    <span class="eyebrow">지금 상태</span>
+    <h2>과장하지 않기</h2>
+    <p>포트폴리오라고 다 됐다고 쓰지 않습니다. 실제로 검증된 것과, 아직 손대지 않은 것을 구분합니다.</p>
+  </div>
+  <div class="status-board reveal">
+    <div class="status-row">
+      <div class="status-row-head"><svg class="done" width="13" height="13" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" fill="currentColor" opacity="0.15"/><path d="M3.2 6.2l1.8 1.8 3.8-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>완료 · 5</div>
+      <div class="status-chips">
+        <span class="status-chip done"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.3l2 2 4.2-4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>일정 CRUD·재예약·반복·검색</span>
+        <span class="status-chip done"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.3l2 2 4.2-4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>오프라인 Outbox·증분 동기화</span>
+        <span class="status-chip done"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.3l2 2 4.2-4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Google Calendar 읽기 전용 미러</span>
+        <span class="status-chip done"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.3l2 2 4.2-4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>온디바이스+클라우드 BYOK Agent</span>
+        <span class="status-chip done"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.3l2 2 4.2-4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Google·GitHub 로그인</span>
+      </div>
+    </div>
+    <div class="status-row">
+      <div class="status-row-head"><svg class="todo" width="13" height="13" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.6" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>진행 예정 · 6</div>
+      <div class="status-chips">
+        <span class="status-chip todo"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>Apple 로그인</span>
+        <span class="status-chip todo"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>비 Apple-Intelligence 온디바이스 폴백</span>
+        <span class="status-chip todo"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>Memdo Remote MCP</span>
+        <span class="status-chip todo"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>App Store 배포</span>
+        <span class="status-chip todo"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>Agent 평가셋 (승인율·tool-call 성공률)</span>
+        <span class="status-chip todo"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>부하·지연 검증 (p95, EXPLAIN ANALYZE)</span>
+      </div>
+    </div>
+    <div class="status-note">Apple 로그인은 App Store 심사 요건상 출시 전 필수이고, 나머지는 우선순위상 뒤로 미뤘습니다 — 폴백 모델은 스코프만 잡아둔 상태, MCP는 Google 연동이 안정된 뒤 착수합니다. Agent 평가셋과 부하 검증은 실사용자 규모가 커지면 가장 먼저 채울 계획입니다 — 지금은 지어낸 숫자를 넣는 대신 미착수로 정직하게 남깁니다.</div>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <div class="wrap footer-grid">
+    <div>
+      <span class="eyebrow">Memdo</span>
+      <div class="footer-cta">
+        <a href="https://github.com/leebeanbin/memdo" target="_blank" rel="noopener">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub · iOS
+        </a>
+        <a href="https://github.com/leebeanbin/memdo-backend" target="_blank" rel="noopener">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub · Backend
+        </a>
+        <a href="mailto:muzidea0808@gmail.com">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M2 4.5l6 4.5 6-4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          muzidea0808@gmail.com
+        </a>
+      </div>
+      <div class="stack-tags" style="margin-top: 0.9rem;">
+        <span>Swift 6</span><span>SwiftUI</span><span>WidgetKit</span><span>Live Activities</span>
+        <span>Supabase</span><span>PostgreSQL</span><span>Deno</span><span>Apple FoundationModels</span>
+        <span>OpenRouter</span><span>Google Calendar API</span><span>HealthKit</span>
+      </div>
+    </div>
+    <div class="footer-note">개인 프로젝트 · 기획부터 iOS·백엔드·배포까지 단독 개발<br />개발명 "Memdo", 정식 출시 전 상표 확인 예정</div>
+  </div>
+</footer>
+
+</div>
+<!-- /content-ko -->
+
+<div id="content-en" lang="en" hidden>
+
+<header>
+<div class="wrap hero">
+  <div class="hero-grid">
+    <div class="reveal" style="--d:0ms">
+      <span class="eyebrow">Solo project · iOS app + backend · 2026</span>
+      <h1>An AI assistant shouldn't live in a chat window —<br /><em>it belongs inside your day</em></h1>
+      <p class="hero-sub">
+        Personal AI agents are moving deeper into everyday life, but most are still trapped in a
+        separate chat window. Memdo tried the opposite — instead of a standalone screen, the agent
+        is built <strong>into the calendar itself</strong>, the surface you already open every day.
+        I designed and built the SwiftUI client, the Supabase backend, and a dual on-device/cloud
+        AI agent, solo.
+      </p>
+      <div class="hero-meta">
+        <span>SwiftUI · Swift 6</span>
+        <span>Supabase · PostgreSQL · Deno</span>
+        <span>Apple FoundationModels + OpenRouter</span>
+        <span>Contextual agent · no separate chat tab</span>
+      </div>
+      <div class="footer-cta" style="margin-top: 1.1rem;">
+        <a href="https://github.com/leebeanbin/memdo" target="_blank" rel="noopener">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+        <a href="mailto:muzidea0808@gmail.com">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M2 4.5l6 4.5 6-4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          muzidea0808@gmail.com
+        </a>
+      </div>
+    </div>
+    <div class="phone-mount">
+      <div class="phone-card"><img src="{{IMG_TODAY}}" alt="Memdo Today screen" /></div>
+    </div>
+  </div>
+</div>
+
+<div class="stat-strip">
+  <div class="stat"><div class="n" data-value="19" data-decimals="0">19</div><div class="l">Edge Functions</div></div>
+  <div class="stat"><div class="n" data-value="14" data-decimals="0">14</div><div class="l">Tables with RLS</div></div>
+  <div class="stat"><div class="n" data-value="75" data-decimals="0">75</div><div class="l">Decision records (ADR)</div></div>
+  <div class="stat"><div class="n" data-value="191" data-decimals="0">191</div><div class="l">Total commits</div></div>
+  <div class="stat"><div class="n" data-value="15.5" data-decimals="1" data-suffix="k">15.5k</div><div class="l">Swift LOC</div></div>
+  <div class="stat"><div class="n" data-value="4.3" data-decimals="1" data-suffix="k">4.3k</div><div class="l">Edge Function TS LOC</div></div>
+</div>
+</header>
+
+<nav class="toc wrap" aria-label="Table of contents" style="margin-top: 1.4rem;">
+  <ul>
+    <li><a href="#s-why-en">Why</a></li>
+    <li><a href="#s-stack-en">Tech stack</a></li>
+    <li><a href="#s-arch-en">Architecture</a></li>
+    <li><a href="#s-data-en">Data model</a></li>
+    <li><a href="#s-screens-en">Screens</a></li>
+    <li><a href="#s-sync-en">Sync flow</a></li>
+    <li><a href="#s-bugs-en">Troubleshooting</a></li>
+    <li><a href="#s-adr-en">Decisions</a></li>
+    <li><a href="#s-design-en">Design system</a></li>
+    <li><a href="#s-practice-en">Practice</a></li>
+    <li><a href="#s-status-en">Status</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-why-en">
+    <span class="eyebrow">Product thesis</span>
+    <h2>Why a calendar, not a chat window</h2>
+    <p>An agent that makes users open an app, start a conversation, and re-explain context ends up
+    unused. Memdo moves the agent to where planning already happens instead.</p>
+  </div>
+  <div class="prose reveal">
+    Early on, this project had a dedicated AI tab. In practice, adding one more tab turned out to be
+    no different from "locking the agent in yet another chat window." So the AI-only page was
+    removed, leaving only <strong>contextual agent actions</strong> next to Today, Calendar, and
+    Settings (ADR-060) — instead of navigating to a new screen, you get a suggestion directly on the
+    schedule you're already looking at.
+  </div>
+  <div class="prose reveal">
+    One rule protects that direction — completion is never guessed by AI, it only changes through
+    the user's own response at a time the user chose. Recurrence and reminders are complete features
+    without AI; AI is an <strong>optional</strong> tool for plan drafts, natural-language input, and
+    free-slot search. The agent only ever proposes; writes only happen through the normal API, after
+    the user approves.
+  </div>
+</div>
+
+<div class="section-gap"></div>
+<div class="wrap"><div class="divider"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-stack-en">
+    <span class="eyebrow">Tech stack</span>
+    <h2>What I chose, and why</h2>
+    <p>I optimized for fit over familiarity. Each item is paired with the reason it was chosen.</p>
+  </div>
+  <div class="stack-grid">
+    <div class="stack-card reveal">
+      <h3><span class="dot"></span>Client</h3>
+      <ul>
+        <li><b>Swift 6</b><span class="why">Strict concurrency enforces actor/MainActor boundaries at compile time</span></li>
+        <li><b>SwiftUI</b><span class="why">Today, Calendar, Settings, and widgets in one declarative codebase</span></li>
+        <li><b>WidgetKit / ActivityKit</b><span class="why">Home/lock-screen widgets and Dynamic Island Live Activities</span></li>
+        <li><b>Apple FoundationModels</b><span class="why">iOS 26 on-device LLM — conversation, proposals, and Reflection with no network call</span></li>
+        <li><b>HealthKit / Share Extension</b><span class="why">Automatic workout import, receiving shares from other apps</span></li>
+      </ul>
+    </div>
+    <div class="stack-card reveal">
+      <h3><span class="dot"></span>Backend</h3>
+      <ul>
+        <li><b>Supabase</b><span class="why">Postgres + Auth + Edge Functions + Vault + Cron on one platform, sized for a 50-person pilot without over-engineering</span></li>
+        <li><b>PostgreSQL + RLS</b><span class="why">User isolation enforced by DB policy, not application code</span></li>
+        <li><b>Deno / TypeScript</b><span class="why">19 Edge Functions, npm dependencies used as-is</span></li>
+        <li><b>SQL migrations</b><span class="why">No ORM — SQL stays the source of truth, so RLS/cron/views are never maintained twice</span></li>
+        <li><b>GitHub Actions</b><span class="why">Migration push and function deploy only run after typecheck + contract tests pass</span></li>
+      </ul>
+    </div>
+    <div class="stack-card reveal">
+      <h3><span class="dot"></span>AI / Agent</h3>
+      <ul>
+        <li><b>OpenRouter</b><span class="why">Cloud path where the user brings their own API key (BYOK) — not locked to one vendor</span></li>
+        <li><b>SSE streaming</b><span class="why">Chat Completions streamed token by token; tool_call deltas accumulated incrementally</span></li>
+        <li><b>Server-side Reflection</b><span class="why">The model's "no conflict" claim is re-verified against the DB, server-side</span></li>
+        <li><b>Hourly rate limit</b><span class="why">Usage capped via the agent_chat_requests log table</span></li>
+      </ul>
+    </div>
+    <div class="stack-card reveal">
+      <h3><span class="dot"></span>Integrations</h3>
+      <ul>
+        <li><b>Google Calendar API</b><span class="why">Read-only mirror, consent kept separate from login, refresh token in Vault</span></li>
+        <li><b>Slack Incoming Webhook</b><span class="why">Instant connection via a user-issued URL — no OAuth app review needed</span></li>
+        <li><b>Google / GitHub sign-in</b><span class="why">Supabase Auth OAuth, verified on real devices with session restore</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-arch-en">
+    <span class="eyebrow">Architecture</span>
+    <h2>Three tiers, and two paths that skip the backend</h2>
+    <p>The iOS client, 19 Supabase Edge Functions, and Postgres plus external services form the
+    core path. On-device agent inference and Slack notifications deliberately bypass the backend.</p>
+  </div>
+
+  <div class="diagram reveal">
+    <div class="tier-label">01 · iOS client (SwiftUI, Swift 6)</div>
+    <div class="tier">
+      <div class="node"><b>Today · Calendar · Settings</b><span>Schedule CRUD, recurrence, widgets, Live Activity</span></div>
+      <div class="node accent"><b>On-device agent</b><span>Apple FoundationModels + Reflection</span></div>
+      <div class="node"><b>Offline outbox</b><span>NWPathMonitor, auto-replay on reconnect</span></div>
+      <div class="node"><b>Share ext. · widgets · notifications</b><span>Shared via App Group snapshot</span></div>
+    </div>
+
+    <div class="flow"><span class="rule"></span>HTTPS + Bearer token (Supabase Auth)<span class="rule"></span></div>
+
+    <div class="tier-label">02 · Supabase Edge Functions (Deno/TypeScript, 19)</div>
+    <div class="tier">
+      <div class="node"><b>todos · days · sync · rules</b><span>CRUD, atomic reschedule, incremental cursor</span></div>
+      <div class="node"><b>search · reviews · summaries</b><span>pg_trgm search, daily review, period summaries</span></div>
+      <div class="node"><b>categories · workout-logs</b><span>Custom categories, workout logging</span></div>
+      <div class="node"><b>google-calendar-*</b><span>OAuth, status, incremental sync (5 functions)</span></div>
+      <div class="node accent"><b>agent-key · agent-cloud-chat</b><span>BYOK vault, SSE streaming, rate limiting</span></div>
+    </div>
+
+    <div class="flow"><span class="rule"></span>SQL · RLS · Vault RPC<span class="rule"></span></div>
+
+    <div class="tier-label">03 · Data &amp; external services</div>
+    <div class="tier">
+      <div class="node"><b>PostgreSQL</b><span>Owner RLS, optimistic version, pg_cron</span></div>
+      <div class="node"><b>Supabase Vault</b><span>Refresh tokens · API keys, service-role only</span></div>
+      <div class="node ext"><b>Google Calendar API</b><span>Read-only mirror, external</span></div>
+      <div class="node ext"><b>OpenRouter</b><span>Called with the user's BYOK key, external</span></div>
+    </div>
+
+    <div class="bypass-row">
+      <div class="bypass">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h9m0 0-3.5-3.5M11 8l-3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>The on-device agent never touches the network</b>Conversation, proposals, and Reflection run entirely on Apple FoundationModels on-device and never reach this backend.</div>
+      </div>
+      <div class="bypass">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h9m0 0-3.5-3.5M11 8l-3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>Slack notifications also bypass the backend</b>iOS stores a user-issued Incoming Webhook URL in Keychain and posts to Slack directly.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-data-en">
+    <span class="eyebrow">Data model</span>
+    <h2>Decisions still visible in the live schema</h2>
+    <p>Of 14 tables, here are the relationships that matter. Every foreign key below is the result
+    of an ADR above — pulled straight from the migrations, not a design doc.</p>
+  </div>
+
+  <div class="diagram reveal">
+    <div class="tier-label">Core scheduling domain</div>
+    <div class="tier">
+      <div class="node"><b>users</b><span>Supabase Auth user, one row</span></div>
+      <div class="node"><b>user_calendars</b><span>Personal + work calendars auto-created on signup</span></div>
+      <div class="node accent"><b>todos</b><span>Composite FK (calendar_id, user_id) pins ownership to a calendar</span></div>
+    </div>
+
+    <div class="tier-label" style="margin-top:1.2rem;">Extended domain — all branch off users</div>
+    <div class="tier">
+      <div class="node"><b>schedule_rules</b><span>Referenced by todos.schedule_rule_id, the source rule behind an occurrence</span></div>
+      <div class="node"><b>user_categories</b><span>User-defined categories</span></div>
+      <div class="node"><b>workout_logs → workout_log_details</b><span>1:1 detail extension table</span></div>
+      <div class="node"><b>daily_reviews · user_preferences</b><span>Daily review log, single settings row</span></div>
+    </div>
+
+    <div class="tier-label" style="margin-top:1.2rem;">Integrations & security — kept isolated</div>
+    <div class="tier">
+      <div class="node"><b>google_calendar_connections</b><span>Extended by oauth_states, mirror_events</span></div>
+      <div class="node"><b>user_api_keys</b><span>Stores only a secret_id — the value itself lives in Vault</span></div>
+      <div class="node"><b>agent_chat_requests</b><span>Service-role only, used for rate-limit counting</span></div>
+    </div>
+
+    <div class="erd-callouts">
+      <div class="bypass">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h9m0 0-3.5-3.5M11 8l-3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>todos.rescheduled_from_id → todos (self-referencing)</b>Every reschedule keeps the original id, so following the chain shows exactly how many times an item has moved.</div>
+      </div>
+      <div class="bypass">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h9m0 0-3.5-3.5M11 8l-3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><b>todos ↔ google_calendar_mirror_events: no FK</b>Per ADR-020, these tables are fully separate. Any join across the two domains happens only in the application layer (the query service).</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+<div class="wrap"><div class="divider"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-screens-en">
+    <span class="eyebrow">Screens</span>
+    <h2>Six screens that actually work</h2>
+    <p>These are captures from the iOS Simulator, not mockups. Under each one is what's actually
+    happening behind the screen.</p>
+  </div>
+
+  <div class="gallery">
+    <div class="shot reveal">
+      <div class="frame"><img src="{{IMG_TODAY}}" alt="Today screen" /></div>
+      <span class="tag">Today</span>
+      <h3>Today's direction + briefing</h3>
+      <p>Completion rate changes only through the user's own response. The briefing isn't server-side — iOS collects RSS directly and summarizes it on-device.</p>
+    </div>
+    <div class="shot reveal">
+      <div class="frame"><img src="{{IMG_NEW_EVENT}}" alt="New event screen" /></div>
+      <span class="tag">New event</span>
+      <h3>Fill from paste</h3>
+      <p>Paste text and the on-device agent fills in title, time, and location. Every value stays editable before saving.</p>
+    </div>
+    <div class="shot reveal">
+      <div class="frame"><img src="{{IMG_EVENT_DETAIL}}" alt="Event detail screen" /></div>
+      <span class="tag">Event detail</span>
+      <h3>Optimistic concurrency</h3>
+      <p>Every edit is checked against a <code>version</code> field. Reschedule is an atomic command that closes the original and creates the replacement in one Postgres function.</p>
+    </div>
+    <div class="shot reveal">
+      <div class="frame"><img src="{{IMG_CALENDAR}}" alt="Calendar month view" /></div>
+      <span class="tag">Calendar</span>
+      <h3>On-demand recurrence</h3>
+      <p>Recurring events aren't pre-materialized — only the occurrences a query actually needs get computed. Verified against DST, month-end, and single-instance exceptions.</p>
+    </div>
+    <div class="shot reveal">
+      <div class="frame"><img src="{{IMG_SETTINGS}}" alt="Settings screen" /></div>
+      <span class="tag">Settings</span>
+      <h3>Connections are explicit</h3>
+      <p>Google Calendar and Slack connections are separate consent from login. The screen shows the real scope in use (read, or write-after-approval) as-is.</p>
+    </div>
+    <div class="shot reveal">
+      <div class="frame"><img src="{{IMG_AGENT}}" alt="Agent chat sheet" /></div>
+      <span class="tag">Agent</span>
+      <h3>Proposes, never writes</h3>
+      <p>The agent only reads and proposes. Actual writes happen through the normal Command API, only after the user approves.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-sync-en">
+    <span class="eyebrow">Sync flow</span>
+    <h2>Why editing on the subway never loses your changes</h2>
+    <p>The full path an offline change takes to safely converge with the server on reconnect. Split
+    between iOS <code>OutboxQueue.swift</code> and the backend <code>sync</code> Edge Function.</p>
+  </div>
+  <div class="diagram reveal">
+    <div class="flow-steps">
+      <div class="flow-step" data-step="1">
+        <h3>Create, edit, or delete while offline</h3>
+        <p>A failed network request is classified as <code>ScheduleAPIError.offline</code> — the change is never discarded.</p>
+      </div>
+      <div class="flow-step" data-step="2">
+        <h3>The <code>OutboxStore</code> actor queues it to disk</h3>
+        <p>Operations are serialized to JSON and stored locally, in order. The queue survives an app restart.</p>
+      </div>
+      <div class="flow-step" data-step="3">
+        <h3><code>NWPathMonitor</code> detects reconnection</h3>
+        <p>Network return is delivered as an event, not polled, so there are no wasted retries.</p>
+      </div>
+      <div class="flow-step accent" data-step="4">
+        <h3>Queue replays in order, reusing the original Idempotency-Key</h3>
+        <p>The key generated when an item was queued is reused, so a duplicate delivery is only ever applied once server-side.</p>
+      </div>
+      <div class="flow-step" data-step="5">
+        <h3>The server checks idempotency and version for conflicts</h3>
+        <p>If another device changed the value first while offline, the server returns 409 instead of letting the client blindly overwrite it.</p>
+      </div>
+      <div class="flow-step" data-step="6">
+        <h3>Only retries worth making stay queued</h3>
+        <p>Still offline: stop right there and leave the rest queued. A request the server actually rejected (a real conflict) gets dropped from the queue, surfaced to the user as an error, and reconciled via <code>refresh()</code> — no infinite retry of a failure that retrying can't fix.</p>
+      </div>
+      <div class="flow-step" data-step="7">
+        <h3>Incremental pull via the <code>(updatedAt, id)</code> cursor</h3>
+        <p>Every following <code>sync</code> call fetches only what changed and delete tombstones — no deep OFFSET.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+<div class="wrap"><div class="divider"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-bugs-en">
+    <span class="eyebrow">Troubleshooting</span>
+    <h2>Real problems, actually fixed</h2>
+    <p>More time went here than into the screens. Laid out as symptom → cause → fix.</p>
+  </div>
+  <div class="bugs">
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">01</span><h3>A timezone bug that passed locally but failed in CI</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">Symptom</div><p>The recurrence conflict-check test passed locally (KST) but failed on GitHub Actions (UTC).</p></div>
+        <div class="bug-col"><div class="k">Cause</div><p>The date functions mixed <code>setHours</code> (local timezone) with <code>toISOString()</code> (UTC). Even after fixing the source, the test fixtures used offset-less strings (<code>'2026-08-16T14:00:00'</code>), reintroducing the same ambiguity.</p></div>
+        <div class="bug-col"><div class="k">Fix</div><p>Rewrote the date math with <code>Date.UTC()</code> plus an explicit minute offset, and rebuilt the fixtures on top of the real production function, cross-checked under <code>TZ=UTC</code> and <code>TZ=America/New_York</code>.</p></div>
+      </div>
+    </div>
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">02</span><h3>A SwiftUI error the compiler blamed on the wrong line</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">Symptom</div><p>The workout log editor threw a cascading compile error pointing at <code>ForEach</code> and <code>Range&lt;Int&gt;</code> — code I hadn't touched.</p></div>
+        <div class="bug-col"><div class="k">Cause</div><p>The real cause was one line added just above: <code>.frame(width: 76, minHeight: 64)</code>. SwiftUI has no <code>frame</code> overload for that combination, so type inference failed and the compiler blamed an unrelated spot.</p></div>
+        <div class="bug-col"><div class="k">Fix</div><p>Split it into <code>.frame(width: 76).frame(minHeight: 64)</code>. Since then, an unexplained compile error means checking the most recently edited line first.</p></div>
+      </div>
+    </div>
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">03</span><h3>A feature already live in production with no version history</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">Symptom</div><p>The workout-log table and its Edge Function already existed in the production database with no migration history.</p></div>
+        <div class="bug-col"><div class="k">Cause</div><p>The CI typecheck script hardcoded its list of functions, so six functions added later were silently skipped by typechecking.</p></div>
+        <div class="bug-col"><div class="k">Fix</div><p>Replaced the hardcoded list with a <code>deno check supabase/functions/*/index.ts</code> glob, and backfilled the existing schema into a migration to bring it under version control.</p></div>
+      </div>
+    </div>
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">04</span><h3>An error that silently vanished on the client</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">Symptom</div><p>Calling the agent while Google Calendar was disconnected just failed silently — no message shown to the user.</p></div>
+        <div class="bug-col"><div class="k">Cause</div><p>The server nested its detail code under <code>details.code</code>, while the iOS error parser only read the top-level <code>error.code</code>. The docs matched, but the actual parsing code didn't.</p></div>
+        <div class="bug-col"><div class="k">Fix</div><p>Unified on the top-level <code>ErrorCode</code> (<code>RESOURCE_NOT_FOUND</code>) the client already parsed. Error contracts are now checked against the parsing code, not the docs.</p></div>
+      </div>
+    </div>
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">05</span><h3>Not trusting the model when it says "no conflict"</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">Symptom</div><p>When the cloud agent proposed a new event, it sometimes claimed there was no time conflict when one actually existed.</p></div>
+        <div class="bug-col"><div class="k">Cause</div><p>Acting on an LLM's natural-language judgment without verification lets a false claim get committed as fact.</p></div>
+        <div class="bug-col"><div class="k">Fix</div><p>Added a Reflection step: every <code>propose_schedule</code> call has the server independently recompute the time overlap against existing events, regardless of what the model claimed.</p></div>
+      </div>
+    </div>
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">06</span><h3>Verifying against the live API instead of trusting a doc summary</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">Symptom</div><p>Some models in the OpenRouter allowlist had already stopped being served. A web page summary still returned a plausible-looking, seemingly current list.</p></div>
+        <div class="bug-col"><div class="k">Cause</div><p>A page summary is not a substitute for the actual API response. "The doc was read" doesn't guarantee "this model exists right now."</p></div>
+        <div class="bug-col"><div class="k">Fix</div><p>Pulled the raw JSON directly via <code>curl https://openrouter.ai/api/v1/models</code>, confirmed 413 models, and kept only the ones actually being served in the allowlist. External API specs are now checked by direct call, never by summary.</p></div>
+      </div>
+    </div>
+    <div class="bug reveal">
+      <div class="bug-head"><span class="num">07</span><h3>Reflection's fail-open bug: a failed check read as "no conflict"</h3></div>
+      <div class="bug-body">
+        <div class="bug-col"><div class="k">Symptom</div><p>Caught during a review of this very page — it claimed Reflection "always re-verifies against the DB," but the code silently fell through to "no conflict" whenever that lookup itself failed.</p></div>
+        <div class="bug-col"><div class="k">Cause</div><p><code>fetchSchedules(...).catch(() => [])</code> swapped a fetch failure for an empty array, so the conflict check downstream always passed as "nothing overlaps." A safeguard meant to fail closed was failing open.</p></div>
+        <div class="bug-col"><div class="k">Fix</div><p>Threaded a dedicated <code>conflictCheckFailed</code> flag from the backend through to the client, so a failed check now shows the user an explicit "couldn't verify" warning instead of silently reading as safe — fixed in the backend and iOS together.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+<div class="wrap"><div class="divider"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-adr-en">
+    <span class="eyebrow">Design decisions</span>
+    <h2>7 of 75 ADRs</h2>
+    <p>Every non-obvious choice was recorded as an Architecture Decision Record. Writing the reason
+    down once means never re-litigating "why did we do it this way" later.</p>
+  </div>
+  <div class="decisions">
+    <div class="decision reveal">
+      <div class="id">ADR-039</div>
+      <div><h3>Reschedule is a dedicated atomic command</h3><p>To prevent a partial failure where only
+      the original disappears mid-move, closing the original and creating the replacement happen
+      inside one PostgreSQL function.</p></div>
+    </div>
+    <div class="decision reveal">
+      <div class="id">ADR-011 / B4</div>
+      <div><h3>Keyset cursor sync + offline outbox</h3><p>Incremental pull uses an <code>(updatedAt, id)</code>
+      cursor instead of a deep OFFSET; offline creates/edits/deletes queue locally on iOS and replay
+      on reconnect.</p></div>
+    </div>
+    <div class="decision reveal">
+      <div class="id">ADR-020</div>
+      <div><h3>Google events are a separate mirror, not a Todo</h3><p>External calendar events aren't
+      merged into the Todo table — they're stored in a read-only mirror table that keeps source,
+      permissions, and completion state as separate responsibilities.</p></div>
+    </div>
+    <div class="decision reveal">
+      <div class="id">ADR-073</div>
+      <div><h3>On-device agent first, cloud is BYOK</h3><p>Instead of an always-on server
+      orchestration layer, Apple FoundationModels on-device is the default, and a user's own
+      OpenRouter key unlocks a stronger cloud model on demand. Reusing an existing AI subscription
+      was ruled out — it either has no API access at all, or violates a third-party tool's terms of
+      service.</p></div>
+    </div>
+    <div class="decision reveal">
+      <div class="id">B10 · Reflection</div>
+      <div><h3>Never take the model's claim at face value — fail closed on the check itself</h3><p>Every
+      <code>propose_schedule</code> call has the server independently re-check the time conflict
+      against existing events, even when the model says "no conflict" — and if that re-check itself
+      fails (a DB error), it's surfaced to the user as unverified, never silently treated as "no
+      conflict" (Troubleshooting 07).</p></div>
+    </div>
+    <div class="decision reveal">
+      <div class="id">ADR-018</div>
+      <div><h3>READ COMMITTED + optimistic version</h3><p>At a 50-person pilot's scale, a
+      <code>version</code>-field-based optimistic concurrency model is enough — no need for a
+      heavier isolation level or pessimistic locking.</p></div>
+    </div>
+    <div class="decision reveal">
+      <div class="id">ADR-060</div>
+      <div><h3>Removed the AI-only tab for contextual agent actions</h3><p>Instead of a standalone
+      agent screen, agent actions sit next to Today, Calendar, and Settings, so a suggestion arrives
+      on the current content with no tab switch. The core product decision of this project.</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-design-en">
+    <span class="eyebrow">Design system</span>
+    <h2>The first time I built a real design system</h2>
+    <p>Instead of stacking features one at a time, I turned decisions — color, type, motion — into
+    tokens with a written reason, properly, for the first time.</p>
+  </div>
+  <div class="design-note reveal">
+    <div class="prose">
+      I was used to hand-building custom components, but as screens multiplied, color and motion
+      started getting redecided ad hoc on every screen. So instead of arbitrary values, I started
+      documenting design decisions as <strong>reusable tokens</strong> (color presets, a type scale,
+      motion durations) with the same rigor as code. Below are decisions that were actually
+      reversed — running a design system for the first time meant learning firsthand that it never
+      converges in one pass.
+    </div>
+    <div class="design-timeline">
+      <div class="design-step"><div class="id">ADR-050</div><div class="body"><b>v1 locked in with a custom FloatingTabBar + color presets</b><span>Started with a hand-built bottom tab bar and several color presets</span></div></div>
+      <div class="design-step"><div class="id">ADR-053</div><div class="body"><b>Replaced with the native TabView + iOS 26 Liquid Glass</b><span>Decided not to reimplement safe areas, collapse behavior, and accessibility by hand — the custom component was removed</span></div></div>
+      <div class="design-step"><div class="id">ADR-058</div><div class="body"><b>Colorful presets → semantic black/white + a single brand color</b><span>Base surfaces became black/white; the brand color (amber) was scoped down to logo, emphasis, and agent evidence only</span></div></div>
+      <div class="design-step"><div class="id">ADR-072</div><div class="body"><b>Apple's own components first, custom work reserved for content</b><span>Settled on spending design effort on product-specific screens, not on what the system already handles</span></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-practice-en">
+    <span class="eyebrow">Engineering practice</span>
+    <h2>Built solo, verified like a team</h2>
+  </div>
+  <div class="practice-grid">
+    <div class="practice reveal">
+      <div class="n">01</div>
+      <h3>Migrations are the source of truth</h3>
+      <p>No ORM — SQL migrations stay the schema's origin, so RLS, cron, and views are never
+      maintained in two places.</p>
+    </div>
+    <div class="practice reveal">
+      <div class="n">02</div>
+      <h3>RLS, no exceptions</h3>
+      <p>Every user table gets an owner policy keyed on <code>(select auth.uid())</code>; tables that
+      need service-role-only writes (Vault references, rate-limit logs) never get an
+      <code>authenticated</code> write grant at all.</p>
+    </div>
+    <div class="practice reveal">
+      <div class="n">03</div>
+      <h3>AI as a pair programmer, verification stays mine</h3>
+      <p>I designed and built this with Claude Code, but every claim was re-verified against real
+      code or a real API response. For example, an earlier draft of this very page claimed "Google
+      Calendar connects via MCP" — I checked the backend, found no MCP server, and corrected it to
+      "read-only OAuth mirror."</p>
+    </div>
+  </div>
+
+  <div class="section-gap sm"></div>
+
+  <div class="diagram reveal">
+    <div class="tier-label">What a change goes through before it ships</div>
+    <div class="pipeline">
+      <div class="pipeline-step"><div class="dot"></div><div class="label">Commit</div><div class="sub">feat/fix/chore/docs</div></div>
+      <div class="pipeline-step"><div class="dot"></div><div class="label">Push</div><div class="sub">main or PR</div></div>
+      <div class="pipeline-step"><div class="dot"></div><div class="label">CI</div><div class="sub">typecheck + 44 tests, TZ cross-check</div></div>
+      <div class="pipeline-step"><div class="dot"></div><div class="label">Deploy</div><div class="sub">migration + functions</div></div>
+    </div>
+    <div class="pipeline-note">Early work used <code>feat/*</code> branches merged after PR review (#1–#5). Once the CI gate became a reliable safety net, small changes moved to direct commits on <code>main</code> — this gate actually caught a CI-only failure (Troubleshooting 01).</div>
+  </div>
+</div>
+
+<div class="section-gap"></div>
+
+<div class="wrap">
+  <div class="section-head reveal" id="s-status-en">
+    <span class="eyebrow">Current status</span>
+    <h2>No overstating</h2>
+    <p>Being a portfolio doesn't mean claiming everything is done. Here's what's actually verified,
+    versus what's still untouched.</p>
+  </div>
+  <div class="status-board reveal">
+    <div class="status-row">
+      <div class="status-row-head"><svg class="done" width="13" height="13" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" fill="currentColor" opacity="0.15"/><path d="M3.2 6.2l1.8 1.8 3.8-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Done · 5</div>
+      <div class="status-chips">
+        <span class="status-chip done"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.3l2 2 4.2-4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Schedule CRUD · reschedule · recurrence · search</span>
+        <span class="status-chip done"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.3l2 2 4.2-4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Offline outbox · incremental sync</span>
+        <span class="status-chip done"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.3l2 2 4.2-4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Google Calendar read-only mirror</span>
+        <span class="status-chip done"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.3l2 2 4.2-4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>On-device + cloud BYOK agent</span>
+        <span class="status-chip done"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.3l2 2 4.2-4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Google · GitHub sign-in</span>
+      </div>
+    </div>
+    <div class="status-row">
+      <div class="status-row-head"><svg class="todo" width="13" height="13" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.6" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>Not started · 6</div>
+      <div class="status-chips">
+        <span class="status-chip todo"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>Sign in with Apple</span>
+        <span class="status-chip todo"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>On-device fallback for non-Apple-Intelligence devices</span>
+        <span class="status-chip todo"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>Memdo Remote MCP</span>
+        <span class="status-chip todo"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>App Store release</span>
+        <span class="status-chip todo"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>Agent eval set (approval rate, tool-call success)</span>
+        <span class="status-chip todo"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 2"/></svg>Load/latency verification (p95, EXPLAIN ANALYZE)</span>
+      </div>
+    </div>
+    <div class="status-note">Sign in with Apple is required before launch per App Store review; the rest are deprioritized — the fallback model is scoped only, MCP waits until the Google integration proves stable, and the eval set / load testing are planned for whenever real usage grows enough to justify them — no invented numbers in the meantime.</div>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <div class="wrap footer-grid">
+    <div>
+      <span class="eyebrow">Memdo</span>
+      <div class="footer-cta">
+        <a href="https://github.com/leebeanbin/memdo" target="_blank" rel="noopener">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub · iOS
+        </a>
+        <a href="https://github.com/leebeanbin/memdo-backend" target="_blank" rel="noopener">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub · Backend
+        </a>
+        <a href="mailto:muzidea0808@gmail.com">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M2 4.5l6 4.5 6-4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          muzidea0808@gmail.com
+        </a>
+      </div>
+      <div class="stack-tags" style="margin-top: 0.9rem;">
+        <span>Swift 6</span><span>SwiftUI</span><span>WidgetKit</span><span>Live Activities</span>
+        <span>Supabase</span><span>PostgreSQL</span><span>Deno</span><span>Apple FoundationModels</span>
+        <span>OpenRouter</span><span>Google Calendar API</span><span>HealthKit</span>
+      </div>
+    </div>
+    <div class="footer-note">Solo project · concept through iOS, backend, and deploy, built alone<br />"Memdo" is a working name, pending trademark clearance before launch</div>
+  </div>
+</footer>
+
+</div>
+<!-- /content-en -->
+
+<script>
+(function () {
+  "use strict";
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- scroll-triggered reveal, staggered per sibling group ----
+  var revealEls = Array.prototype.slice.call(document.querySelectorAll(".reveal"));
+  if (revealEls.length) {
+    var counters = new WeakMap();
+    revealEls.forEach(function (el) {
+      if (el.style.getPropertyValue("--d")) return; // hero already set explicitly
+      var parent = el.parentElement;
+      var n = counters.get(parent) || 0;
+      el.style.setProperty("--d", Math.min(n * 45, 220) + "ms");
+      counters.set(parent, n + 1);
+    });
+
+    if (reduceMotion || !("IntersectionObserver" in window)) {
+      revealEls.forEach(function (el) { el.classList.add("is-visible"); });
+    } else {
+      var io = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+              io.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.12, rootMargin: "0px 0px -8% 0px" }
+      );
+      revealEls.forEach(function (el) { io.observe(el); });
+    }
+  }
+
+  // ---- count-up stats ----
+  var statNums = document.querySelectorAll(".stat .n[data-value]");
+  function animateCount(el) {
+    var target = parseFloat(el.dataset.value);
+    var suffix = el.dataset.suffix || "";
+    var decimals = el.dataset.decimals ? parseInt(el.dataset.decimals, 10) : 0;
+    if (reduceMotion || isNaN(target)) {
+      el.textContent = target.toFixed(decimals) + suffix;
+      return;
+    }
+    var start = null;
+    var dur = 1000;
+    function tick(ts) {
+      if (start === null) start = ts;
+      var p = Math.min(1, (ts - start) / dur);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = (target * eased).toFixed(decimals) + suffix;
+      if (p < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+  if (statNums.length) {
+    if ("IntersectionObserver" in window) {
+      var statIo = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              animateCount(entry.target);
+              statIo.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.4 }
+      );
+      Array.prototype.forEach.call(statNums, function (el) { statIo.observe(el); });
+    } else {
+      Array.prototype.forEach.call(statNums, animateCount);
+    }
+  }
+
+  // ---- scroll progress bar ----
+  var bar = document.getElementById("scroll-progress");
+  if (bar) {
+    var ticking = false;
+    function updateBar() {
+      var doc = document.documentElement;
+      var max = doc.scrollHeight - doc.clientHeight;
+      var pct = max > 0 ? (doc.scrollTop / max) * 100 : 0;
+      bar.style.width = pct + "%";
+      ticking = false;
+    }
+    document.addEventListener(
+      "scroll",
+      function () {
+        if (!ticking) {
+          requestAnimationFrame(updateBar);
+          ticking = true;
+        }
+      },
+      { passive: true }
+    );
+    updateBar();
+  }
+
+  // ---- language toggle ----
+  var koTree = document.getElementById("content-ko");
+  var enTree = document.getElementById("content-en");
+  var btnKo = document.getElementById("lang-btn-ko");
+  var btnEn = document.getElementById("lang-btn-en");
+  function setLang(lang) {
+    var showEn = lang === "en";
+    if (koTree) koTree.hidden = showEn;
+    if (enTree) enTree.hidden = !showEn;
+    document.documentElement.lang = lang;
+    if (btnKo) btnKo.setAttribute("aria-pressed", String(!showEn));
+    if (btnEn) btnEn.setAttribute("aria-pressed", String(showEn));
+    // A tree that was hidden never intersected, so its .reveal items never
+    // animated in. Show them immediately rather than replaying the scroll effect.
+    var activeTree = showEn ? enTree : koTree;
+    if (activeTree) {
+      Array.prototype.forEach.call(activeTree.querySelectorAll(".reveal"), function (el) {
+        el.classList.add("is-visible");
+      });
+    }
+    if (bar) updateBar();
+  }
+  if (btnKo) btnKo.addEventListener("click", function () { setLang("ko"); });
+  if (btnEn) btnEn.addEventListener("click", function () { setLang("en"); });
+})();
+</script>
+</body>
+</html>

@@ -83,6 +83,8 @@
 | ADR-073 | Agent는 온디바이스 Apple FoundationModels(Reflection 포함, 기본 경로)와 사용자 BYOK OpenRouter 클라우드(OpenAI 호환 Chat Completions, 사용자가 자기 API 키를 직접 입력) 2트랙으로 구성한다. ADR-016·ADR-066을 대체한다 | OpenAI Responses API·Agents SDK 상시 서버 오케스트레이션은 모든 요청에 Memdo가 비용을 부담해야 했다. 기존 ChatGPT Plus/Claude Pro·Max/Google AI Pro 같은 구독 재사용도 검토했으나 ChatGPT·Gemini 구독은 애초에 API 접근이 없고, Claude Pro/Max 구독 OAuth를 서드파티 도구에 쓰는 경로는 Anthropic이 2026-04-04부터 Consumer ToS 위반으로 집행 중이라 제외했다 |
 | ADR-074 | 뉴스 브리핑은 서버 pgmq 파이프라인 대신 iOS 클라이언트의 RSS 수집 + 온디바이스 FoundationModels 요약으로 구현한다. ADR-034를 대체한다 | 별도 뉴스 API 계약이나 서버 파이프라인 없이 하루 3~5개·출처 표시 요건을 클라이언트만으로 충족했고, 요약 자체에 사용자 데이터를 서버로 보내지 않는다 |
 | ADR-075 | Slack 연결은 OAuth 앱 설치·workspace 심사 대신 사용자가 Slack에서 직접 발급한 Incoming Webhook URL을 붙여넣어 iOS Keychain에 저장하는 방식으로 시작한다 | 개인 사용자가 워크스페이스 관리자 승인 없이 즉시 연결할 수 있다. 다중 채널·슬래시 커맨드가 필요해지면 섹션 17~18의 OAuth 설계로 확장한다 |
+| ADR-076 | 소비자 앱에서는 `.env` 파일 업로드를 제공하지 않고, 허용된 공급자 키 한 개를 시스템 붙여넣기 버튼으로 입력한다 | `.env`에는 무관한 DB·배포 자격 증명까지 섞이기 쉬우며 단일 키 연결에 개발자용 파일 형식이 필요하지 않다. 다중 공급자 일괄 연결 수요가 확인되면 파일을 서버로 보내지 않는 로컬 allowlist 파서만 검토한다 |
+| ADR-077 | 클라우드 Agent를 무제한 무료로 제공하지 않는다. 온디바이스 모델을 기본으로 하고, 클라우드는 BYOK를 우선하며 향후 유료 Memdo Cloud에는 사용자별 포함량과 서버 hard cap을 둔다 | 창업자 공용 키의 무제한 비용과 키 유출을 막고, 지원 기기에서는 클라우드 추론비 없이 핵심 요약·분류를 제공한다 |
 
 ## 제품 이름
 

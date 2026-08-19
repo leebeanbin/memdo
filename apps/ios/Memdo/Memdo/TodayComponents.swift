@@ -255,7 +255,7 @@ struct TodayBriefingSection: View {
     @State private var items: [BriefingRepository.FetchedItem] = []
     @State private var isLoading = false
     @State private var aiSummary: String?
-    @State private var safariItem: BriefingLink?
+    @State private var showsBriefing = false
     // Seeded from UserDefaults and kept in sync via didChangeNotification so
     // interest edits in Settings show up here without an app relaunch.
     @State private var selectedCategories: [BriefingFeedCategory] = Self.storedCategories()
@@ -275,7 +275,10 @@ struct TodayBriefingSection: View {
     var body: some View {
         Group {
             if isEnabled {
-                MemdoSection(title: "오늘의 브리핑", trailing: isLoading && items.isEmpty ? "업데이트 중" : nil) {
+                MemdoSection(
+                    title: "오늘의 브리핑",
+                    trailing: isLoading && items.isEmpty ? "업데이트 중" : nil
+                ) {
                     if isLoading && items.isEmpty {
                         BriefingLoadingRow()
                     } else if items.isEmpty {
@@ -286,24 +289,17 @@ struct TodayBriefingSection: View {
                             tint: MemdoTheme.secondaryInk
                         )
                     } else {
-                        if let summary = aiSummary {
-                            BriefingSummaryCard(text: summary)
-                        }
-                        VStack(spacing: 0) {
-                            ForEach(Array(items.prefix(5).enumerated()), id: \.element.id) { index, item in
-                                BriefingNewsRow(item: item) {
-                                    if let url = item.url { safariItem = BriefingLink(url: url) }
-                                }
-                                if index < min(4, items.count - 1) {
-                                    Divider().padding(.leading, MemdoMetrics.rowContentLeading)
-                                }
-                            }
-                        }
-                        .memdoRowGroup()
+                        BriefingPreview(
+                            summary: aiSummary,
+                            item: items[0],
+                            count: min(items.count, 5),
+                            onTap: { showsBriefing = true }
+                        )
                     }
                 }
-                .sheet(item: $safariItem) { link in
-                    BriefingSafariView(url: link.url).ignoresSafeArea()
+                .sheet(isPresented: $showsBriefing) {
+                    BriefingSheet(items: Array(items.prefix(5)), summary: aiSummary)
+                        .memdoSheetPresentation([.medium, .large])
                 }
             }
         }
@@ -349,34 +345,122 @@ private struct BriefingLink: Identifiable {
     var id: String { url.absoluteString }
 }
 
-// MARK: - Briefing AI Summary Card
+private struct BriefingPreview: View {
+    let summary: String?
+    let item: BriefingRepository.FetchedItem
+    let count: Int
+    let onTap: () -> Void
 
-private struct BriefingSummaryCard: View {
-    let text: String
+    private var previewText: String {
+        summary?.compactBriefingText ?? item.title
+    }
+
+    private var metadata: String {
+        count > 1 ? "\(item.sourceName) 외 \(count - 1)개 · 1분" : "\(item.sourceName) · 1분"
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("AI 요약", systemImage: "sparkles")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(MemdoTheme.brand)
-            Text(text)
-                .font(.subheadline)
-                .foregroundStyle(MemdoTheme.ink)
-                .lineSpacing(3)
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("AI 요약", systemImage: "sparkles")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.brand)
+                    Text(previewText)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.ink)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+
+                HStack(spacing: 8) {
+                    Text(metadata)
+                        .font(.caption)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                    Spacer(minLength: 8)
+                    Image(systemName: "arrow.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.horizontal, MemdoMetrics.rowInset)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(
-            MemdoTheme.brandSoft,
-            in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
-                .stroke(MemdoTheme.brand.opacity(0.2), lineWidth: 0.5)
+        .buttonStyle(MemdoScaleButtonStyle())
+        .memdoRowGroup()
+        .accessibilityLabel("오늘의 브리핑 \(count)개. \(previewText)")
+        .accessibilityHint("전체 브리핑을 엽니다")
+    }
+}
+
+private struct BriefingSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var safariItem: BriefingLink?
+    let items: [BriefingRepository.FetchedItem]
+    let summary: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    if let summary {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("AI 요약", systemImage: "sparkles")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(MemdoTheme.brand)
+                            Text(summary.compactBriefingText)
+                                .font(.headline.weight(.semibold))
+                                .foregroundStyle(MemdoTheme.ink)
+                                .lineLimit(2)
+                        }
+                        .padding(.horizontal, MemdoMetrics.pagePadding)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("기사 \(items.count)개")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, MemdoMetrics.pagePadding)
+
+                        VStack(spacing: 0) {
+                            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                                BriefingNewsRow(item: item) {
+                                    if let url = item.url { safariItem = BriefingLink(url: url) }
+                                }
+                                if index < items.count - 1 {
+                                    Divider().padding(.leading, MemdoMetrics.rowContentLeading)
+                                }
+                            }
+                        }
+                        .memdoRowGroup()
+                    }
+                }
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+            }
+            .background(MemdoTheme.background)
+            .navigationTitle("오늘의 브리핑")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("완료") { dismiss() }
+                }
+            }
         }
-        .padding(.horizontal, MemdoMetrics.rowInset)
-        .padding(.bottom, 4)
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        .sheet(item: $safariItem) { link in
+            BriefingSafariView(url: link.url).ignoresSafeArea()
+        }
+    }
+}
+
+private extension String {
+    var compactBriefingText: String {
+        replacingOccurrences(of: "**", with: "")
+            .replacingOccurrences(of: "* ", with: "")
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: CharacterSet(charactersIn: ".。"))
     }
 }
 
@@ -402,63 +486,40 @@ private struct BriefingNewsRow: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(alignment: .top, spacing: MemdoMetrics.rowSpacing) {
-                VStack(alignment: .leading, spacing: 6) {
-                    // Category chip + source + relative time
-                    HStack(spacing: 6) {
-                        Text(item.category.rawValue)
-                            .font(.caption2.bold())
-                            .foregroundStyle(MemdoTheme.brand)
-                            .padding(.horizontal, 7)
-                            .frame(height: 18)
-                            .background(MemdoTheme.brandSoft, in: Capsule())
-
-                        Text(item.sourceName)
-                            .font(.caption2)
-                            .foregroundStyle(MemdoTheme.secondaryInk)
-
-                        if !item.relativeTime.isEmpty {
-                            Text("·")
-                                .font(.caption2)
-                                .foregroundStyle(MemdoTheme.secondaryInk)
-                            Text(item.relativeTime)
-                                .font(.caption2)
-                                .foregroundStyle(MemdoTheme.secondaryInk)
-                        }
-
-                        if let keyword = item.matchedKeyword {
-                            Label(keyword, systemImage: "tag")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(MemdoTheme.secondaryInk)
-                                .padding(.horizontal, 6)
-                                .frame(height: 18)
-                                .background(MemdoTheme.accentSoft, in: Capsule())
-                        }
-                    }
-                    .lineLimit(1)
-
+            HStack(spacing: MemdoMetrics.rowSpacing) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(MemdoTheme.ink)
-                        .lineLimit(2)
+                        .lineLimit(1)
                         .multilineTextAlignment(.leading)
+
+                    Text(metadata)
+                        .font(.caption2)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .lineLimit(1)
                 }
 
                 Spacer(minLength: 8)
 
-                Image(systemName: "arrow.up.right.square")
-                    .font(.caption.bold())
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(MemdoTheme.secondaryInk)
-                    .padding(.top, 3)
             }
             .padding(.horizontal, MemdoMetrics.rowInset)
-            .frame(minHeight: 64)
+            .frame(minHeight: 52)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.category.rawValue), \(item.sourceName), \(item.title)")
         .accessibilityHint("탭하면 원문을 열어요")
+    }
+
+    private var metadata: String {
+        [item.sourceName, item.relativeTime, item.matchedKeyword ?? item.category.rawValue]
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
     }
 }
 

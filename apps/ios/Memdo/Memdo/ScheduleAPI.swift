@@ -62,6 +62,32 @@ struct AgentKeySaveRequestDTO: Encodable {
     let apiKey: String
 }
 
+struct AgentModelDTO: Decodable, Identifiable, Equatable {
+    let id: String
+    let name: String
+    let promptPricePerM: Double
+    let completionPricePerM: Double
+    let contextLength: Int
+}
+
+struct AgentModelsResponseDTO: Decodable {
+    let models: [AgentModelDTO]
+}
+
+struct AgentUsageItemDTO: Decodable, Identifiable {
+    let model: String
+    let costUsd: Double
+    let createdAt: String
+
+    var id: String { "\(createdAt):\(model)" }
+}
+
+struct AgentUsageResponseDTO: Decodable {
+    let totalRequests: Int
+    let totalCostUsd: Double
+    let recent: [AgentUsageItemDTO]
+}
+
 struct AgentChatTurnDTO: Codable {
     let role: String
     let content: String
@@ -538,6 +564,22 @@ actor MemdoAPIClient {
         try await send(path: "agent-key", method: "DELETE", accessToken: accessToken)
     }
 
+    func agentModels(accessToken: String) async throws -> [AgentModelDTO] {
+        let response: AgentModelsResponseDTO = try await send(
+            path: "agent-models",
+            accessToken: accessToken
+        )
+        return response.models
+    }
+
+    func agentUsage(days: Int, accessToken: String) async throws -> AgentUsageResponseDTO {
+        try await send(
+            path: "agent-usage",
+            queryItems: [URLQueryItem(name: "days", value: String(days))],
+            accessToken: accessToken
+        )
+    }
+
     /// agent-cloud-chat responds with newline-delimited JSON, not a single
     /// decodable body -- `onDelta` fires as text chunks arrive so the UI can
     /// update live the same way the on-device path's streamResponse already
@@ -792,6 +834,14 @@ actor ScheduleRepository {
 
     func deleteAgentKey() async throws {
         _ = try await api.deleteAgentKey(accessToken: accessToken())
+    }
+
+    func agentModels() async throws -> [AgentModelDTO] {
+        try await api.agentModels(accessToken: accessToken())
+    }
+
+    func agentUsage(days: Int = 30) async throws -> AgentUsageResponseDTO {
+        try await api.agentUsage(days: days, accessToken: accessToken())
     }
 
     func agentCloudChat(
