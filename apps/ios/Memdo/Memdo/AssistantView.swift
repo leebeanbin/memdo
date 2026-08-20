@@ -28,6 +28,23 @@ enum CloudAgentModelPreference {
     }
 }
 
+// MARK: - AI consent
+
+/// Backs the toggle in AIConsentSheet (SettingsView.swift). Defaults to
+/// `true` (opt-out, not opt-in) -- the sheet's own copy already describes
+/// consent in withdrawal terms ("AI·알림·캘린더 동의는 각각 철회"), and the
+/// Agent feature has been usable with no gate at all up to this point, so an
+/// opt-in default would silently lock existing users out with no onboarding
+/// flow prompting them to turn it back on.
+enum AIConsent {
+    private static let key = "memdo.v1.aiConsentGranted"
+
+    static var granted: Bool {
+        get { (UserDefaults.standard.object(forKey: key) as? Bool) ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
+    }
+}
+
 // MARK: - Context
 
 enum AgentContext {
@@ -652,20 +669,29 @@ struct AgentSheet: View {
         send()
     }
 
-    private func send() {
-        let prompt = composer.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !prompt.isEmpty, !isLoading else { return }
-        composer = ""
-        // Set synchronously, before scheduling the Task -- sendWithCloudAgent/
-        // sendWithFoundationModels used to set this at the top of their own
-        // (async) bodies, which left a window where a second send() call in
-        // the same run loop pass would still see isLoading == false and pass
-        // the guard above. Two overlapping streams then both wrote into
-        // `messages[last]`, which shifts as each one appends its own
-        // messages -- the runaway/duplicated-output bug reported from
-        // tapping a quick action.
+    /// Consent-gated message shown instead of dispatching to either path
+    /// when AIConsent.granted is off -- checked here rather than per-tool
+    /// since the sheet's copy describes the whole Agent, not individual
+    /// tools, and a half-gated chat (some tools silently no-op) would be
+    /// more confusing than not responding at all.
+    private var consentDeclinedMessage: AgentMessage {
+        AgentMessage(
+            role: .assistant,
+            text: "설정 > 개인정보 및 데이터 > AI 데이터 접근에서 Memdo Agent 사용을 켜야 답할 수 있어요.",
+            isError: true
+        )
+    }
+
+    /// Set isLoading synchronously, before scheduling the Task -- sendWithCloudAgent/
+    /// sendWithFoundationModels used to set this at the top of their own
+    /// (async) bodies, which left a window where a second call in the same
+    /// run loop pass would still see isLoading == false and pass the guard
+    /// in send(). Two overlapping streams then both wrote into
+    /// `messages[last]`, which shifts as each one appends its own
+    /// messages -- the runaway/duplicated-output bug reported from tapping a
+    /// quick action. Shared by send()/retry() so both stay in sync.
+    private func dispatchToModel(_ prompt: String) {
         isLoading = true
-        messages.append(AgentMessage(role: .user, text: prompt))
         activeTask?.cancel()
         // On-device when this OS/device actually has it available; otherwise
         // the cloud path (BYOK via OpenRouter, see agent-cloud-chat) covers
@@ -676,6 +702,18 @@ struct AgentSheet: View {
         } else {
             activeTask = Task { await sendWithCloudAgent(prompt) }
         }
+    }
+
+    private func send() {
+        let prompt = composer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty, !isLoading else { return }
+        composer = ""
+        messages.append(AgentMessage(role: .user, text: prompt))
+        guard AIConsent.granted else {
+            messages.append(consentDeclinedMessage)
+            return
+        }
+        dispatchToModel(prompt)
     }
 
     /// Turns already-settled messages into the flat history the stateless
@@ -836,13 +874,11 @@ struct AgentSheet: View {
         guard !isLoading else { return }
         guard let lastUserMsg = messages.dropLast().last(where: { $0.role == .user }) else { return }
         messages.removeLast()
-        isLoading = true  // synchronous, same reasoning as send() above
-        activeTask?.cancel()
-        if #available(iOS 26, *), case .available = SystemLanguageModel.default.availability {
-            activeTask = Task { await sendWithFoundationModels(lastUserMsg.text) }
-        } else {
-            activeTask = Task { await sendWithCloudAgent(lastUserMsg.text) }
+        guard AIConsent.granted else {
+            messages.append(consentDeclinedMessage)
+            return
         }
+        dispatchToModel(lastUserMsg.text)
     }
 
     private var hasSchedulesToday: Bool {

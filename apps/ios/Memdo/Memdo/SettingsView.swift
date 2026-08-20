@@ -1418,6 +1418,7 @@ private struct PrivacySheet: View {
 
 private struct AIConsentSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var granted = AIConsent.granted
 
     var body: some View {
         NavigationStack {
@@ -1426,6 +1427,18 @@ private struct AIConsentSheet: View {
                     Text("이 항목은 설정에서 별도로 연결하는 Memdo Agent 기준입니다.")
                         .font(MemdoTypography.footnote)
                         .foregroundStyle(MemdoTheme.secondaryInk)
+
+                    Toggle(isOn: $granted) {
+                        RoutineLabel(
+                            icon: "sparkles",
+                            title: "Memdo Agent 사용",
+                            detail: "끄면 Agent가 응답하지 않아요"
+                        )
+                    }
+                    .memdoToggle()
+                    .onChange(of: granted) { _, newValue in
+                        AIConsent.granted = newValue
+                    }
                 }
                 Section("Memdo Agent가 보는 정보") {
                     Label("일정 제목", systemImage: "textformat")

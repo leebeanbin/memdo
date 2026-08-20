@@ -166,6 +166,26 @@ final class ScheduleModelTests: XCTestCase {
         }
     }
 
+    func testAIConsentDefaultsToGrantedAndPersists() {
+        let key = "memdo.v1.aiConsentGranted"
+        let original = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let original { UserDefaults.standard.set(original, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+
+        UserDefaults.standard.removeObject(forKey: key)
+        // Opt-out, not opt-in -- the Agent feature was usable with no gate at
+        // all before this flag existed, so a fresh install (no stored value)
+        // must not suddenly go silent.
+        XCTAssertTrue(AIConsent.granted)
+
+        AIConsent.granted = false
+        XCTAssertFalse(AIConsent.granted)
+        AIConsent.granted = true
+        XCTAssertTrue(AIConsent.granted)
+    }
+
     @available(iOS 26, *)
     @MainActor
     func testUpdateScheduleToolResolvesTitleAndDetectsConflict() async throws {
