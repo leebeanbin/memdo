@@ -414,6 +414,12 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         return Calendar.current.startOfDay(for: day)
     }
     var kindLabel: String { kind.label }
+    /// A title of only whitespace isn't a real title -- checked at every
+    /// save-gate alongside isTimeRangeValid, so it lives next to it rather
+    /// than being re-derived inline at each call site.
+    var hasValidTitle: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
     var isTimeRangeValid: Bool {
         switch (startAt, endAt) {
         case let (startAt?, endAt?): endAt > startAt

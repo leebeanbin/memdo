@@ -14,7 +14,7 @@ struct ScheduleDetailSheet: View {
     let onSave: (ScheduleDetail) -> Void
 
     private var canSave: Bool {
-        !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && draft.isTimeRangeValid
+        draft.hasValidTitle && draft.isTimeRangeValid
     }
 
     // The store's version for this item, once it's been written back by a prior
@@ -679,7 +679,7 @@ struct AddScheduleSheet: View {
         if selectedCategory.isWorkout {
             return workoutStartAt < workoutEndAt
         }
-        return !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return draft.hasValidTitle
             && UUID(uuidString: draft.calendar.id) != nil
             && draft.isTimeRangeValid
     }

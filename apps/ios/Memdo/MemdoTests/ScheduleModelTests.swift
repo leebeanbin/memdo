@@ -46,6 +46,21 @@ final class ScheduleModelTests: XCTestCase {
         XCTAssertFalse(task.occurs(on: nextDay))
     }
 
+    func testHasValidTitleRejectsWhitespaceOnly() {
+        // Two save-gate call sites (ScheduleSheets.swift) used to each
+        // re-derive `!title.trimmingCharacters(...).isEmpty` inline -- this
+        // pins the shared property's whitespace handling now that both
+        // route through it instead.
+        let day = Date()
+        let blank = ScheduleDetail(scheduledDate: day, title: "   ", kind: .task, calendar: calendar)
+        let real = ScheduleDetail(scheduledDate: day, title: "  진짜 제목  ", kind: .task, calendar: calendar)
+        let empty = ScheduleDetail(scheduledDate: day, title: "", kind: .task, calendar: calendar)
+
+        XCTAssertFalse(blank.hasValidTitle)
+        XCTAssertFalse(empty.hasValidTitle)
+        XCTAssertTrue(real.hasValidTitle)
+    }
+
     func testSearchScopeTitlesStayUserFacing() {
         XCTAssertEqual(ScheduleSearchScope.all.title, "전체")
         XCTAssertEqual(ScheduleSearchScope.mine.title, "내 일정")

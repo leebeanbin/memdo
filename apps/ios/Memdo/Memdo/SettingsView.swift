@@ -961,13 +961,7 @@ private struct SlackConnectionSheet: View {
         testResult = nil
         defer { isTesting = false }
         do {
-            let payload = ["text": "✅ Memdo에서 보낸 테스트 메시지예요. 연결이 잘 됐어요!"]
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            let (_, response) = try await URLSession.shared.data(for: request)
-            let ok = (response as? HTTPURLResponse)?.statusCode == 200
+            let ok = try await SlackNotifier.sendTest(to: url)
             testResult = ok
                 ? SlackTestResult(isSuccess: true, message: "Slack 채널에 메시지를 전달했어요.", icon: "checkmark.circle.fill")
                 : SlackTestResult(isSuccess: false, message: "전송에 실패했어요. URL을 확인해 주세요.", icon: "exclamationmark.circle.fill")

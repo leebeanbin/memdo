@@ -59,6 +59,21 @@ enum SlackNotifier {
         case created, completed
     }
 
+    /// Sends a one-off test message to verify a webhook URL works, distinct
+    /// from `notify` (which is fire-and-forget and never surfaces failures --
+    /// a user actively testing a connection needs to see whether it worked).
+    /// Returns whether Slack responded 200; throws on a network/serialization
+    /// failure so the caller can show that separately from "wrong URL."
+    static func sendTest(to url: URL) async throws -> Bool {
+        let payload = ["text": "✅ Memdo에서 보낸 테스트 메시지예요. 연결이 잘 됐어요!"]
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let (_, response) = try await URLSession.shared.data(for: request)
+        return (response as? HTTPURLResponse)?.statusCode == 200
+    }
+
     static func notify(schedule: ScheduleDetail, event: Event) async {
         let urlString = webhookURL
         guard !urlString.isEmpty, let url = URL(string: urlString) else { return }
