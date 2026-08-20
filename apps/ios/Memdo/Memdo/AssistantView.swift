@@ -1332,7 +1332,11 @@ private struct ProposedScheduleCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("일정 제안", systemImage: "calendar.badge.plus")
+            // "Agent" prefix makes the source explicit, matching this app's
+            // documented proposal-card fields (제목·시간·반복·알림·출처) --
+            // not just implied by "this card only ever appears inside the
+            // Agent sheet."
+            Label("Agent 일정 제안", systemImage: "calendar.badge.plus")
                 .font(MemdoTypography.captionEmphasis)
                 .foregroundStyle(MemdoTheme.brand)
 
@@ -1436,7 +1440,7 @@ private struct ProposedScheduleUpdateCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("\(proposal.displayActionLabel) 제안", systemImage: icon)
+            Label("Agent \(proposal.displayActionLabel) 제안", systemImage: icon)
                 .font(MemdoTypography.captionEmphasis)
                 .foregroundStyle(MemdoTheme.brand)
 

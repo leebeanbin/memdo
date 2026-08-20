@@ -1110,7 +1110,7 @@ struct CloudAgentConnectionSheet: View {
 
     private var disconnectedContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
                 HStack(spacing: 12) {
                     Image(systemName: "cloud")
                         .font(.body.weight(.medium))
@@ -1240,7 +1240,7 @@ struct CloudAgentConnectionSheet: View {
                 }
                 Spacer(minLength: 0)
             }
-            .frame(minHeight: 52)
+            .frame(minHeight: MemdoMetrics.settingsRowHeight)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1269,7 +1269,7 @@ struct CloudAgentConnectionSheet: View {
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
         }
-        .frame(minHeight: 52)
+        .frame(minHeight: MemdoMetrics.settingsRowHeight)
     }
 
     private func loadStatus() async {
