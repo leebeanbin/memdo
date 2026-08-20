@@ -443,7 +443,7 @@ private struct BriefingSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(
                             Date.now.formatted(
@@ -475,16 +475,23 @@ private struct BriefingSheet: View {
                         .accessibilityLabel("오늘의 흐름, \(summary.compactBriefingText)")
                     }
 
-                    if let lead = items.first {
-                        BriefingLeadStory(
-                            item: lead,
-                            relatedItems: topicPool,
-                            selectedCategories: $selectedCategories
-                        )
-                    }
-
-                    if items.count > 1 {
+                    // One row group, not a card plus a separate list -- DESIGN.md
+                    // 5.8: "반복 항목은 카드 여러 개가 아니라 하나의 그룹 안에
+                    // 행으로 배치하며 카드 안에 카드를 넣지 않는다", and the
+                    // surface-card treatment is reserved for the empty-state
+                    // intention prompt specifically, not for content rows.
+                    if !items.isEmpty {
                         VStack(spacing: 0) {
+                            if let lead = items.first {
+                                BriefingLeadStory(
+                                    item: lead,
+                                    relatedItems: topicPool,
+                                    selectedCategories: $selectedCategories
+                                )
+                                if items.count > 1 {
+                                    Divider().padding(.leading, MemdoMetrics.rowContentLeading)
+                                }
+                            }
                             ForEach(Array(items.dropFirst().enumerated()), id: \.element.id) { index, item in
                                 BriefingNewsRow(
                                     number: index + 2,
@@ -498,6 +505,7 @@ private struct BriefingSheet: View {
                             }
                         }
                         .memdoRowGroup()
+                        .padding(.horizontal, MemdoMetrics.pagePadding)
                     }
                 }
                 .padding(.top, 16)
@@ -595,24 +603,12 @@ private struct BriefingLeadStory: View {
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
             .multilineTextAlignment(.leading)
-            .padding(20)
+            .padding(.horizontal, MemdoMetrics.rowInset)
+            .padding(.vertical, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(MemdoScaleButtonStyle())
-        // The AI's single pick reads as a distinct hero card, not another
-        // list row -- same surface+stroke treatment as TodayIntentionPrompt
-        // (오늘의 방향), not the bare-divider .memdoRowGroup() the plain
-        // numbered rows below it use.
-        .background(
-            MemdoTheme.surface,
-            in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
-                .stroke(MemdoTheme.outline, lineWidth: 0.5)
-        }
-        .padding(.horizontal, MemdoMetrics.pagePadding)
         .accessibilityLabel("첫 번째 기사, \(item.title), \(item.metadata)")
         .accessibilityHint("기사 요약과 관련 주제를 엽니다")
     }
@@ -702,7 +698,7 @@ private struct BriefingStoryDetail: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
                         BriefingCategoryBadge(category: item.category)
@@ -720,7 +716,7 @@ private struct BriefingStoryDetail: View {
                 }
 
                 if !item.summary.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: MemdoMetrics.sectionContentSpacing) {
                         Text("핵심 내용")
                             .font(MemdoTypography.sectionTitle)
                         Text(item.summary.compactBriefingText)
@@ -728,17 +724,8 @@ private struct BriefingStoryDetail: View {
                             .foregroundStyle(MemdoTheme.ink)
                             .lineSpacing(5)
                     }
-                    .padding(.horizontal, MemdoMetrics.pagePadding)
                     .padding(.vertical, 18)
-                    .background(
-                        MemdoTheme.surface,
-                        in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
-                            .stroke(MemdoTheme.outline, lineWidth: 0.5)
-                    }
-                    .padding(.horizontal, -MemdoMetrics.pagePadding)
+                    .memdoRowGroup()
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -806,7 +793,7 @@ private struct BriefingTopicView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
                 VStack(alignment: .leading, spacing: 8) {
                     Image(systemName: category.systemImage)
                         .font(MemdoTypography.title3)
