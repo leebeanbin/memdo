@@ -24,6 +24,7 @@
 		27F704F7116840EA5D152218 /* WallpaperIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFB1F40579E7D5062404CC55 /* WallpaperIntent.swift */; };
 		28ACEBD7EE2EC6276D9F3CFE /* WorkoutAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67DDB3585BB47A7B725E0F95 /* WorkoutAPI.swift */; };
 		2A29175D38335F059C4AE766 /* MemdoComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42994A317F898780763B33D4 /* MemdoComponents.swift */; };
+		2E79B85E1483FF6B965024C6 /* AgentTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6D1987E0D3F1E0418371476 /* AgentTools.swift */; };
 		34C226C7140C637FA392B0B1 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = BA381B15831EFB2DC3181BCA /* Supabase */; };
 		47980E617A1DA64917EB0AEB /* BriefingFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = D74BAC4CE2DAFC9BABA5244E /* BriefingFeed.swift */; };
 		480BC8CB74B2601AFEEF5DBD /* ScheduleSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F8C4864695656352FE70BA3 /* ScheduleSheets.swift */; };
@@ -61,6 +62,7 @@
 		EAD86635B870F07E38DF7E19 /* LiveActivityScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 282B54EFD5EB0ED2655D512E /* LiveActivityScheduler.swift */; };
 		F3426B7FCF7A6E73261D2D93 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 027C4773F8BAC3F78AF09125 /* NotificationScheduler.swift */; };
 		F419353E585BF3E497A45906 /* PendingWorkoutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CF4B965CFF4FE3ACB3B3D33 /* PendingWorkoutStore.swift */; };
+		F4F9034A72064E154F3CB506 /* AgentComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B892B8303D8BC814A1CFDC23 /* AgentComponents.swift */; };
 		F63E8DD2470DCBE30FA93063 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02910E4D9DB4CBEE1D8C7C10 /* SettingsView.swift */; };
 		F8D4CF99953AB55A8AF78167 /* AppShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25993FA0A6C348E04CC8573E /* AppShortcuts.swift */; };
 /* End PBXBuildFile section */
@@ -145,8 +147,10 @@
 		AE1B6FFACC369DADAFC99ADB /* MemdoWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MemdoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B159571A9900C21AA6BE4349 /* SecureSessionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureSessionStorage.swift; sourceTree = "<group>"; };
 		B4D119A0D929FA9AE7D47773 /* AppShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellView.swift; sourceTree = "<group>"; };
+		B892B8303D8BC814A1CFDC23 /* AgentComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentComponents.swift; sourceTree = "<group>"; };
 		BFB1F40579E7D5062404CC55 /* WallpaperIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperIntent.swift; sourceTree = "<group>"; };
 		C4EA7A02C55094DEBD06AF37 /* MemdoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoWidget.swift; sourceTree = "<group>"; };
+		C6D1987E0D3F1E0418371476 /* AgentTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTools.swift; sourceTree = "<group>"; };
 		CC29E0621A97339E19CDC2C1 /* Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preferences.swift; sourceTree = "<group>"; };
 		CF37F31C681B18584711EBD0 /* HealthKitImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitImporter.swift; sourceTree = "<group>"; };
 		D4F83C89D78FD9D59E7C1EE3 /* MemdoLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoLiveActivity.swift; sourceTree = "<group>"; };
@@ -240,8 +244,10 @@
 		5D4D14025AC0E221E668A0F8 /* Memdo */ = {
 			isa = PBXGroup;
 			children = (
+				B892B8303D8BC814A1CFDC23 /* AgentComponents.swift */,
 				4CCEC3682202DC527390D6C3 /* AgentPrompts.swift */,
 				DC83A92A9DA90179F3E5254E /* AgentTabBridge.swift */,
+				C6D1987E0D3F1E0418371476 /* AgentTools.swift */,
 				54A9DCC8471814155094BAFF /* AppIcon.icon */,
 				B4D119A0D929FA9AE7D47773 /* AppShellView.swift */,
 				25993FA0A6C348E04CC8573E /* AppShortcuts.swift */,
@@ -466,8 +472,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F4F9034A72064E154F3CB506 /* AgentComponents.swift in Sources */,
 				567B8523F98FA34B84994096 /* AgentPrompts.swift in Sources */,
 				190B58650DDB5E6EBE7AD2AC /* AgentTabBridge.swift in Sources */,
+				2E79B85E1483FF6B965024C6 /* AgentTools.swift in Sources */,
 				4CE9071DE9A5E1E5F3D45F0A /* AppShellView.swift in Sources */,
 				F8D4CF99953AB55A8AF78167 /* AppShortcuts.swift in Sources */,
 				A09C21CAE62B67DF6753F375 /* AssistantView.swift in Sources */,
