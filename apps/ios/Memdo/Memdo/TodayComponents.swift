@@ -615,10 +615,25 @@ private struct BriefingLeadStory: View {
 }
 
 private extension String {
+    /// RSS description fields from Korean news aggregators are commonly a
+    /// list of unpunctuated clause fragments, one per line ("A안 찬성 47%\n
+    /// B는 반대\n..."), not full sentences. Replacing "\n" with a bare space
+    /// (the old behavior) ran them together into a single unpunctuated wall
+    /// of text -- e.g. "...47.4% 반대 41.9%보다 다소 높아 2030은 반대 55%
+    /// 넘어서 이준석 "당사자 빠진 설계"여성도..." with no marker between
+    /// distinct points. Joins with " · " instead -- the same separator this
+    /// app already uses everywhere else for "several distinct facts on one
+    /// line" (e.g. "매일경제 · 5개 · 약 3분"), so a multi-clause summary
+    /// reads the same way the rest of the UI already presents grouped facts.
     var compactBriefingText: String {
-        replacingOccurrences(of: "**", with: "")
+        let cleaned = replacingOccurrences(of: "**", with: "")
             .replacingOccurrences(of: "* ", with: "")
-            .replacingOccurrences(of: "\n", with: " ")
+        let clauses = cleaned
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return clauses
+            .joined(separator: " · ")
             .trimmingCharacters(in: CharacterSet(charactersIn: ".。"))
     }
 }
