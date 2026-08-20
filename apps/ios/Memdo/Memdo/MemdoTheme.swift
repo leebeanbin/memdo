@@ -1,5 +1,48 @@
 import SwiftUI
 
+// Pretendard, not Work Sans -- Work Sans (still bundled, unreferenced below)
+// has zero Hangul glyphs (verified against its cmap: 0 of 11,172 syllables),
+// so in this Korean-first app it only ever affected the odd digit/Latin
+// fragment; every actual Korean character silently fell back to the system
+// font regardless of which MemdoTypography token was used. Pretendard covers
+// Hangul + Latin in one face, so widening MemdoTypography's usage now
+// actually changes what's on screen.
+//
+// Weights are separate static faces (Regular/SemiBold/Bold), not one
+// variable font read at different weights -- Font.custom(name:).weight()
+// against a single registered variable-font face does not reliably resolve
+// to the requested weight on this SDK, so each weight needed is embedded and
+// referenced by its own PostScript name instead.
+enum MemdoTypography {
+    private static let regular = "Pretendard-Regular"
+    private static let semibold = "Pretendard-SemiBold"
+    private static let bold = "Pretendard-Bold"
+
+    static let body = Font.custom(regular, size: 17, relativeTo: .body)
+    static let action = Font.custom(semibold, size: 15, relativeTo: .subheadline)
+    static let caption = Font.custom(regular, size: 12, relativeTo: .caption)
+    /// For a caption-sized label that needs emphasis (e.g. a category tag).
+    /// `.weight(.semibold)` chained onto `.caption` doesn't reliably resolve
+    /// against a custom static face -- Pretendard-SemiBold's family name
+    /// ("Pretendard SemiBold") differs from Pretendard-Regular's ("Pretendard"),
+    /// so weight-based face lookup within .caption's family wouldn't find it.
+    static let captionEmphasis = Font.custom(semibold, size: 12, relativeTo: .caption)
+    static let metric = Font.custom(semibold, size: 13, relativeTo: .footnote)
+    static let editorialTitle = Font.custom(bold, size: 20, relativeTo: .title3)
+    static let detailTitle = Font.custom(bold, size: 22, relativeTo: .title2)
+    static let brand = Font.custom(bold, size: 22, relativeTo: .title2)
+    /// Mirrors the system `.headline` text style (17pt semibold) that most
+    /// shared components (MemdoSection's title, etc.) used before this --
+    /// same size/weight, different typeface, so swapping it in doesn't
+    /// change layout.
+    static let sectionTitle = Font.custom(semibold, size: 17, relativeTo: .headline)
+    /// Mirrors `.subheadline` (15pt regular) -- MemdoPage's subtitle text.
+    static let subtitle = Font.custom(regular, size: 15, relativeTo: .subheadline)
+    /// Mirrors `.body.weight(.semibold)` (17pt) -- the three shared
+    /// MemdoPrimaryActionButtonStyle-family button labels.
+    static let buttonLabel = Font.custom(semibold, size: 17, relativeTo: .body)
+}
+
 enum MemdoTheme {
     static let background = Color(uiColor: .systemGroupedBackground)
     static let surface = Color(uiColor: .secondarySystemGroupedBackground)
