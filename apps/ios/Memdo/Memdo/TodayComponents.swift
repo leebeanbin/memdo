@@ -520,15 +520,23 @@ private struct BriefingSheet: View {
 /// number-in-circle variant for list rows (where read-order still matters).
 /// Reuses ScheduleColor rather than inventing a second palette -- see
 /// BriefingFeedCategory.accentColor.
+/// Same shape/size as ScheduleSourceIcon (ScheduleRow.swift) -- rounded
+/// square at MemdoMetrics.iconRadius, not a circle. That's the app's one
+/// existing "icon in a tinted badge" convention (icon color = the item's
+/// ScheduleColor, background = its soft variant); these badges match it
+/// exactly rather than introducing a second badge shape.
 private struct BriefingCategoryBadge: View {
     let category: BriefingFeedCategory
 
     var body: some View {
         Image(systemName: category.systemImage)
-            .font(MemdoTypography.caption2Emphasis)
+            .font(MemdoTypography.captionEmphasis)
             .foregroundStyle(category.accentColor.swiftUIColor)
-            .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.rowLeadingWidth)
-            .background(category.accentColor.softSwiftUIColor, in: Circle())
+            .frame(width: 30, height: 30)
+            .background(
+                category.accentColor.softSwiftUIColor,
+                in: RoundedRectangle(cornerRadius: MemdoMetrics.iconRadius, style: .continuous)
+            )
             .accessibilityHidden(true)
     }
 }
@@ -541,8 +549,11 @@ private struct BriefingOrdinalBadge: View {
         Text(String(format: "%02d", number))
             .font(MemdoTypography.metric.monospacedDigit())
             .foregroundStyle(category.accentColor.swiftUIColor)
-            .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.rowLeadingWidth)
-            .background(category.accentColor.softSwiftUIColor, in: Circle())
+            .frame(width: 30, height: 30)
+            .background(
+                category.accentColor.softSwiftUIColor,
+                in: RoundedRectangle(cornerRadius: MemdoMetrics.iconRadius, style: .continuous)
+            )
             .accessibilityHidden(true)
     }
 }
@@ -582,13 +593,24 @@ private struct BriefingLeadStory: View {
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
             .multilineTextAlignment(.leading)
-            .padding(.horizontal, MemdoMetrics.pagePadding)
-            .padding(.vertical, 16)
+            .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .memdoRowGroup()
+        .buttonStyle(MemdoScaleButtonStyle())
+        // The AI's single pick reads as a distinct hero card, not another
+        // list row -- same surface+stroke treatment as TodayIntentionPrompt
+        // (오늘의 방향), not the bare-divider .memdoRowGroup() the plain
+        // numbered rows below it use.
+        .background(
+            MemdoTheme.surface,
+            in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                .stroke(MemdoTheme.outline, lineWidth: 0.5)
+        }
+        .padding(.horizontal, MemdoMetrics.pagePadding)
         .accessibilityLabel("첫 번째 기사, \(item.title), \(item.metadata)")
         .accessibilityHint("기사 요약과 관련 주제를 엽니다")
     }
@@ -659,7 +681,7 @@ private struct BriefingNewsRow: View {
             .frame(minHeight: 52)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MemdoScaleButtonStyle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(number)번째 기사, \(item.title), \(item.metadata)")
         .accessibilityHint("기사 요약과 관련 주제를 엽니다")
@@ -821,7 +843,7 @@ private struct BriefingTopicView: View {
                             .padding(.vertical, 10)
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(MemdoScaleButtonStyle())
                         .disabled(item.url == nil)
 
                         if item.id != items.last?.id {
