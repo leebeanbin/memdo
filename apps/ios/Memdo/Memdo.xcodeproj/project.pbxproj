@@ -13,6 +13,7 @@
 		05A16520EDB91AFE6AA6B061 /* ShareWorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9BC3B0CEFE2D4C6854CE6D /* ShareWorkoutView.swift */; };
 		07C63312BBCA02E3A38CDA86 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 592EA12B6FF1AB799EF6869C /* ShareViewController.swift */; };
 		08DE99AB607725B2E3D52207 /* MemdoShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7E846EC17F4BCC9B7757596E /* MemdoShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		09F92AF7FB120FDD80087A27 /* DateFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81842BD1CFF4ED836A2E09A7 /* DateFormatting.swift */; };
 		0F660EFC0579CCC6223DB2B9 /* WorkoutViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE3D42537298C53BC842A35 /* WorkoutViews.swift */; };
 		0FDA22493E17D874CFE3A6A4 /* MemdoGuideSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99214A59192502A52C8A73AD /* MemdoGuideSheet.swift */; };
 		127639652BAACB34DA1E4279 /* MemdoLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F83C89D78FD9D59E7C1EE3 /* MemdoLiveActivity.swift */; };
@@ -131,6 +132,7 @@
 		6A32B5F7D73399A9F62D92CA /* WorkoutModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutModel.swift; sourceTree = "<group>"; };
 		7687EBCFF670FFE2F6CA37D2 /* Memdo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Memdo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7E846EC17F4BCC9B7757596E /* MemdoShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MemdoShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		81842BD1CFF4ED836A2E09A7 /* DateFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateFormatting.swift; sourceTree = "<group>"; };
 		83EC68D64631B324F171F399 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8640DA0A68D661636709CCDD /* Pretendard-Bold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pretendard-Bold.otf"; sourceTree = "<group>"; };
 		8FD6B2D482673663626353C2 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
@@ -250,6 +252,7 @@
 				DBD366DE45CA454C72F2BBC3 /* CoachMarks.swift */,
 				F9442BC0734AAE004616103C /* Config.xcconfig */,
 				6561C352731005322618C740 /* DailySummaryView.swift */,
+				81842BD1CFF4ED836A2E09A7 /* DateFormatting.swift */,
 				AB3E052299D1A953107E411D /* EventCapture.swift */,
 				CF37F31C681B18584711EBD0 /* HealthKitImporter.swift */,
 				83EC68D64631B324F171F399 /* Info.plist */,
@@ -472,6 +475,7 @@
 				8440D2E9F99B1C9848CF21ED /* CalendarView.swift in Sources */,
 				87E2689DFF3C0F8C22A74D06 /* CoachMarks.swift in Sources */,
 				78F5DD11294A40F25A5A9524 /* DailySummaryView.swift in Sources */,
+				09F92AF7FB120FDD80087A27 /* DateFormatting.swift in Sources */,
 				76D234B343C9376873066059 /* EventCapture.swift in Sources */,
 				E13CC110F4ADD28CD689DC33 /* HealthKitImporter.swift in Sources */,
 				EAD86635B870F07E38DF7E19 /* LiveActivityScheduler.swift in Sources */,

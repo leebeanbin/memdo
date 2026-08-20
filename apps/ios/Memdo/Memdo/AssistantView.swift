@@ -79,7 +79,7 @@ func resolveAgentDateToken(_ token: String) -> Date {
     case "today":    return cal.startOfDay(for: .now)
     case "tomorrow": return cal.startOfDay(for: cal.date(byAdding: .day, value: 1, to: .now) ?? .now)
     default:
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        let f = DateFormatting.posix("yyyy-MM-dd")
         return f.date(from: token).map { cal.startOfDay(for: $0) } ?? cal.startOfDay(for: .now)
     }
 }
@@ -99,10 +99,7 @@ func displayAgentDateToken(_ token: String) -> String {
     case "today":    return "오늘"
     case "tomorrow": return "내일"
     default:
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "M월 d일"
-        return f.string(from: resolveAgentDateToken(token))
+        return DateFormatting.korean("M월 d일").string(from: resolveAgentDateToken(token))
     }
 }
 
@@ -349,7 +346,7 @@ struct FindFreeSlotTool: Tool {
         case "tomorrow":  return [cal.date(byAdding: .day, value: 1, to: today) ?? today]
         case "this_week": return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: today) }
         default:
-            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+            let f = DateFormatting.posix("yyyy-MM-dd")
             return [f.date(from: scope).map { cal.startOfDay(for: $0) } ?? today]
         }
     }
@@ -392,9 +389,7 @@ struct FindFreeSlotTool: Tool {
     }
 
     private func formatInterval(_ interval: DateInterval) -> String {
-        let f = DateFormatter()
-        f.locale     = Locale(identifier: "ko_KR")
-        f.dateFormat = "H:mm"
+        let f = DateFormatting.korean("H:mm")
         let endTime  = interval.start.addingTimeInterval(interval.duration)
         return "\(f.string(from: interval.start))–\(f.string(from: endTime))"
     }
@@ -403,9 +398,7 @@ struct FindFreeSlotTool: Tool {
         let cal = Calendar.current
         if cal.isDateInToday(date)    { return "오늘" }
         if cal.isDateInTomorrow(date) { return "내일" }
-        let f = DateFormatter()
-        f.locale     = Locale(identifier: "ko_KR")
-        f.dateFormat = "M월 d일(E)"
+        let f = DateFormatting.korean("M월 d일(E)")
         return f.string(from: date)
     }
 }

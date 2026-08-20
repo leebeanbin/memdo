@@ -99,24 +99,14 @@ enum SlackNotifier {
 
         var parts = ["\(prefix): \(schedule.title)"]
 
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "ko_KR")
-        fmt.dateFormat = "M/d(E) a h:mm"
-
         if let start = schedule.startAt {
-            var time = fmt.string(from: start)
+            var time = DateFormatting.korean("M/d(E) a h:mm").string(from: start)
             if let end = schedule.endAt {
-                let endFmt = DateFormatter()
-                endFmt.locale = Locale(identifier: "ko_KR")
-                endFmt.dateFormat = "h:mm"
-                time += " – \(endFmt.string(from: end))"
+                time += " – \(DateFormatting.korean("h:mm").string(from: end))"
             }
             parts.append(time)
         } else {
-            let dayFmt = DateFormatter()
-            dayFmt.locale = Locale(identifier: "ko_KR")
-            dayFmt.dateFormat = "M/d(E)"
-            parts.append(dayFmt.string(from: schedule.scheduledDate))
+            parts.append(DateFormatting.korean("M/d(E)").string(from: schedule.scheduledDate))
         }
 
         if let emoji = schedule.emoji, !emoji.isEmpty {

@@ -225,9 +225,7 @@ enum NotificationScheduler {
     }
 
     private static func reminderTimeRange(start: Date, end: Date?) -> String {
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "ko_KR")
-        fmt.dateFormat = "a h:mm"
+        let fmt = DateFormatting.korean("a h:mm")
         var text = fmt.string(from: start)
         if let end { text += " – " + fmt.string(from: end) }
         return text

@@ -253,9 +253,7 @@ actor BriefingRepository {
 
     private func parseDate(_ string: String) -> Date? {
         // RFC 2822: "Wed, 13 Aug 2026 08:30:00 +0900"
-        let rfc2822 = DateFormatter()
-        rfc2822.locale = Locale(identifier: "en_US_POSIX")
-        rfc2822.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
+        let rfc2822 = DateFormatting.posix("EEE, dd MMM yyyy HH:mm:ss Z")
         if let d = rfc2822.date(from: string) { return d }
 
         // ISO 8601 with/without fractional seconds
@@ -292,9 +290,7 @@ actor BriefingRepository {
     }
 
     private func currentDateString() -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: .now)
+        DateFormatting.posix("yyyy-MM-dd").string(from: .now)
     }
 
     // MARK: - On-device AI Summary

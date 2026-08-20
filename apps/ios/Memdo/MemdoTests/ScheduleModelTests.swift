@@ -46,6 +46,30 @@ final class ScheduleModelTests: XCTestCase {
         XCTAssertFalse(task.occurs(on: nextDay))
     }
 
+    func testDateFormattingKoreanUsesKoreanLocale() {
+        // AssistantView/SlackNotifier/NotificationScheduler/BriefingFeed each
+        // used to build their own DateFormatter and set this locale by hand.
+        let calendar = Calendar(identifier: .gregorian)
+        let date = calendar.date(from: DateComponents(year: 2026, month: 8, day: 20))!
+        XCTAssertEqual(DateFormatting.korean("M월 d일").string(from: date), "8월 20일")
+    }
+
+    func testDateFormattingPosixParsesRegardlessOfDeviceLocale() {
+        // AssistantView's two "yyyy-MM-dd" parse sites (resolveAgentDateToken,
+        // FindFreeSlotTool.expandScope) and BriefingFeed's currentDateString()
+        // built a bare DateFormatter() with no locale at all -- Apple's
+        // documented fix for "fixed-format" parsing being silently affected
+        // by the device's actual locale/calendar is `en_US_POSIX`, which
+        // DateFormatting.posix now applies for all of them.
+        let formatter = DateFormatting.posix("yyyy-MM-dd")
+        let parsed = formatter.date(from: "2026-08-20")
+        XCTAssertNotNil(parsed)
+        let components = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day], from: parsed!)
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 8)
+        XCTAssertEqual(components.day, 20)
+    }
+
     func testHasValidTitleRejectsWhitespaceOnly() {
         // Two save-gate call sites (ScheduleSheets.swift) used to each
         // re-derive `!title.trimmingCharacters(...).isEmpty` inline -- this
