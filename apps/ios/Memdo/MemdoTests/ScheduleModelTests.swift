@@ -86,6 +86,30 @@ final class ScheduleModelTests: XCTestCase {
         XCTAssertNotNil(UIFont(name: "Pretendard-Bold", size: 17))
     }
 
+    func testScheduleColorResolvesCorrectDynamicRGBForLightAndDark() {
+        // NotificationScheduler's notification-attachment thumbnail derives
+        // its UIColor from this (UIColor(color.swiftUIColor)) rather than
+        // keeping its own copy of these six dynamic light/dark RGB pairs --
+        // this pins that the Color -> UIColor round trip actually preserves
+        // the correct per-appearance value instead of silently collapsing
+        // to one fixed color.
+        let uiColor = UIColor(ScheduleColor.coral.swiftUIColor)
+
+        let light = uiColor.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
+        var lr: CGFloat = 0, lg: CGFloat = 0, lb: CGFloat = 0, la: CGFloat = 0
+        light.getRed(&lr, green: &lg, blue: &lb, alpha: &la)
+        XCTAssertEqual(lr, 0.95, accuracy: 0.01)
+        XCTAssertEqual(lg, 0.36, accuracy: 0.01)
+        XCTAssertEqual(lb, 0.29, accuracy: 0.01)
+
+        let dark = uiColor.resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark))
+        var dr: CGFloat = 0, dg: CGFloat = 0, db: CGFloat = 0, da: CGFloat = 0
+        dark.getRed(&dr, green: &dg, blue: &db, alpha: &da)
+        XCTAssertEqual(dr, 1.00, accuracy: 0.01)
+        XCTAssertEqual(dg, 0.60, accuracy: 0.01)
+        XCTAssertEqual(db, 0.55, accuracy: 0.01)
+    }
+
     func testAgentPromptsYAMLLoadsAndResolvesEveryContext() {
         // Exercises the actual bundled AgentPrompts.yml through Yams, not a
         // hand-written fixture -- a YAML syntax error or a schema mismatch
