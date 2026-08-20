@@ -873,10 +873,18 @@ struct AgentSheet: View {
             return parts.joined(separator: "\n\n")
 
         case .calendar:
+            // Includes kind (할 일/일정) and completion so "미완료 할 일을
+            // 빈 시간에 제안해줘" (a quick action below) has something to
+            // actually filter on -- a bare title+time list can't answer
+            // that prompt at all.
             guard let weekEnd = cal.date(byAdding: .day, value: 7, to: now) else { return "" }
             let week = schedules.filter { $0.scheduledDate >= now && $0.scheduledDate <= weekEnd }
             guard !week.isEmpty else { return "" }
-            return "이번 주 일정:\n" + week.prefix(15).map { "- \($0.title) \($0.displayTime)" }.joined(separator: "\n")
+            return "이번 주 일정:\n" + week.prefix(15).map {
+                let kind = $0.kind == .task ? "할 일" : "일정"
+                let status = $0.isDone ? ", 완료" : ""
+                return "- [\(kind)\(status)] \($0.title) \($0.displayTime)"
+            }.joined(separator: "\n")
 
         case .weekReview:
             guard let weekStart = cal.date(byAdding: .day, value: -7, to: now) else { return "" }
@@ -887,11 +895,20 @@ struct AgentSheet: View {
                 + past.prefix(15).map { "- [\($0.isDone ? "✓" : " ")] \($0.title)" }.joined(separator: "\n")
 
         case .monthReview:
+            // Used to be just a bare count ("지난 30일 일정 47개 (완료
+            // 32개)") with no titles at all -- the "놓친 작업의 공통점을
+            // 찾아줘" quick action below asks the model to find a pattern
+            // across titles it was never actually given. Same
+            // title-list shape as weekReview, just a smaller slice (most
+            // recent first) since a month can have far more items than a
+            // rolling 15-line context is meant for.
             guard let monthStart = cal.date(byAdding: .day, value: -30, to: now) else { return "" }
             let past = schedules.filter { $0.scheduledDate >= monthStart && $0.scheduledDate <= now }
             guard !past.isEmpty else { return "" }
             let doneCount = past.filter { $0.isDone }.count
-            return "지난 30일 일정 \(past.count)개 (완료 \(doneCount)개)"
+            let recent = past.sorted { $0.scheduledDate > $1.scheduledDate }
+            return "지난 30일 일정 \(past.count)개 (완료 \(doneCount)개), 최근 항목:\n"
+                + recent.prefix(15).map { "- [\($0.isDone ? "✓" : " ")] \($0.title)" }.joined(separator: "\n")
 
         case .settings:
             return ""
