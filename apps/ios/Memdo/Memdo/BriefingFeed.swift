@@ -341,6 +341,42 @@ actor BriefingRepository {
         }
         return text
     }
+
+    private static let cleanupCacheKey = "briefing-cleanup-cache-v1"
+
+    /// On-demand, per-article version of the same idea as `summarize()`
+    /// above, but rewriting rather than distilling: some source feeds glue
+    /// a deck fragment straight onto the article's lead paragraph with zero
+    /// separator (verified directly against 매일경제's RSS -- not a "\n" or
+    /// truncation issue, so no client-side string transform reliably
+    /// un-glues it). Explicitly told to preserve facts/numbers and not add
+    /// anything -- this is a rewrite for readability, not a re-summary.
+    /// Cached per item id so re-opening the same article doesn't re-run it.
+    @available(iOS 26, *)
+    func cleanUpSummary(for item: FetchedItem) async -> String? {
+        guard !item.summary.isEmpty else { return nil }
+
+        var cache = (UserDefaults.standard.data(forKey: Self.cleanupCacheKey))
+            .flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
+        if let cached = cache[item.id] { return cached }
+
+        guard case .available = SystemLanguageModel.default.availability else { return nil }
+
+        let session = LanguageModelSession(
+            instructions: "뉴스 요약 텍스트를 자연스러운 한국어 문장으로 다듬어. 원문에 있는 사실과 숫자는 그대로 유지하고 새로운 내용을 추가하거나 의견을 넣지 마. 문장 부호 없이 여러 문장이 붙어 있으면 적절히 문장을 나눠. 2~3문장, 120자 내외로 정리해. 결과 문장만 출력해."
+        )
+        let prompt = "다음 뉴스 요약을 다듬어줘:\n\(item.summary)"
+
+        guard let response = try? await session.respond(to: prompt) else { return nil }
+        let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+
+        cache[item.id] = text
+        if let data = try? JSONEncoder().encode(cache) {
+            UserDefaults.standard.set(data, forKey: Self.cleanupCacheKey)
+        }
+        return text
+    }
 }
 
 // MARK: - Persistent Cache Structures (file-private)

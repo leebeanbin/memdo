@@ -1,3 +1,4 @@
+import FoundationModels
 import SafariServices
 import SwiftUI
 
@@ -682,10 +683,29 @@ private struct BriefingNewsRow: View {
 
 private struct BriefingStoryDetail: View {
     @State private var safariItem: BriefingLink?
+    @State private var cleanedSummary: String?
+    @State private var isCleaningUp = false
     let item: BriefingRepository.FetchedItem
     @Binding var selectedCategories: Set<BriefingFeedCategory>
 
     private var isFollowed: Bool { selectedCategories.contains(item.category) }
+
+    private var canCleanUp: Bool {
+        guard #available(iOS 26, *) else { return false }
+        guard case .available = SystemLanguageModel.default.availability else { return false }
+        return true
+    }
+
+    @available(iOS 26, *)
+    private func runCleanup() async {
+        isCleaningUp = true
+        let result = await BriefingRepository.shared.cleanUpSummary(for: item)
+        isCleaningUp = false
+        guard let result else { return }
+        withAnimation(.easeOut(duration: 0.4)) {
+            cleanedSummary = result
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -744,12 +764,49 @@ private struct BriefingStoryDetail: View {
 
                 if !item.summary.isEmpty {
                     VStack(alignment: .leading, spacing: MemdoMetrics.sectionContentSpacing) {
-                        Text("핵심 내용")
-                            .font(MemdoTypography.sectionTitle)
-                        Text(item.summary.compactBriefingText)
+                        HStack {
+                            Text("핵심 내용")
+                                .font(MemdoTypography.sectionTitle)
+                            Spacer()
+                            // Some source feeds glue two fields together with
+                            // no separator at all (verified against
+                            // 매일경제's raw RSS -- not fixable by any
+                            // client-side string transform), so this offers
+                            // an on-device rewrite instead of trying to parse
+                            // around it. Compact, inline, next to the header
+                            // it affects -- not a full-width button below;
+                            // this is a one-off touch-up, not this screen's
+                            // main action. DESIGN.md 5.8 requires a text
+                            // label (not icon-only) for an "AI 실행" action,
+                            // so it keeps a short label rather than going
+                            // icon-only like the 관심 추가 toggle above.
+                            if canCleanUp, cleanedSummary == nil {
+                                Button {
+                                    if #available(iOS 26, *) {
+                                        Task { await runCleanup() }
+                                    }
+                                } label: {
+                                    if isCleaningUp {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                            .tint(MemdoTheme.brand)
+                                    } else {
+                                        Label("정리", systemImage: "sparkles")
+                                    }
+                                }
+                                .font(MemdoTypography.captionEmphasis)
+                                .foregroundStyle(MemdoTheme.brand)
+                                .disabled(isCleaningUp)
+                                .accessibilityLabel("Agent로 자연스럽게 정리하기")
+                                .transition(.opacity)
+                            }
+                        }
+                        Text(cleanedSummary ?? item.summary.compactBriefingText)
                             .font(MemdoTypography.body)
                             .foregroundStyle(MemdoTheme.ink)
                             .lineSpacing(5)
+                            .id(cleanedSummary)
+                            .transition(.blurReplace)
                     }
                     .padding(.vertical, 18)
                     .memdoRowGroup()
