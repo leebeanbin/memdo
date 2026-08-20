@@ -1551,3 +1551,160 @@ private struct AgentComposer: View {
         .memdoFloatingSurface(cornerRadius: MemdoMetrics.groupRadius)
     }
 }
+
+// MARK: - Output gallery (Preview only)
+
+/// Every shape an Agent message/card can render in, side by side, so a
+/// change to any of them can be checked visually without hand-triggering
+/// each state in the simulator (loading/error/tool-call require timing or a
+/// live key; the proposal cards require a real tool call). Not shown at
+/// runtime -- Xcode canvas / #Preview only.
+private struct AgentOutputGallery: View {
+    private static let markdownBugRepro = """
+        오늘의 일정을 알려줄게.
+
+        * **제안 일정**: 오늘 일정을 제안해줄게.
+        * **공백 시간 찾기**: 오늘의 공백 시간을 찾아줄게.
+        * **일정 수정하기**: 오늘의 일정을 수정해줄게.
+
+        만약 다른 기능이 필요하시면 알려주세요!
+        """
+
+    private var conflictFreeScheduleProposal: AgentScheduleProposal {
+        let p = AgentScheduleProposal()
+        p.propose(ProposedScheduleDraft(
+            title: "집중 업무", dateString: "today",
+            startTimeString: "14:00", endTimeString: "15:00",
+            isTask: false, note: nil
+        ))
+        return p
+    }
+
+    private var conflictingScheduleProposal: AgentScheduleProposal {
+        let p = AgentScheduleProposal()
+        p.propose(
+            ProposedScheduleDraft(
+                title: "점심 약속", dateString: "today",
+                startTimeString: "12:00", endTimeString: "13:00",
+                isTask: false, note: "동료와 함께"
+            ),
+            conflictTitle: "팀 회의"
+        )
+        return p
+    }
+
+    private var checkFailedScheduleProposal: AgentScheduleProposal {
+        let p = AgentScheduleProposal()
+        p.propose(
+            ProposedScheduleDraft(
+                title: "독서", dateString: "tomorrow",
+                startTimeString: nil, endTimeString: nil,
+                isTask: true, note: nil
+            ),
+            conflictCheckFailed: true
+        )
+        return p
+    }
+
+    private var completeUpdateProposal: AgentScheduleUpdateProposal {
+        let p = AgentScheduleUpdateProposal()
+        p.propose(
+            id: "1", action: "complete", title: "보고서 작성",
+            dateString: nil, startTimeString: nil, endTimeString: nil,
+            conflictTitle: nil, conflictCheckFailed: false
+        )
+        return p
+    }
+
+    private var rescheduleConflictUpdateProposal: AgentScheduleUpdateProposal {
+        let p = AgentScheduleUpdateProposal()
+        p.propose(
+            id: "2", action: "reschedule", title: "팀 회의",
+            dateString: "tomorrow", startTimeString: "10:00", endTimeString: "11:00",
+            conflictTitle: "1:1 미팅", conflictCheckFailed: false
+        )
+        return p
+    }
+
+    private var deleteUpdateProposal: AgentScheduleUpdateProposal {
+        let p = AgentScheduleUpdateProposal()
+        p.propose(
+            id: "3", action: "delete", title: "취소된 약속",
+            dateString: nil, startTimeString: nil, endTimeString: nil,
+            conflictTitle: nil, conflictCheckFailed: false
+        )
+        return p
+    }
+
+    private func label(_ text: String) -> some View {
+        Text(text)
+            .font(MemdoTypography.captionEmphasis)
+            .foregroundStyle(MemdoTheme.secondaryInk)
+            .padding(.top, 4)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                label("사용자 버블")
+                AgentUserBubble(text: "오늘 일정 알려줘")
+
+                label("Agent 응답 — 일반 텍스트")
+                AgentResponse(message: AgentMessage(role: .assistant, text: "오늘은 회의가 2개 있어요."))
+
+                label("Agent 응답 — 마크다운 목록 (버그 재현 케이스)")
+                AgentResponse(message: AgentMessage(role: .assistant, text: Self.markdownBugRepro))
+
+                label("Agent 응답 — 생각 중")
+                AgentResponse(message: AgentMessage(role: .assistant, text: "", isStreaming: true))
+
+                label("Agent 응답 — 도구 실행 중")
+                AgentResponse(message: AgentMessage(
+                    role: .assistant, text: "", isStreaming: true, toolHint: "일정을 제안하는 중..."
+                ))
+
+                label("Agent 응답 — 오류 (재시도 가능)")
+                AgentResponse(
+                    message: AgentMessage(role: .assistant, text: "오류가 발생했어요. 다시 시도해주세요.", isError: true),
+                    onRetry: {}
+                )
+
+                label("일정 제안 카드 — 충돌 없음")
+                ProposedScheduleCard(
+                    draft: conflictFreeScheduleProposal.draft!,
+                    conflictTitle: nil, conflictCheckFailed: false,
+                    onConfirm: {}, onDecline: {}
+                )
+
+                label("일정 제안 카드 — 충돌 있음")
+                ProposedScheduleCard(
+                    draft: conflictingScheduleProposal.draft!,
+                    conflictTitle: conflictingScheduleProposal.conflictTitle, conflictCheckFailed: false,
+                    onConfirm: {}, onDecline: {}
+                )
+
+                label("일정 제안 카드 — 충돌 확인 실패")
+                ProposedScheduleCard(
+                    draft: checkFailedScheduleProposal.draft!,
+                    conflictTitle: nil, conflictCheckFailed: true,
+                    onConfirm: {}, onDecline: {}
+                )
+
+                label("일정 변경 카드 — 완료 처리")
+                ProposedScheduleUpdateCard(proposal: completeUpdateProposal, onConfirm: {}, onDecline: {})
+
+                label("일정 변경 카드 — 이동 (충돌 있음)")
+                ProposedScheduleUpdateCard(proposal: rescheduleConflictUpdateProposal, onConfirm: {}, onDecline: {})
+
+                label("일정 변경 카드 — 삭제")
+                ProposedScheduleUpdateCard(proposal: deleteUpdateProposal, onConfirm: {}, onDecline: {})
+            }
+            .padding(MemdoMetrics.pagePadding)
+        }
+        .background(MemdoTheme.background)
+    }
+}
+
+#Preview("Agent 출력 갤러리") {
+    AgentOutputGallery()
+}
