@@ -255,12 +255,6 @@ struct TodayScheduleSection: View {
 
 struct TodayBriefingSection: View {
     @State private var items: [BriefingRepository.FetchedItem] = []
-    /// The full fetch (up to 20 items across every category), kept
-    /// separately from `items` (the 5 curated for the sheet's visible list)
-    /// so BriefingTopicView has more than 1-3 items to filter down to when
-    /// browsing a single category -- `items` alone was too thin a pool for
-    /// "먼저 살펴보고" (browse first) to mean anything.
-    @State private var topicPool: [BriefingRepository.FetchedItem] = []
     @State private var isLoading = false
     @State private var aiSummary: String?
     @State private var showsBriefing = false
@@ -301,7 +295,6 @@ struct TodayBriefingSection: View {
         .sheet(isPresented: $showsBriefing) {
             BriefingSheet(
                 items: Array(items.prefix(5)),
-                topicPool: topicPool,
                 summary: aiSummary,
                 selectedCategories: $selectedCategories
             )
@@ -328,7 +321,6 @@ struct TodayBriefingSection: View {
         )
         let curated = Self.curatedItems(fetched, selectedCategories: selectedCategories)
         items = curated
-        topicPool = fetched
         isLoading = false
 
         if #available(iOS 26, *) {
@@ -432,11 +424,6 @@ private struct BriefingPreview: View {
 private struct BriefingSheet: View {
     @Environment(\.dismiss) private var dismiss
     let items: [BriefingRepository.FetchedItem]
-    /// Passed to BriefingLeadStory/BriefingNewsRow as `relatedItems` instead
-    /// of `items` -- the full fetch, not just the 5 curated for this sheet's
-    /// visible list, so BriefingTopicView has a real pool to filter by
-    /// category from. `items` stays what's actually rendered here.
-    let topicPool: [BriefingRepository.FetchedItem]
     let summary: String?
     @Binding var selectedCategories: Set<BriefingFeedCategory>
 
@@ -485,7 +472,6 @@ private struct BriefingSheet: View {
                             if let lead = items.first {
                                 BriefingLeadStory(
                                     item: lead,
-                                    relatedItems: topicPool,
                                     selectedCategories: $selectedCategories
                                 )
                                 if items.count > 1 {
@@ -496,7 +482,6 @@ private struct BriefingSheet: View {
                                 BriefingNewsRow(
                                     number: index + 2,
                                     item: item,
-                                    relatedItems: topicPool,
                                     selectedCategories: $selectedCategories
                                 )
                                 if item.id != items.last?.id {
@@ -568,16 +553,11 @@ private struct BriefingOrdinalBadge: View {
 
 private struct BriefingLeadStory: View {
     let item: BriefingRepository.FetchedItem
-    let relatedItems: [BriefingRepository.FetchedItem]
     @Binding var selectedCategories: Set<BriefingFeedCategory>
 
     var body: some View {
         NavigationLink {
-            BriefingStoryDetail(
-                item: item,
-                relatedItems: relatedItems,
-                selectedCategories: $selectedCategories
-            )
+            BriefingStoryDetail(item: item, selectedCategories: $selectedCategories)
         } label: {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
@@ -598,7 +578,7 @@ private struct BriefingLeadStory: View {
                         .lineSpacing(3)
                         .lineLimit(2)
                 }
-                Text(item.metadata)
+                Text(item.metadataWithoutCategory)
                     .font(MemdoTypography.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
@@ -610,7 +590,7 @@ private struct BriefingLeadStory: View {
         }
         .buttonStyle(MemdoScaleButtonStyle())
         .accessibilityLabel("첫 번째 기사, \(item.title), \(item.metadata)")
-        .accessibilityHint("기사 요약과 관련 주제를 엽니다")
+        .accessibilityHint("기사 요약을 엽니다")
     }
 }
 
@@ -657,16 +637,11 @@ private struct BriefingLoadingRow: View {
 private struct BriefingNewsRow: View {
     let number: Int
     let item: BriefingRepository.FetchedItem
-    let relatedItems: [BriefingRepository.FetchedItem]
     @Binding var selectedCategories: Set<BriefingFeedCategory>
 
     var body: some View {
         NavigationLink {
-            BriefingStoryDetail(
-                item: item,
-                relatedItems: relatedItems,
-                selectedCategories: $selectedCategories
-            )
+            BriefingStoryDetail(item: item, selectedCategories: $selectedCategories)
         } label: {
             HStack(alignment: .top, spacing: MemdoMetrics.rowSpacing) {
                 BriefingOrdinalBadge(number: number, category: item.category)
@@ -679,7 +654,7 @@ private struct BriefingNewsRow: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
-                    Text(item.metadata)
+                    Text(item.metadataWithoutCategory)
                         .font(MemdoTypography.caption)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                         .lineLimit(1)
@@ -701,33 +676,70 @@ private struct BriefingNewsRow: View {
         .buttonStyle(MemdoScaleButtonStyle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(number)번째 기사, \(item.title), \(item.metadata)")
-        .accessibilityHint("기사 요약과 관련 주제를 엽니다")
+        .accessibilityHint("기사 요약을 엽니다")
     }
 }
 
 private struct BriefingStoryDetail: View {
     @State private var safariItem: BriefingLink?
     let item: BriefingRepository.FetchedItem
-    let relatedItems: [BriefingRepository.FetchedItem]
     @Binding var selectedCategories: Set<BriefingFeedCategory>
+
+    private var isFollowed: Bool { selectedCategories.contains(item.category) }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
                 VStack(alignment: .leading, spacing: 12) {
+                    // Category is shown here already, so it doesn't need its
+                    // own separate "이 이야기의 주제" section/screen below --
+                    // the follow toggle that section's sole real function
+                    // (관심사에 추가/제거) now lives right next to it instead.
                     HStack(spacing: 8) {
                         BriefingCategoryBadge(category: item.category)
                         Text(item.category.rawValue)
                             .font(MemdoTypography.captionEmphasis)
                             .foregroundStyle(item.category.accentColor.swiftUIColor)
+                        Spacer()
+                        Button {
+                            if isFollowed {
+                                selectedCategories.remove(item.category)
+                            } else {
+                                selectedCategories.insert(item.category)
+                            }
+                        } label: {
+                            Label(
+                                isFollowed ? "관심 해제" : "관심 추가",
+                                systemImage: isFollowed ? "checkmark.circle.fill" : "plus.circle"
+                            )
+                        }
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(isFollowed ? MemdoTheme.secondaryInk : item.category.accentColor.swiftUIColor)
+                        .accessibilityValue(isFollowed ? "관심 분야로 등록됨" : "관심 분야 아님")
                     }
                     Text(item.title)
                         .font(MemdoTypography.detailTitle)
                         .foregroundStyle(MemdoTheme.ink)
                         .lineSpacing(5)
-                    Text(item.metadata)
-                        .font(MemdoTypography.caption)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
+                    // Byline -- source name is the one piece of provenance a
+                    // reader actually orients on, so it gets its own line at
+                    // a readable size instead of being buried in a single
+                    // small caption alongside the timestamp.
+                    HStack(spacing: 6) {
+                        Image(systemName: "building.columns")
+                            .font(MemdoTypography.caption2)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                        Text(item.sourceName)
+                            .font(MemdoTypography.action)
+                            .foregroundStyle(MemdoTheme.ink)
+                        if !item.relativeTime.isEmpty {
+                            Text("·")
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                            Text(item.relativeTime)
+                                .font(MemdoTypography.caption)
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                        }
+                    }
                 }
 
                 if !item.summary.isEmpty {
@@ -742,48 +754,6 @@ private struct BriefingStoryDetail: View {
                     .padding(.vertical, 18)
                     .memdoRowGroup()
                 }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("이 이야기의 주제")
-                        .font(MemdoTypography.sectionTitle)
-
-                    NavigationLink {
-                        BriefingTopicView(
-                            category: item.category,
-                            items: relatedItems.filter { $0.category == item.category },
-                            selectedCategories: $selectedCategories
-                        )
-                    } label: {
-                        HStack(spacing: 12) {
-                            BriefingCategoryBadge(category: item.category)
-                            Text(item.category.rawValue)
-                                .font(MemdoTypography.action)
-                            Spacer()
-                            if selectedCategories.contains(item.category) {
-                                Label("관심", systemImage: "checkmark")
-                                    .font(MemdoTypography.captionEmphasis)
-                                    .foregroundStyle(MemdoTheme.secondaryInk)
-                            }
-                            Image(systemName: "chevron.right")
-                                .font(MemdoTypography.captionEmphasis)
-                                .foregroundStyle(MemdoTheme.secondaryInk)
-                                .accessibilityHidden(true)
-                        }
-                        .foregroundStyle(MemdoTheme.ink)
-                        .frame(minHeight: MemdoMetrics.settingsRowHeight)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(MemdoScaleButtonStyle())
-                    .memdoRowGroup()
-                    .accessibilityHint("관련 기사를 살펴보고 관심사에 추가할 수 있습니다")
-                }
-
-                if item.url != nil {
-                    Button("원문 읽기") {
-                        if let url = item.url { safariItem = BriefingLink(url: url) }
-                    }
-                    .buttonStyle(MemdoPrimaryActionButtonStyle())
-                }
             }
             .padding(.horizontal, MemdoMetrics.pagePadding)
             .padding(.top, 20)
@@ -792,95 +762,21 @@ private struct BriefingStoryDetail: View {
         .background(MemdoTheme.background)
         .navigationTitle("기사")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $safariItem) { link in
-            BriefingSafariView(url: link.url).ignoresSafeArea()
-        }
-    }
-}
-
-private struct BriefingTopicView: View {
-    @State private var safariItem: BriefingLink?
-    let category: BriefingFeedCategory
-    let items: [BriefingRepository.FetchedItem]
-    @Binding var selectedCategories: Set<BriefingFeedCategory>
-
-    private var isSelected: Bool { selectedCategories.contains(category) }
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: category.systemImage)
-                        .font(MemdoTypography.title3)
-                        .foregroundStyle(category.accentColor.swiftUIColor)
-                        .frame(width: 44, height: 44)
-                        .background(category.accentColor.softSwiftUIColor, in: Circle())
-                        .accessibilityHidden(true)
-                    Text(category.rawValue)
-                        .font(MemdoTypography.detailTitle)
-                    Text("관련 기사 \(items.count)개를 먼저 살펴보고 관심사에 추가할 수 있어요.")
-                        .font(MemdoTypography.subtitle)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
-                }
-
-                if isSelected {
+        .toolbar {
+            // "원문 읽기" moved off the page and into the nav bar -- opening
+            // the source externally is a secondary, one-off action here, not
+            // the screen's main event, so it doesn't need a full-width
+            // primary-button treatment.
+            if item.url != nil {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        selectedCategories.remove(category)
+                        if let url = item.url { safariItem = BriefingLink(url: url) }
                     } label: {
-                        Label("관심사에서 제거", systemImage: "checkmark")
-                    }
-                    .buttonStyle(MemdoSecondaryActionButtonStyle())
-                    .accessibilityAddTraits(.isSelected)
-                } else {
-                    Button {
-                        selectedCategories.insert(category)
-                    } label: {
-                        Label("관심사에 추가", systemImage: "plus")
-                    }
-                    .buttonStyle(MemdoPrimaryActionButtonStyle())
-                }
-
-                VStack(spacing: 0) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        Button {
-                            if let url = item.url { safariItem = BriefingLink(url: url) }
-                        } label: {
-                            HStack(alignment: .top, spacing: MemdoMetrics.rowSpacing) {
-                                BriefingOrdinalBadge(number: index + 1, category: item.category)
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(item.title)
-                                        .font(MemdoTypography.action)
-                                        .foregroundStyle(MemdoTheme.ink)
-                                        .lineSpacing(3)
-                                        .lineLimit(2)
-                                    Text(item.metadata)
-                                        .font(MemdoTypography.caption)
-                                        .foregroundStyle(MemdoTheme.secondaryInk)
-                                }
-                                .padding(.top, 3)
-                                Spacer(minLength: 8)
-                            }
-                            .multilineTextAlignment(.leading)
-                            .padding(.vertical, 14)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(MemdoScaleButtonStyle())
-                        .disabled(item.url == nil)
-
-                        if item.id != items.last?.id {
-                            Divider().padding(.leading, MemdoMetrics.rowContentLeading)
-                        }
+                        Label("원문", systemImage: "arrow.up.right")
                     }
                 }
-                .memdoRowGroup()
             }
-            .padding(.horizontal, MemdoMetrics.pagePadding)
-            .padding(.top, 20)
-            .padding(.bottom, 32)
         }
-        .background(MemdoTheme.background)
-        .navigationTitle("주제")
-        .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $safariItem) { link in
             BriefingSafariView(url: link.url).ignoresSafeArea()
         }
@@ -888,8 +784,20 @@ private struct BriefingTopicView: View {
 }
 
 private extension BriefingRepository.FetchedItem {
+    /// Full provenance (source, time, category) -- used for accessibility
+    /// labels, where category is worth saying even though sighted users
+    /// already see it via the row's category badge.
     var metadata: String {
         [sourceName, relativeTime, category.rawValue]
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+
+    /// Same as `metadata` without category -- every briefing row already
+    /// shows category via its badge, so repeating the name a second time
+    /// in the visible metadata line was redundant.
+    var metadataWithoutCategory: String {
+        [sourceName, relativeTime]
             .filter { !$0.isEmpty }
             .joined(separator: " · ")
     }
