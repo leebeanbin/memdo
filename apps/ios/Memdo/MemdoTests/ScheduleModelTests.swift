@@ -115,4 +115,54 @@ final class ScheduleModelTests: XCTestCase {
         let monthPrompts = AgentPrompts.quickActions(for: .monthReview, hasSchedulesToday: true)
         XCTAssertNotEqual(weekPrompts.map(\.1), monthPrompts.map(\.1))
     }
+
+    @MainActor
+    func testAgentScheduleUpdateProposalStateTransitions() {
+        // propose_schedule_update's state class had no View reading it for a
+        // while (see AssistantView.swift's messageList) -- this pins the
+        // state transitions ProposedScheduleUpdateCard now renders from,
+        // independent of the view layer.
+        let proposal = AgentScheduleUpdateProposal()
+        XCTAssertFalse(proposal.isPending)
+
+        proposal.propose(
+            id: "abc-123",
+            action: "reschedule",
+            title: "테스트 일정",
+            dateString: "tomorrow",
+            startTimeString: "09:00",
+            endTimeString: "10:00",
+            conflictTitle: "다른 일정",
+            conflictCheckFailed: false
+        )
+
+        XCTAssertTrue(proposal.isPending)
+        XCTAssertEqual(proposal.displayActionLabel, "일정 변경")
+        XCTAssertEqual(proposal.displayDate, "내일")
+        XCTAssertEqual(proposal.conflictTitle, "다른 일정")
+
+        proposal.clear()
+        XCTAssertFalse(proposal.isPending)
+        XCTAssertNil(proposal.action)
+        XCTAssertNil(proposal.conflictTitle)
+    }
+
+    @MainActor
+    func testAgentScheduleUpdateProposalActionLabels() {
+        let proposal = AgentScheduleUpdateProposal()
+        let expected: [(String, String)] = [
+            ("complete", "완료 처리"),
+            ("reschedule", "일정 변경"),
+            ("delete", "삭제"),
+            ("unknown", "변경")
+        ]
+        for (action, label) in expected {
+            proposal.propose(
+                id: "x", action: action, title: "t",
+                dateString: nil, startTimeString: nil, endTimeString: nil,
+                conflictTitle: nil, conflictCheckFailed: false
+            )
+            XCTAssertEqual(proposal.displayActionLabel, label, action)
+        }
+    }
 }

@@ -527,6 +527,13 @@ struct AgentSheet: View {
                     withAnimation(.easeOut(duration: 0.2)) { proposal.clear() }
                 }
             }
+            if updateProposal.isPending {
+                ProposedScheduleUpdateCard(proposal: updateProposal) {
+                    confirmScheduleUpdateProposal()
+                } onDecline: {
+                    declineScheduleUpdateProposal()
+                }
+            }
         }
     }
 
@@ -1187,6 +1194,105 @@ private struct ProposedScheduleCard: View {
             HStack(spacing: 8) {
                 Button(action: onConfirm) {
                     Label("저장하기", systemImage: "checkmark")
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(MemdoTheme.onAccent)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(MemdoTheme.accent,
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onDecline) {
+                    Text("취소")
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(MemdoTheme.surface,
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(MemdoTheme.outline, lineWidth: 0.5)
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .background(MemdoTheme.brandSoft,
+                    in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                .stroke(MemdoTheme.brand.opacity(0.2), lineWidth: 0.5)
+        }
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .move(edge: .bottom)),
+            removal: .opacity
+        ))
+    }
+}
+
+/// Confirmation card for propose_schedule_update (complete/reschedule/delete
+/// an EXISTING item) -- shared by both the cloud path and UpdateScheduleTool
+/// (on-device), since both funnel into the same AgentScheduleUpdateProposal.
+private struct ProposedScheduleUpdateCard: View {
+    let proposal: AgentScheduleUpdateProposal
+    let onConfirm: () -> Void
+    let onDecline: () -> Void
+
+    private var icon: String {
+        switch proposal.action {
+        case "complete":   return "checkmark.circle"
+        case "reschedule": return "calendar.badge.clock"
+        case "delete":     return "trash"
+        default:           return "pencil"
+        }
+    }
+
+    private var confirmLabel: String {
+        proposal.action == "delete" ? "삭제하기" : "적용하기"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("\(proposal.displayActionLabel) 제안", systemImage: icon)
+                .font(MemdoTypography.captionEmphasis)
+                .foregroundStyle(MemdoTheme.brand)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(proposal.title ?? "일정")
+                    .font(MemdoTypography.action)
+                    .foregroundStyle(MemdoTheme.ink)
+
+                if proposal.action == "reschedule", let displayDate = proposal.displayDate {
+                    HStack(spacing: 10) {
+                        Label(displayDate, systemImage: "calendar")
+                        if let start = proposal.startTimeString {
+                            Label(start + (proposal.endTimeString.map { " – \($0)" } ?? ""), systemImage: "clock")
+                        }
+                    }
+                    .font(MemdoTypography.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+                    .lineLimit(1)
+                }
+
+                // Reflection result, same convention as ProposedScheduleCard
+                // above -- surfaced before approval, not only after applying.
+                if let conflictTitle = proposal.conflictTitle {
+                    Label("같은 시간에 '\(conflictTitle)' 일정이 있어요", systemImage: "exclamationmark.triangle.fill")
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(.orange)
+                        .lineLimit(2)
+                } else if proposal.conflictCheckFailed {
+                    Label("기존 일정을 확인하지 못했어요 — 적용 전 직접 확인해주세요", systemImage: "questionmark.circle.fill")
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(.orange)
+                        .lineLimit(2)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button(action: onConfirm) {
+                    Label(confirmLabel, systemImage: "checkmark")
                         .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.onAccent)
                         .frame(maxWidth: .infinity, minHeight: 34)
