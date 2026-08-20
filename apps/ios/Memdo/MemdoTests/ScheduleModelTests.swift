@@ -165,4 +165,56 @@ final class ScheduleModelTests: XCTestCase {
             XCTAssertEqual(proposal.displayActionLabel, label, action)
         }
     }
+
+    @available(iOS 26, *)
+    @MainActor
+    func testUpdateScheduleToolResolvesTitleAndDetectsConflict() async throws {
+        // buildScheduleContext() never puts real ids in the model's text
+        // context, so UpdateScheduleTool has to resolve a bare title back to
+        // a real item id itself (see its bestMatch(for:)) -- this exercises
+        // that resolution plus its inline reschedule conflict check, both
+        // private implementation details only reachable through call().
+        let cal = Calendar(identifier: .gregorian)
+        let today = cal.startOfDay(for: .now)
+        let existing = [
+            UpdateScheduleTool.ExistingItem(
+                id: "id-1", title: "팀 회의",
+                scheduledDate: today,
+                startAt: cal.date(byAdding: .hour, value: 9, to: today),
+                endAt: cal.date(byAdding: .hour, value: 10, to: today)
+            ),
+            UpdateScheduleTool.ExistingItem(
+                id: "id-2", title: "점심 약속",
+                scheduledDate: today,
+                startAt: cal.date(byAdding: .hour, value: 12, to: today),
+                endAt: cal.date(byAdding: .hour, value: 13, to: today)
+            )
+        ]
+
+        let proposal = AgentScheduleUpdateProposal()
+        let tool = UpdateScheduleTool(proposal: proposal, existing: existing)
+
+        // Exact title match, no reschedule -> no conflict.
+        _ = try await tool.call(arguments: .init(title: "팀 회의", action: "complete", date: "", startTime: "", endTime: ""))
+        XCTAssertEqual(proposal.id, "id-1")
+        XCTAssertEqual(proposal.action, "complete")
+        XCTAssertNil(proposal.conflictTitle)
+        proposal.clear()
+
+        // Fuzzy (substring) title match still resolves to the right id.
+        _ = try await tool.call(arguments: .init(title: "회의", action: "delete", date: "", startTime: "", endTime: ""))
+        XCTAssertEqual(proposal.id, "id-1")
+        proposal.clear()
+
+        // Reschedule into an occupied slot surfaces the conflicting title.
+        _ = try await tool.call(arguments: .init(title: "팀 회의", action: "reschedule", date: "today", startTime: "12:30", endTime: "13:00"))
+        XCTAssertEqual(proposal.id, "id-1")
+        XCTAssertEqual(proposal.conflictTitle, "점심 약속")
+        proposal.clear()
+
+        // No matching title -> nothing proposed.
+        let result = try await tool.call(arguments: .init(title: "존재하지 않는 일정", action: "delete", date: "", startTime: "", endTime: ""))
+        XCTAssertFalse(proposal.isPending)
+        XCTAssertTrue(result.contains("찾지 못했어요"))
+    }
 }

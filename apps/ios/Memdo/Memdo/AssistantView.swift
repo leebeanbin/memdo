@@ -393,6 +393,95 @@ struct FindFreeSlotTool: Tool {
     }
 }
 
+// MARK: - Update Schedule Tool
+
+/// On-device counterpart to the cloud propose_schedule_update tool --
+/// completes, reschedules, or deletes an EXISTING item. Unlike the cloud
+/// path (which resolves ids via a separate search_schedules round trip),
+/// buildScheduleContext() never puts ids in the model's text context, so
+/// the model can only refer to an item by title. This tool resolves that
+/// title against the in-memory snapshot itself instead of asking the model
+/// for an id it was never given.
+@available(iOS 26, *)
+struct UpdateScheduleTool: Tool {
+    struct ExistingItem: Sendable {
+        let id: String
+        let title: String
+        let scheduledDate: Date
+        let startAt: Date?
+        let endAt: Date?
+    }
+
+    let name = "updateSchedule"
+    let description = "Proposes completing, rescheduling, or deleting an EXISTING schedule or task for the user to confirm. Use this when the user wants to mark something done, move it, or remove it -- do not just describe it in text. Identify the item by the title as it appears in the current context."
+
+    @Generable
+    struct Arguments: Sendable {
+        @Guide(description: "The title of the existing schedule/task, as seen in the current context")
+        let title: String
+        @Guide(description: "One of: complete, reschedule, delete")
+        let action: String
+        @Guide(description: "New date for reschedule: 'today', 'tomorrow', or yyyy-MM-dd. Empty string if not rescheduling")
+        let date: String
+        @Guide(description: "New start time HH:mm for reschedule. Empty string if not rescheduling or no fixed time")
+        let startTime: String
+        @Guide(description: "New end time HH:mm for reschedule. Empty string if none")
+        let endTime: String
+    }
+
+    let proposal: AgentScheduleUpdateProposal
+    let existing: [ExistingItem]
+
+    func call(arguments: Arguments) async throws -> String {
+        guard let match = bestMatch(for: arguments.title) else {
+            return "'\(arguments.title)'과(와) 일치하는 일정을 찾지 못했어요."
+        }
+
+        var conflict: ExistingItem?
+        if arguments.action == "reschedule", !arguments.date.isEmpty, !arguments.startTime.isEmpty {
+            let day = resolveAgentDateToken(arguments.date)
+            if let start = parseAgentTime(arguments.startTime, on: day) {
+                let end = arguments.endTime.isEmpty
+                    ? start.addingTimeInterval(3_600)
+                    : (parseAgentTime(arguments.endTime, on: day) ?? start.addingTimeInterval(3_600))
+                conflict = conflictingItem(excluding: match.id, start: start, end: end)
+            }
+        }
+
+        await proposal.propose(
+            id: match.id,
+            action: arguments.action,
+            title: match.title,
+            dateString: arguments.date.isEmpty ? nil : arguments.date,
+            startTimeString: arguments.startTime.isEmpty ? nil : arguments.startTime,
+            endTimeString: arguments.endTime.isEmpty ? nil : arguments.endTime,
+            conflictTitle: conflict?.title,
+            conflictCheckFailed: false
+        )
+
+        guard let conflict else {
+            return "'\(match.title)' 항목에 대한 변경을 제안했습니다."
+        }
+        return "'\(match.title)' 항목에 대한 변경을 제안했습니다. 주의: 같은 시간에 이미 '\(conflict.title)' 일정이 있어요."
+    }
+
+    private func bestMatch(for title: String) -> ExistingItem? {
+        let needle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return nil }
+        if let exact = existing.first(where: { $0.title == needle }) { return exact }
+        return existing.first {
+            $0.title.localizedCaseInsensitiveContains(needle) || needle.localizedCaseInsensitiveContains($0.title)
+        }
+    }
+
+    private func conflictingItem(excluding id: String, start: Date, end: Date) -> ExistingItem? {
+        existing.first { item in
+            guard item.id != id, let itemStart = item.startAt, let itemEnd = item.endAt else { return false }
+            return start < itemEnd && end > itemStart
+        }
+    }
+}
+
 // MARK: - Agent Sheet
 
 struct AgentSheet: View {
@@ -476,7 +565,8 @@ struct AgentSheet: View {
                     _sessionBacking = LanguageModelSession(
                         tools: [
                             ProposeScheduleTool(proposal: proposal, existing: existingItemsSnapshot()),
-                            FindFreeSlotTool(snapshot: scheduleSnapshot())
+                            FindFreeSlotTool(snapshot: scheduleSnapshot()),
+                            UpdateScheduleTool(proposal: updateProposal, existing: updatableItemsSnapshot())
                         ],
                         instructions: agentInstructions()
                     )
@@ -771,6 +861,13 @@ struct AgentSheet: View {
     private func existingItemsSnapshot() -> [ProposeScheduleTool.ExistingItem] {
         scheduleStore.schedules.map {
             .init(title: $0.title, scheduledDate: $0.scheduledDate, startAt: $0.startAt, endAt: $0.endAt)
+        }
+    }
+
+    @available(iOS 26, *)
+    private func updatableItemsSnapshot() -> [UpdateScheduleTool.ExistingItem] {
+        scheduleStore.schedules.map {
+            .init(id: $0.id.uuidString, title: $0.title, scheduledDate: $0.scheduledDate, startAt: $0.startAt, endAt: $0.endAt)
         }
     }
 
