@@ -842,10 +842,7 @@ struct AgentSheet: View {
     @available(iOS 26, *)
     private func agentInstructions() -> String {
         return """
-            The person’s locale is ko_KR. You MUST respond in Korean.
-            You are Memdo’s personal schedule assistant. Be concise, warm, and practical.
-            When the user wants to create, add, or make any new schedule or task, call the proposeSchedule tool — do not just describe it in text.
-            When the user asks to find free time, an open slot, or where to fit something, call the findFreeSlots tool — do not guess from the context alone.
+            \(AgentPrompts.onDeviceInstructions)
             Current view context: \(context.displayTitle)
             \(buildScheduleContext())
             """
@@ -971,33 +968,7 @@ private struct AgentQuickActions: View {
     let onSelect: (String) -> Void
 
     private var prompts: [(String, String)] {
-        switch context {
-        case .calendar: [
-            ("빈 시간 찾기", "이번 주에 1시간 비는 시간 찾아줘"),
-            ("일정 정리", "겹치거나 너무 붙은 일정 알려줘"),
-            ("할 일 배치", "미완료 할 일을 빈 시간에 제안해줘")
-        ]
-        case .todaySummary, .weekReview, .monthReview: [
-            ("완료 흐름", "\(context.displayTitle)에서 잘 이어간 작업을 알려줘"),
-            ("놓친 작업", "\(context.displayTitle)에서 놓친 작업의 공통점을 찾아줘"),
-            ("다음 계획", "\(context.displayTitle) 내용을 바탕으로 다음 계획을 제안해줘")
-        ]
-        case .settings: [
-            ("권한 확인", "Agent가 사용하는 정보를 알려줘"),
-            ("루틴 안내", "하루 시작과 하루 정리 설정을 설명해줘"),
-            ("자동화 확인", "반복 일정 실행 전에 무엇을 확인하는지 알려줘")
-        ]
-        case .today where !hasSchedulesToday: [
-            ("일정 만들기", "오늘 오후 2시에 집중 업무 1시간 일정 추가해줘"),
-            ("할 일 추가", "오늘 중요한 할 일 1개를 일정으로 만들어줘"),
-            ("루틴 시작", "오늘 아침 루틴 30분 일정 만들어줘")
-        ]
-        case .today: [
-            ("일정 추가", "오늘 빈 시간에 집중 일정 1시간 추가해줘"),
-            ("하루 정리", "오늘 일정 핵심만 요약해줘"),
-            ("미완료 정리", "남은 할 일을 어떻게 처리할지 알려줘")
-        ]
-        }
+        AgentPrompts.quickActions(for: context, hasSchedulesToday: hasSchedulesToday)
     }
 
     var body: some View {

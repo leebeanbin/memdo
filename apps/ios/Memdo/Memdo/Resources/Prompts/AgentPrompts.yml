@@ -1,0 +1,68 @@
+# Central catalog of Agent-facing prompt text.
+#
+# This is the single source of truth for the on-device Agent's system
+# instructions and every "빠른 요청" quick-action label/prompt shown in
+# AssistantView, plus the two on-device rewrite instructions used by the
+# briefing feature in BriefingFeed.swift. Editing this file changes what
+# ships in the app -- no Swift code changes needed for wording tweaks.
+#
+# The cloud Agent's system prompt (agent-cloud-contract.ts) is intentionally
+# NOT here -- it lives server-side as a single TS constant, already
+# centralized in one place with no scattering problem.
+#
+# `{context}` inside a quick_actions.review prompt is replaced at load time
+# with the current AgentContext's displayTitle (예: "하루 정리", "지난 7일 회고").
+
+on_device_agent:
+  instructions: |
+    The person’s locale is ko_KR. You MUST respond in Korean.
+    You are Memdo’s personal schedule assistant. Be concise, warm, and practical.
+    When the user wants to create, add, or make any new schedule or task, call the proposeSchedule tool — do not just describe it in text.
+    When the user asks to find free time, an open slot, or where to fit something, call the findFreeSlots tool — do not guess from the context alone.
+
+quick_actions:
+  calendar:
+    - label: 빈 시간 찾기
+      prompt: 이번 주에 1시간 비는 시간 찾아줘
+    - label: 일정 정리
+      prompt: 겹치거나 너무 붙은 일정 알려줘
+    - label: 할 일 배치
+      prompt: 미완료 할 일을 빈 시간에 제안해줘
+
+  review:
+    - label: 완료 흐름
+      prompt: "{context}에서 잘 이어간 작업을 알려줘"
+    - label: 놓친 작업
+      prompt: "{context}에서 놓친 작업의 공통점을 찾아줘"
+    - label: 다음 계획
+      prompt: "{context} 내용을 바탕으로 다음 계획을 제안해줘"
+
+  settings:
+    - label: 권한 확인
+      prompt: Agent가 사용하는 정보를 알려줘
+    - label: 루틴 안내
+      prompt: 하루 시작과 하루 정리 설정을 설명해줘
+    - label: 자동화 확인
+      prompt: 반복 일정 실행 전에 무엇을 확인하는지 알려줘
+
+  today_empty:
+    - label: 일정 만들기
+      prompt: 오늘 오후 2시에 집중 업무 1시간 일정 추가해줘
+    - label: 할 일 추가
+      prompt: 오늘 중요한 할 일 1개를 일정으로 만들어줘
+    - label: 루틴 시작
+      prompt: 오늘 아침 루틴 30분 일정 만들어줘
+
+  today:
+    - label: 일정 추가
+      prompt: 오늘 빈 시간에 집중 일정 1시간 추가해줘
+    - label: 하루 정리
+      prompt: 오늘 일정 핵심만 요약해줘
+    - label: 미완료 정리
+      prompt: 남은 할 일을 어떻게 처리할지 알려줘
+
+briefing:
+  headline_instructions: |
+    관심 분야 뉴스에서 연결되는 구체적인 변화 하나를 한국어 편집 헤드라인으로 써. 숫자·기업명·기술명 중 하나를 반드시 포함하고, 독자가 다음 내용을 궁금해하게 만들어. 과장과 낚시는 금지해. 22~36자, 최대 두 줄, 마침표 없이 제목만 출력해. '미치는 영향', '전망', '동향', '주목', '가속화', '혁신' 같은 추상 표현은 쓰지 마.
+  cleanup_instructions: |
+    뉴스 요약 텍스트를 자연스러운 한국어 문장으로 다듬어. 원문에 있는 사실과 숫자는 그대로 유지하고 새로운 내용을 추가하거나 의견을 넣지 마. 문장 부호 없이 여러 문장이 붙어 있으면 적절히 문장을 나눠. 2~3문장, 120자 내외로 정리해. 결과 문장만 출력해.

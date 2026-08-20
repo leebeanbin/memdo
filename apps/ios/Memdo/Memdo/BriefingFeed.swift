@@ -326,9 +326,7 @@ actor BriefingRepository {
             "\(i + 1). [\(item.category.rawValue)] \(item.title)"
         }.joined(separator: "\n")
 
-        let session = LanguageModelSession(
-            instructions: "관심 분야 뉴스에서 연결되는 구체적인 변화 하나를 한국어 편집 헤드라인으로 써. 숫자·기업명·기술명 중 하나를 반드시 포함하고, 독자가 다음 내용을 궁금해하게 만들어. 과장과 낚시는 금지해. 22~36자, 최대 두 줄, 마침표 없이 제목만 출력해. '미치는 영향', '전망', '동향', '주목', '가속화', '혁신' 같은 추상 표현은 쓰지 마."
-        )
+        let session = LanguageModelSession(instructions: AgentPrompts.briefingHeadlineInstructions)
         let prompt = "오늘의 주요 뉴스:\n\(headlines)\n\n기사 사이의 연결이 보이는 구체적인 제목 하나를 써줘."
 
         guard let response = try? await session.respond(to: prompt) else { return nil }
@@ -362,9 +360,7 @@ actor BriefingRepository {
 
         guard case .available = SystemLanguageModel.default.availability else { return nil }
 
-        let session = LanguageModelSession(
-            instructions: "뉴스 요약 텍스트를 자연스러운 한국어 문장으로 다듬어. 원문에 있는 사실과 숫자는 그대로 유지하고 새로운 내용을 추가하거나 의견을 넣지 마. 문장 부호 없이 여러 문장이 붙어 있으면 적절히 문장을 나눠. 2~3문장, 120자 내외로 정리해. 결과 문장만 출력해."
-        )
+        let session = LanguageModelSession(instructions: AgentPrompts.briefingCleanupInstructions)
         let prompt = "다음 뉴스 요약을 다듬어줘:\n\(item.summary)"
 
         guard let response = try? await session.respond(to: prompt) else { return nil }

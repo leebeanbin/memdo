@@ -85,4 +85,34 @@ final class ScheduleModelTests: XCTestCase {
         XCTAssertNotNil(UIFont(name: "Pretendard-SemiBold", size: 17))
         XCTAssertNotNil(UIFont(name: "Pretendard-Bold", size: 17))
     }
+
+    func testAgentPromptsYAMLLoadsAndResolvesEveryContext() {
+        // Exercises the actual bundled AgentPrompts.yml through Yams, not a
+        // hand-written fixture -- a YAML syntax error or a schema mismatch
+        // against AgentPrompts.swift's Decodable types would otherwise only
+        // surface as a runtime fatalError() the first time a user opened the
+        // Agent tab.
+        XCTAssertFalse(AgentPrompts.onDeviceInstructions.isEmpty)
+        XCTAssertFalse(AgentPrompts.briefingHeadlineInstructions.isEmpty)
+        XCTAssertFalse(AgentPrompts.briefingCleanupInstructions.isEmpty)
+
+        for context: AgentContext in [.today, .calendar, .settings, .todaySummary, .weekReview, .monthReview] {
+            for hasSchedulesToday in [true, false] {
+                let actions = AgentPrompts.quickActions(for: context, hasSchedulesToday: hasSchedulesToday)
+                XCTAssertEqual(actions.count, 3, "\(context) (hasSchedulesToday: \(hasSchedulesToday))")
+                for (label, prompt) in actions {
+                    XCTAssertFalse(label.isEmpty)
+                    XCTAssertFalse(prompt.isEmpty)
+                    XCTAssertFalse(prompt.contains("{context}"), "unsubstituted placeholder in: \(prompt)")
+                }
+            }
+        }
+
+        // The review contexts share one prompt set with `{context}`
+        // substitution -- confirm it actually varies per context rather than
+        // silently no-op'ing the replace.
+        let weekPrompts = AgentPrompts.quickActions(for: .weekReview, hasSchedulesToday: true)
+        let monthPrompts = AgentPrompts.quickActions(for: .monthReview, hasSchedulesToday: true)
+        XCTAssertNotEqual(weekPrompts.map(\.1), monthPrompts.map(\.1))
+    }
 }
