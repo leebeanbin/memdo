@@ -166,6 +166,61 @@ final class ScheduleModelTests: XCTestCase {
         }
     }
 
+    func testAgentMarkdownTextClassifiesListLinesAndStripsTheirMarker() {
+        // Reproduces a real model response reported as looking "raw" --
+        // AttributedString(markdown:) with .inlineOnlyPreservingWhitespace
+        // parses **bold** correctly but has no concept of list markers, so
+        // "* **제안 일정**: ..." rendered with a literal leading asterisk.
+        let text = """
+            오늘의 일정을 알려줄게.
+
+            * **제안 일정**: 오늘 일정을 제안해줄게.
+            * **공백 시간 찾기**: 오늘의 공백 시간을 찾아줄게.
+            - 하이픈도 목록으로 인식돼야 해
+            일반 문단은 그대로 유지돼야 해
+            """
+        let lines = AgentMarkdownText.lines(for: text)
+
+        XCTAssertEqual(lines[0].content, "오늘의 일정을 알려줄게.")
+        XCTAssertFalse(lines[0].isListItem)
+
+        XCTAssertEqual(lines[1].content, "")
+
+        XCTAssertTrue(lines[2].isListItem)
+        // The list marker ("* ") is stripped here; the bold markup that
+        // remains ("**제안 일정**") is inline markdown, parsed separately by
+        // inlineAttributed() below -- not this classification step's job.
+        XCTAssertEqual(lines[2].content, "**제안 일정**: 오늘 일정을 제안해줄게.")
+
+        XCTAssertTrue(lines[3].isListItem)
+
+        XCTAssertTrue(lines[4].isListItem, "a hyphen marker is a list item too")
+        XCTAssertEqual(lines[4].content, "하이픈도 목록으로 인식돼야 해")
+
+        XCTAssertFalse(lines[5].isListItem)
+        XCTAssertEqual(lines[5].content, "일반 문단은 그대로 유지돼야 해")
+    }
+
+    func testAgentMarkdownTextInlineParsingRendersBoldAsAStrongRun() {
+        let attributed = AgentMarkdownText.inlineAttributed("**제안 일정**: 오늘 일정을 제안해줄게.")
+        // The bold marker characters themselves must not survive into the
+        // rendered text -- exactly the symptom in the reported screenshot.
+        XCTAssertFalse(String(attributed.characters).contains("**"))
+        XCTAssertTrue(String(attributed.characters).contains("제안 일정"))
+
+        let hasStrongRun = attributed.runs.contains { run in
+            run.inlinePresentationIntent?.contains(.stronglyEmphasized) == true
+        }
+        XCTAssertTrue(hasStrongRun, "**제안 일정** must carry a bold run, not just plain text")
+    }
+
+    func testAgentMarkdownTextHandlesPlainTextWithNoMarkdown() {
+        let lines = AgentMarkdownText.lines(for: "그냥 평범한 응답이에요.")
+        XCTAssertEqual(lines.count, 1)
+        XCTAssertFalse(lines[0].isListItem)
+        XCTAssertEqual(lines[0].content, "그냥 평범한 응답이에요.")
+    }
+
     func testAIConsentDefaultsToGrantedAndPersists() {
         let key = "memdo.v1.aiConsentGranted"
         let original = UserDefaults.standard.object(forKey: key)

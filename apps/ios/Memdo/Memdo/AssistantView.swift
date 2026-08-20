@@ -1205,19 +1205,10 @@ private struct AgentResponse: View {
 
             // Main content — markdown-rendered
             if !message.text.isEmpty {
-                Group {
-                    if let attributed = try? AttributedString(
-                        markdown: message.text,
-                        options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-                    ) {
-                        Text(attributed)
-                    } else {
-                        Text(message.text)
-                    }
-                }
-                .font(MemdoTypography.subtitle)
-                .foregroundStyle(message.isError ? .red : MemdoTheme.ink)
-                .textSelection(.enabled)
+                AgentMarkdownText(text: message.text)
+                    .font(MemdoTypography.subtitle)
+                    .foregroundStyle(message.isError ? .red : MemdoTheme.ink)
+                    .textSelection(.enabled)
             }
 
             // Retry
@@ -1243,6 +1234,64 @@ private struct AgentResponse: View {
                     UIPasteboard.general.string = message.text
                 } label: {
                     Label("복사하기", systemImage: "doc.on.doc")
+                }
+            }
+        }
+    }
+}
+
+/// Line-based Markdown renderer for Agent responses.
+/// `AttributedString(markdown:)` with `.inlineOnlyPreservingWhitespace`
+/// (used directly on the whole message before this) parses inline emphasis
+/// ("**bold**") correctly but has no concept of block-level list markers --
+/// a line starting with "* " or "- " comes through as a literal asterisk
+/// followed by the (correctly bold-rendered) rest of the line, which is
+/// exactly the raw-looking output reported from a real model response. This
+/// classifies each line first, renders list lines as an actual bullet row,
+/// and still inline-parses each line's own text the same way as before.
+struct AgentMarkdownText: View {
+    let text: String
+
+    struct Line: Identifiable, Equatable {
+        let id: Int
+        let isListItem: Bool
+        let content: String
+    }
+
+    /// Exposed for testing the classification independent of the view body.
+    static func lines(for text: String) -> [Line] {
+        text.components(separatedBy: "\n").enumerated().map { index, raw in
+            let trimmed = raw.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("* ") || trimmed.hasPrefix("- ") {
+                return Line(id: index, isListItem: true, content: String(trimmed.dropFirst(2)))
+            }
+            return Line(id: index, isListItem: false, content: raw)
+        }
+    }
+
+    /// Exposed for testing inline-markdown parsing independent of the view body.
+    static func inlineAttributed(_ s: String) -> AttributedString {
+        (try? AttributedString(
+            markdown: s,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )) ?? AttributedString(s)
+    }
+
+    private var lines: [Line] { Self.lines(for: text) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(lines) { line in
+                if line.content.isEmpty {
+                    Color.clear.frame(height: 6)
+                } else if line.isListItem {
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("•")
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                        Text(Self.inlineAttributed(line.content))
+                    }
+                } else {
+                    Text(Self.inlineAttributed(line.content))
                 }
             }
         }
