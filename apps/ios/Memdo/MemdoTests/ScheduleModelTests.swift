@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import Memdo
 
 final class ScheduleModelTests: XCTestCase {
@@ -49,5 +50,39 @@ final class ScheduleModelTests: XCTestCase {
         XCTAssertEqual(ScheduleSearchScope.all.title, "전체")
         XCTAssertEqual(ScheduleSearchScope.mine.title, "내 일정")
         XCTAssertEqual(ScheduleSearchScope.google.title, "Google")
+    }
+
+    func testBriefingKeepsDiscoveryBesideFollowedTopics() {
+        func item(_ id: String, _ category: BriefingFeedCategory) -> BriefingRepository.FetchedItem {
+            .init(
+                id: id,
+                title: id,
+                summary: "",
+                url: nil,
+                sourceName: "test",
+                category: category,
+                publishedAt: nil,
+                matchedKeyword: nil
+            )
+        }
+
+        let items = [
+            item("e1", .economy), item("e2", .economy), item("e3", .economy), item("e4", .economy),
+            item("t1", .tech), item("w1", .world)
+        ]
+        let result = TodayBriefingSection.curatedItems(items, selectedCategories: [.economy])
+
+        XCTAssertEqual(result.map(\.id), ["e1", "e2", "e3", "t1", "w1"])
+    }
+
+    func testPretendardFacesAreBundled() {
+        // One assertion per embedded static face (Regular/SemiBold/Bold) --
+        // MemdoTypography references each by its own PostScript name (see
+        // MemdoTheme.swift), so a typo or a missing UIAppFonts entry for any
+        // one of them would silently fall back to the system font instead of
+        // failing loudly, which is exactly what this guards against.
+        XCTAssertNotNil(UIFont(name: "Pretendard-Regular", size: 17))
+        XCTAssertNotNil(UIFont(name: "Pretendard-SemiBold", size: 17))
+        XCTAssertNotNil(UIFont(name: "Pretendard-Bold", size: 17))
     }
 }

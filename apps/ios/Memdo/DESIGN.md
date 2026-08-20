@@ -57,7 +57,7 @@ Memdo는 전문적인 업무 캘린더가 아니라 사용자가 자신의 하�
 |---|---|---|
 | 오늘 | 오늘의 계획과 다음 행동 확인 | 새 일정 만들기 |
 | 캘린더 | 월간 흐름과 선택한 날짜 확인 | 날짜 선택 |
-| 설정 | 알림·연동·권한·관심사 설정 | 환경 변경 |
+| 설정 | 알림·연동·권한 설정 | 환경 변경 |
 
 `오늘 요약`은 별도 탭이 아니다. 다음 경로로 들어가는 상세 페이지다.
 
@@ -156,20 +156,36 @@ Task 완료 원, Event 시간축, 브리핑 번호, 오늘 요약의 결정 행�
 
 ### 5.4 타이포그래피
 
-시스템 폰트와 Dynamic Type을 사용한다.
+앱 전체(한국어·영문·숫자 구분 없이)가 Pretendard를 쓴다. Work Sans(이전에 검토했던 후보)는 한글 글리프가 0개라 이 앱처럼 텍스트 대부분이 한글인 화면에서는 숫자·영문 몇 글자를 빼면 사실상 아무 데도 적용되지 않는 것과 같았다 — 실제로 확인된 문제라 폐기했다. Pretendard는 한글·영문을 한 폰트에서 함께 커버해서, 토큰을 넓게 적용할수록 화면에 실제로 반영된다.
 
+- 폰트 소스는 `SwiftUI`가 아니라 `MemdoTypography`(`MemdoTheme.swift`) 하나뿐이다. 새 텍스트를 추가할 때 시스템 스타일(`.headline`, `.caption` 등)을 직접 쓰지 말고 아래 표에서 맞는 토큰을 고른다 — 못 찾겠으면 새 토큰을 추가하는 게 맞다, `.system`/`.headline` 같은 시스템 스타일을 직접 쓰는 게 아니라.
+- 굵기는 정적 페이스 3개(Regular/SemiBold/Bold)만 번들한다. 가변 폰트 하나를 여러 굵기로 읽는 방식은 이 SDK에서 `Font.custom(name:).weight()`가 안정적으로 해당 굵기를 못 찾아서 포기했다 — 확인 방법과 이유는 `MemdoTheme.swift`의 `MemdoTypography` 주석 참고.
+- `.weight(.medium)`과 `.weight(.bold)`를 요청하던 자리는 전부 semibold emphasis 토큰으로 근사했다(별도 Medium/Black 페이스는 안 둠) — 이 앱이 실제로 구분해서 쓰던 굵기 단계는 3개뿐이었다.
+- 큰 장식용 숫자(예: 배경화면 미리보기의 76pt 얇은 숫자)나 아이콘 옆 배지처럼 진짜 일회성 픽셀 크기는 이 표에 넣지 않고 시스템 폰트로 그대로 둔다 — 빠뜨린 게 아니라 의도적 예외다.
+- Pretendard는 SIL OFL 라이선스이며 원문을 `Resources/Fonts/Pretendard-LICENSE.txt`로 폰트와 함께 보관한다.
 - 일반 검수 기준 크기는 `Medium`이다.
 - 앱 전체는 약 200% 확대를 보장하는 `.accessibility3`까지 지원하고, AX4·AX5처럼 화면 밀도를 무너뜨리는 단계는 앱 루트에서 제한한다. 월간 날짜 셀처럼 공간 인덱스인 요소는 기존 `.large` 상한을 유지한다.
 
-| 역할 | SwiftUI 기준 |
-|---|---|
-| 페이지 제목 | `.title2`, rounded, bold |
-| 섹션 제목 | `.headline` |
-| 카드 제목 | `.headline` |
-| 본문 | `.body` |
-| 보조 설명 | `.subheadline` |
-| 메타데이터 | `.caption` / `.caption2` |
-| 시간 | monospaced digits |
+| 역할 | 토큰 | 크기 / 굵기 | 대체한 시스템 스타일 |
+|---|---|---|---|
+| 페이지 제목 | (그대로 시스템) | `.title2`, rounded, bold | 브랜드 느낌의 rounded 디자인은 의도적으로 유지 |
+| 브랜드 워드마크("Memdo") | `MemdoTypography.brand` | 22pt bold | `.title2.bold()` |
+| 상세 화면 제목 | `MemdoTypography.detailTitle` | 22pt bold | `.title2.bold()` |
+| 일반 제목(22pt, 강조 없음) | `MemdoTypography.title2` | 22pt regular | `.title2` |
+| 뉴스 헤드라인(브리핑 대표 기사 등) | `MemdoTypography.editorialTitle` | 20pt bold | `.title3.weight(.bold)` |
+| 일반 제목(20pt, 강조 없음) | `MemdoTypography.title3` | 20pt regular | `.title3` |
+| 섹션 제목 / 카드 제목 | `MemdoTypography.sectionTitle` | 17pt semibold | `.headline` |
+| 본문 | `MemdoTypography.body` | 17pt regular | `.body` |
+| 버튼 라벨(Primary/Secondary/Destructive 공통) | `MemdoTypography.buttonLabel` | 17pt semibold | `.body.weight(.semibold)` |
+| 행 제목 / 선택 칩 라벨 | `MemdoTypography.action` | 15pt semibold | `.subheadline.weight(.semibold/.medium/.bold)` |
+| 보조 설명(페이지 부제 등) | `MemdoTypography.subtitle` | 15pt regular | `.subheadline` |
+| 메트릭 라벨 / 강조 각주 | `MemdoTypography.metric` | 13pt semibold | `.footnote.weight(.semibold/.medium)` |
+| 각주 | `MemdoTypography.footnote` | 13pt regular | `.footnote` |
+| 강조 캡션(카테고리 태그 등) | `MemdoTypography.captionEmphasis` | 12pt semibold | `.caption.weight(.semibold/.bold)` |
+| 캡션 | `MemdoTypography.caption` | 12pt regular | `.caption` |
+| 강조 캡션2(가장 작은 배지) | `MemdoTypography.caption2Emphasis` | 11pt semibold | `.caption2.weight(.semibold/.medium)` |
+| 캡션2 | `MemdoTypography.caption2` | 11pt regular | `.caption2` |
+| 시간 / 숫자 | 위 토큰에 `.monospacedDigit()` 체이닝 | 문맥에 맞는 크기 | `.monospacedDigit()` |
 
 앱 화면의 제목은 과도하게 크게 만들지 않는다. 한 화면에서 가장 큰 텍스트는 페이지 제목 하나다.
 
@@ -352,25 +368,24 @@ Apple SF Symbols를 기본 아이콘 세트로 사용한다. 한 화면에서 �
 
 ## 8. AI 브리핑
 
-AI 브리핑은 뉴스 피드처럼 전면에 나서지 않는다. AI가 뒤에서 관심사를 정리한 결과를 사용자가 오늘 알아둘 핵심 문장으로만 보여준다.
+AI 브리핑은 카드가 반복되는 뉴스 피드처럼 전면에 나서지 않는다. 오늘 화면에서는 핵심 문장만 보여주고, 시트에서 대표 기사 하나와 압축된 기사 행으로 탐색 밀도를 높인다.
 
 ![AI 브리핑](../../../design/previews/02-briefing.png)
 
 ### 목적
 
-사용자는 약 1분 안에 `브리핑 키워드와 관련된 뉴스`와 `오늘 일정에 영향을 주는 정보`만 확인한다. 일반 생산성 조언과 출처 없는 문장은 브리핑에 넣지 않고 Agent 제안으로 분리한다.
+사용자는 약 3분 안에 새로운 분야의 뉴스와 관심 분야 뉴스를 함께 확인한다. 관심사 설정은 진입 조건이 아니며, 기사를 읽다가 발견한 주제를 선택적으로 팔로우한다. 일반 생산성 조언과 출처 없는 문장은 브리핑에 넣지 않고 Agent 제안으로 분리한다.
 
 ### 구성
 
 - 섹션명: `오늘의 브리핑`
-- 섹션 보조 정보: `뉴스 N · 일정 영향 N`
-- 오늘 화면은 작은 `AI 요약` 출처 표시 아래 변화와 의미를 연결한 22~36자의 편집형 헤드라인을 최대 두 줄로 보여주고 `대표 출처 외 N개 · 1분`만 덧붙인다.
-- 미리보기를 누르면 시트에서 브리핑 키워드 뉴스 3~5개를 확인한다.
-- 각 행은 한 줄 제목과 `출처 · 게시 시각 · 선정 이유`를 표시한다.
-- 큰 대표 카드·그라데이션·뉴스 썸네일은 사용하지 않는다.
-- 행을 누르면 상세 시트에서 설명을 확장하고, AI의 역할은 그 안의 보조 문장으로만 드러낸다.
-- 시트 기본 개수: 3개
-- 관심사 기반 최대 개수: 5개
+- 오늘 화면은 `오늘 꼭 알아둘 변화`와 편집형 헤드라인 최대 두 줄, `대표 출처 · N개 · 약 3분`만 표시한다.
+- 미리보기를 누르면 시트에서 기사 5개를 확인한다.
+- 시트는 날짜와 한 줄 흐름, 대표 기사 하나, 번호가 붙은 압축 행 네 개 순서다.
+- 큰 이미지·그라데이션·반복 카드·Liquid Glass 콘텐츠는 사용하지 않는다.
+- 기사 행을 누르면 핵심 내용과 주제를 확인하고 원문으로 이동한다.
+- 주제를 누르면 관련 기사를 먼저 살펴본 뒤 관심사에 추가하거나 제거한다.
+- 관심사가 없으면 분야별 최신 기사부터 탐색한다. 관심사가 있으면 해당 분야 최대 3개를 먼저 두고 다른 분야 2개를 남겨 발견 가능성을 유지한다.
 
 ### 문장 규칙
 
@@ -547,19 +562,16 @@ AI 인사이트는 감상문이 아니라 다음 행동을 돕는 근거와 제�
 
 ![설정 화면](../../../design/previews/07-settings.png)
 
-![브리핑 키워드 편집 시트](../../../design/previews/07-settings-keywords.png)
-
 ### 그룹
 
-- 하루: 오늘 요약 사용 여부, 요약 시간, 무계획 안내 시간, 알림, 브리핑 키워드 선택 수
+- 하루: 오늘 요약 사용 여부, 요약 시간, 무계획 안내 시간, 알림
 - Agent: 메인 설정에는 Memdo 마크가 있는 Agent 행 하나만 두고, 모델·서비스·데이터 설정은 Agent 시트에서 관리한다.
 - Agent 시트는 처음에 `모델 및 사용량`, `연결된 서비스`, `데이터 및 권한` 세 행만 보여준다. Google Calendar·Slack·데이터 세부 항목은 사용자가 펼쳤을 때만 노출한다.
 - 모델 시트는 미연결 시 카드나 `List`를 쓰지 않는 평면형 연결 화면으로 구성한다. OpenRouter 식별 행 아래에 `SecureField`와 아이콘형 시스템 `PasteButton`을 같은 44pt 높이로 두고, 전체 폭 연결 행동과 짧은 보안 설명만 남긴다. 앱이 클립보드를 자동 조회하지 않으며 사용자가 붙여넣기를 누른 뒤 연결할 때만 키를 전송한다. 연결 후에만 모델·최근 30일 사용량을 시스템 목록으로 표시하고 연결 해제는 상단 관리 메뉴에 둔다.
 - API 키 이미지/OCR·파일 업로드는 키가 사진 보관함, iCloud, 임시 파일이나 서버 로그에 복제될 수 있으므로 제공하지 않는다. 원문은 일반 테이블에 저장하지 않고 서버의 Supabase Vault에 보관하며 앱에는 다시 반환하지 않는다.
-- 메인 설정은 현재 값만 보여주고 연결 설명·AI 동의·개인정보·브리핑 키워드 편집은 행을 눌러 시트에서 연다.
+- 메인 설정은 현재 값만 보여주고 연결 설명·AI 동의·개인정보는 행을 눌러 시트에서 연다.
 - 설정 섹션 제목은 작은 단색 SF Symbol로 스캔 기준점만 제공하고, 행과 조작부의 수를 늘리지 않는다.
 - 각 설정 그룹은 `secondarySystemGroupedBackground` 단일 표면과 내부 구분선을 사용한다. 다크모드에서도 그룹 경계를 유지하되 Liquid Glass나 행별 카드는 사용하지 않는다.
-- 브리핑 키워드 시트는 `.medium`에서 시작하고 필요할 때 `.large`로 확장한다. 관심 분야와 제안 키워드는 44pt 터치 영역을 가진 가로 선택 레일로 압축하며 선택 상태는 반전 면과 체크 아이콘을 함께 사용한다. 직접 입력은 별도 카드 없이 44pt 단일 필드와 추가 아이콘으로 묶고 키워드는 최대 5개를 선택한다.
 - 위젯 섹션은 `위젯·배경화면 시작하기` 가이드와 전체 달력 시안 진입만 전면에 둔다. 모든 위젯의 일정명 가림은 가이드 안의 개인정보 옵션으로 제공한다.
 - Google Calendar와 Slack은 각 회사의 공식 제품 마크를 변경 없이 사용한다. 행은 `서비스 → Agent가 사용하는 능력 → 연결 상태` 순서로 읽히며 `MCP`는 작은 인라인 배지로만 표시한다.
 - 회사가 없는 Memdo Agent·데이터 관리 행에는 SF Symbols와 브랜드 semantic 색을 사용한다. 외부 회사 로고처럼 보이게 만들지 않는다.
@@ -702,7 +714,7 @@ AI가 제안한 일정도 사용자가 승인한 뒤에는 일반 일정과 동�
 | `Memdo/ScheduleSearchView.swift` | 캘린더에 삽입되는 일정 검색 결과·필터·요약 |
 | `Memdo/AssistantView.swift` | 공통 Agent 문맥 시트·입력기 |
 | `Memdo/DailySummaryView.swift` | 하루 완료 현황과 미완료 결정 |
-| `Memdo/SettingsView.swift` | 알림·연결·동의·관심사 설정 |
+| `Memdo/SettingsView.swift` | 알림·연결·동의 설정 |
 | `Memdo/ScheduleModel.swift` | 일정 모델·샘플·공유 저장소 |
 | `Memdo/ScheduleRow.swift` | 오늘·캘린더·검색 공통 일정 행과 출처 아이콘 |
 | `Memdo/ScheduleSheets.swift` | 일정 추가·상세·수정 Form |

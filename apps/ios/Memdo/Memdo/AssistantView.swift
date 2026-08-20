@@ -43,7 +43,7 @@ enum AgentContext {
         case .today: "오늘"
         case .calendar: "캘린더"
         case .settings: "설정"
-        case .todaySummary: "오늘 요약"
+        case .todaySummary: "하루 정리"
         case .weekReview: "지난 7일 회고"
         case .monthReview: "지난 30일 회고"
         }
@@ -533,15 +533,15 @@ struct AgentSheet: View {
     private var sessionGapBanner: some View {
         HStack(spacing: 8) {
             Image(systemName: "info.circle")
-                .font(.caption)
+                .font(MemdoTypography.caption)
             Text("새 세션이 시작됐어요. 이전 대화는 참고만 가능해요.")
-                .font(.caption)
+                .font(MemdoTypography.caption)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button("새 대화") {
                 resetConversation()
                 showSessionGapNotice = false
             }
-            .font(.caption.weight(.semibold))
+            .font(MemdoTypography.captionEmphasis)
             .foregroundStyle(MemdoTheme.brand)
         }
         .foregroundStyle(MemdoTheme.secondaryInk)
@@ -921,13 +921,13 @@ private struct AgentSheetHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Label("\(context.displayTitle) 문맥 사용 중", systemImage: "sparkles")
-                .font(.caption.weight(.semibold))
+                .font(MemdoTypography.captionEmphasis)
                 .foregroundStyle(MemdoTheme.brand)
             if !hasStarted {
                 Text("무엇을 정리할까요?")
-                    .font(.title2.bold())
+                    .font(MemdoTypography.detailTitle)
                 Text("오늘 일정을 바탕으로 대화할 수 있어요. 질문하거나 요청해보세요.")
-                    .font(.subheadline)
+                    .font(MemdoTypography.subtitle)
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
         }
@@ -939,7 +939,7 @@ private struct AgentUserBubble: View {
 
     var body: some View {
         Text(text)
-            .font(.subheadline)
+            .font(MemdoTypography.subtitle)
             .foregroundStyle(MemdoTheme.onAccent)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -967,7 +967,7 @@ private struct AgentQuickActions: View {
         ]
         case .settings: [
             ("권한 확인", "Agent가 사용하는 정보를 알려줘"),
-            ("요약 설정", "오늘 요약을 간단하게 설정해줘"),
+            ("루틴 안내", "하루 시작과 하루 정리 설정을 설명해줘"),
             ("자동화 확인", "반복 일정 실행 전에 무엇을 확인하는지 알려줘")
         ]
         case .today where !hasSchedulesToday: [
@@ -977,7 +977,7 @@ private struct AgentQuickActions: View {
         ]
         case .today: [
             ("일정 추가", "오늘 빈 시간에 집중 일정 1시간 추가해줘"),
-            ("오늘 요약", "오늘 일정 핵심만 요약해줘"),
+            ("하루 정리", "오늘 일정 핵심만 요약해줘"),
             ("미완료 정리", "남은 할 일을 어떻게 처리할지 알려줘")
         ]
         }
@@ -986,7 +986,7 @@ private struct AgentQuickActions: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("빠른 요청")
-                .font(.caption.weight(.semibold))
+                .font(MemdoTypography.captionEmphasis)
                 .foregroundStyle(MemdoTheme.secondaryInk)
 
             VStack(spacing: 0) {
@@ -994,14 +994,14 @@ private struct AgentQuickActions: View {
                     Button { onSelect(item.1) } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.up.right")
-                                .font(.caption.weight(.semibold))
+                                .font(MemdoTypography.captionEmphasis)
                                 .foregroundStyle(MemdoTheme.brand)
                                 .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(item.0)
-                                    .font(.subheadline.weight(.semibold))
+                                    .font(MemdoTypography.action)
                                 Text(item.1)
-                                    .font(.caption)
+                                    .font(MemdoTypography.caption)
                                     .foregroundStyle(MemdoTheme.secondaryInk)
                                     .lineLimit(2)
                             }
@@ -1049,29 +1049,29 @@ private struct AgentResponse: View {
             HStack(spacing: 6) {
                 if isToolPhase {
                     Image(systemName: "gearshape.fill")
-                        .font(.caption.weight(.semibold))
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.brand)
                         .symbolEffect(.pulse)
                 } else if message.isStreaming && message.text.isEmpty {
                     TypingDotsView()
                 } else if message.isError {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .font(.caption.weight(.semibold))
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(.red)
                 } else {
                     Image(systemName: "sparkle")
-                        .font(.caption.weight(.semibold))
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.brand)
                 }
                 Text(headerLabel)
-                    .font(.caption.weight(.semibold))
+                    .font(MemdoTypography.captionEmphasis)
                     .foregroundStyle(accentColor)
             }
 
             // Tool hint
             if let hint = message.toolHint, message.text.isEmpty {
                 Text(hint)
-                    .font(.caption)
+                    .font(MemdoTypography.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
 
@@ -1087,7 +1087,7 @@ private struct AgentResponse: View {
                         Text(message.text)
                     }
                 }
-                .font(.subheadline)
+                .font(MemdoTypography.subtitle)
                 .foregroundStyle(message.isError ? .red : MemdoTheme.ink)
                 .textSelection(.enabled)
             }
@@ -1096,7 +1096,7 @@ private struct AgentResponse: View {
             if message.isError, let onRetry {
                 Button(action: onRetry) {
                     Label("다시 시도", systemImage: "arrow.clockwise")
-                        .font(.caption.weight(.semibold))
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.brand)
                 }
                 .buttonStyle(.plain)
@@ -1156,12 +1156,12 @@ private struct ProposedScheduleCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("일정 제안", systemImage: "calendar.badge.plus")
-                .font(.caption.weight(.bold))
+                .font(MemdoTypography.captionEmphasis)
                 .foregroundStyle(MemdoTheme.brand)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(draft.title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(MemdoTypography.action)
                     .foregroundStyle(MemdoTheme.ink)
 
                 HStack(spacing: 10) {
@@ -1169,13 +1169,13 @@ private struct ProposedScheduleCard: View {
                     Label(draft.displayTime,
                           systemImage: draft.isTask ? "checkmark.circle" : "clock")
                 }
-                .font(.caption)
+                .font(MemdoTypography.caption)
                 .foregroundStyle(MemdoTheme.secondaryInk)
                 .lineLimit(1)
 
                 if let note = draft.note, !note.isEmpty {
                     Text(note)
-                        .font(.caption)
+                        .font(MemdoTypography.caption)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                         .lineLimit(2)
                 }
@@ -1185,12 +1185,12 @@ private struct ProposedScheduleCard: View {
                 // informed choice, not just a rubber stamp.
                 if let conflictTitle {
                     Label("같은 시간에 '\(conflictTitle)' 일정이 있어요", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption.weight(.semibold))
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(.orange)
                         .lineLimit(2)
                 } else if conflictCheckFailed {
                     Label("기존 일정을 확인하지 못했어요 — 저장 전 직접 확인해주세요", systemImage: "questionmark.circle.fill")
-                        .font(.caption.weight(.semibold))
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(.orange)
                         .lineLimit(2)
                 }
@@ -1199,7 +1199,7 @@ private struct ProposedScheduleCard: View {
             HStack(spacing: 8) {
                 Button(action: onConfirm) {
                     Label("저장하기", systemImage: "checkmark")
-                        .font(.caption.weight(.semibold))
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.onAccent)
                         .frame(maxWidth: .infinity, minHeight: 34)
                         .background(MemdoTheme.accent,
@@ -1209,7 +1209,7 @@ private struct ProposedScheduleCard: View {
 
                 Button(action: onDecline) {
                     Text("취소")
-                        .font(.caption.weight(.semibold))
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                         .frame(maxWidth: .infinity, minHeight: 34)
                         .background(MemdoTheme.surface,

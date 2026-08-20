@@ -311,7 +311,7 @@ private struct CalendarMonthCard: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
                 ForEach(weekdays, id: \.self) { weekday in
                     Text(weekday)
-                        .font(.caption.bold())
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                 }
                 ForEach(calendarDays.indices, id: \.self) { index in
@@ -367,7 +367,7 @@ private struct CalendarMonthCard: View {
             .accessibilityLabel("이전 달")
 
             Text(month.memdoMonth)
-                .font(.headline)
+                .font(MemdoTypography.sectionTitle)
                 .frame(minWidth: 48)
 
             Button { onMoveMonth(1) } label: {
@@ -381,7 +381,7 @@ private struct CalendarMonthCard: View {
 
     private var todayButton: some View {
         Button("오늘", action: onGoToday)
-            .font(.caption.weight(.semibold))
+            .font(MemdoTypography.captionEmphasis)
             .padding(.horizontal, 10)
             .frame(minHeight: MemdoMetrics.touchTarget)
             .background(MemdoTheme.ink.opacity(0.06), in: Capsule())
@@ -402,7 +402,7 @@ private struct CalendarMonthCard: View {
                 Text(filter.title)
                     .lineLimit(1)
             }
-            .font(.caption.weight(.semibold))
+            .font(MemdoTypography.captionEmphasis)
             .foregroundStyle(filter == .all ? MemdoTheme.secondaryInk : MemdoTheme.brand)
             .padding(.horizontal, 10)
             .frame(minHeight: MemdoMetrics.touchTarget)
@@ -421,7 +421,7 @@ private struct CalendarMonthCard: View {
 
         return Button { onSelect(date) } label: {
             Text("\(day)")
-                .font(.subheadline.weight(isSelected ? .bold : .regular))
+                .font(MemdoTypography.action.monospacedDigit().weight(isSelected ? .bold : .regular))
                 .foregroundStyle(isSelected ? MemdoTheme.onAccent : MemdoTheme.ink)
                 .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
                 .background(isSelected ? MemdoTheme.accent : .clear, in: Circle())
@@ -533,7 +533,7 @@ private struct CalendarAgendaSection: View {
                         Divider().padding(.leading, MemdoMetrics.rowContentLeading)
                         Button(action: onOpenDay) {
                             Label("\(hiddenCount)개 더 보기", systemImage: "calendar")
-                                .font(.subheadline.weight(.semibold))
+                                .font(MemdoTypography.action)
                                 .foregroundStyle(MemdoTheme.accent)
                                 .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
                                 .padding(.horizontal, 16)
@@ -768,7 +768,7 @@ private struct DayTimelineView: View {
             ForEach(startHour..<endHour, id: \.self) { hour in
                 HStack(alignment: .top, spacing: 0) {
                     Text(String(format: "%02d", hour))
-                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .font(MemdoTypography.caption.monospacedDigit())
                         .foregroundStyle(MemdoTheme.secondaryInk)
                         .frame(width: labelWidth, alignment: .trailing)
                         .padding(.trailing, 8)
@@ -791,11 +791,11 @@ private struct DayTimelineView: View {
                         Image(systemName: item.kind == .task
                             ? (item.isDone ? "checkmark.circle.fill" : "circle")
                             : "calendar")
-                            .font(.footnote)
+                            .font(MemdoTypography.footnote)
                             .foregroundStyle(item.isDone ? MemdoTheme.brand : MemdoTheme.secondaryInk)
                             .frame(width: 18)
                         Text(item.title)
-                            .font(.subheadline)
+                            .font(MemdoTypography.subtitle)
                             .strikethrough(item.isDone)
                             .foregroundStyle(item.isDone ? MemdoTheme.secondaryInk : MemdoTheme.ink)
                         Spacer()
@@ -858,7 +858,7 @@ private struct TimelineEventBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(event.title)
-                .font(.caption.weight(.semibold))
+                .font(MemdoTypography.captionEmphasis)
                 .foregroundStyle(MemdoTheme.onAccent)
                 .lineLimit(blockHeight > 48 ? 2 : 1)
             if blockHeight > 36 {

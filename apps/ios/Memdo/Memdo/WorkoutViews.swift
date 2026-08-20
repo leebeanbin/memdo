@@ -23,7 +23,7 @@ struct WorkoutLogRow: View {
                 // 제목 + 통계
                 VStack(alignment: .leading, spacing: 2) {
                     Text(workout.activityType.label)
-                        .font(.subheadline.weight(.semibold))
+                        .font(MemdoTypography.action)
                         .foregroundStyle(MemdoTheme.ink)
                     HStack(spacing: 6) {
                         Text(workout.durationFormatted)
@@ -34,7 +34,7 @@ struct WorkoutLogRow: View {
                             Text("·"); Text("\(Int(cal))kcal")
                         }
                     }
-                    .font(.caption)
+                    .font(MemdoTypography.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
                 }
 
@@ -43,7 +43,7 @@ struct WorkoutLogRow: View {
                 // 심박수
                 if let hr = workout.avgHeartRate {
                     Label("\(Int(hr))", systemImage: "heart.fill")
-                        .font(.caption2.weight(.medium))
+                        .font(MemdoTypography.caption2Emphasis)
                         .foregroundStyle(Color.pink)
                 }
             }
@@ -70,7 +70,7 @@ struct TodayWorkoutSection: View {
             // 섹션 헤더
             HStack {
                 Label("운동", systemImage: "figure.run")
-                    .font(.footnote.weight(.semibold))
+                    .font(MemdoTypography.metric)
                     .foregroundStyle(MemdoTheme.secondaryInk)
                 Spacer()
                 Button(action: onAdd) {
@@ -78,7 +78,7 @@ struct TodayWorkoutSection: View {
                         Image(systemName: "plus")
                         Text("추가")
                     }
-                    .font(.footnote.weight(.medium))
+                    .font(MemdoTypography.metric)
                     .foregroundStyle(MemdoTheme.brand)
                 }
             }
@@ -99,15 +99,15 @@ struct TodayWorkoutSection: View {
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text("운동 기록 추가")
-                                .font(.subheadline.weight(.medium))
+                                .font(MemdoTypography.action)
                                 .foregroundStyle(MemdoTheme.ink)
                             Text("Apple Watch · 운동 앱 · 직접 입력")
-                                .font(.caption)
+                                .font(MemdoTypography.caption)
                                 .foregroundStyle(MemdoTheme.secondaryInk)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
+                            .font(MemdoTypography.captionEmphasis)
                             .foregroundStyle(MemdoTheme.secondaryInk.opacity(0.5))
                     }
                     .padding(.horizontal, MemdoMetrics.pagePadding)
@@ -155,10 +155,10 @@ struct WorkoutDetailSheet: View {
                     if !workout.notes.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             Label("노트", systemImage: "note.text")
-                                .font(.footnote.weight(.semibold))
+                                .font(MemdoTypography.metric)
                                 .foregroundStyle(MemdoTheme.secondaryInk)
                             Text(workout.notes)
-                                .font(.subheadline)
+                                .font(MemdoTypography.subtitle)
                                 .foregroundStyle(MemdoTheme.ink)
                         }
                         .padding(MemdoMetrics.pagePadding)
@@ -206,7 +206,7 @@ struct WorkoutDetailSheet: View {
                     isTracking = false
                 } label: {
                     Label("운동 완료", systemImage: "checkmark.circle.fill")
-                        .font(.subheadline.weight(.semibold))
+                        .font(MemdoTypography.action)
                         .frame(maxWidth: .infinity, minHeight: 48)
                         .background(.green, in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous))
                         .foregroundStyle(.white)
@@ -223,7 +223,7 @@ struct WorkoutDetailSheet: View {
                     isTracking = true
                 } label: {
                     Label("Dynamic Island 추적 시작", systemImage: "liveactivity")
-                        .font(.subheadline.weight(.semibold))
+                        .font(MemdoTypography.action)
                         .frame(maxWidth: .infinity, minHeight: 48)
                         .background(MemdoTheme.accent, in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous))
                         .foregroundStyle(MemdoTheme.onAccent)
@@ -270,15 +270,15 @@ struct WorkoutDetailSheet: View {
     private func exerciseSection(_ exercises: [ExerciseSet]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("세트 기록", systemImage: "dumbbell")
-                .font(.footnote.weight(.semibold))
+                .font(MemdoTypography.metric)
                 .foregroundStyle(MemdoTheme.secondaryInk)
                 .padding(.horizontal, MemdoMetrics.pagePadding)
             VStack(spacing: 0) {
                 ForEach(exercises) { set in
                     HStack {
-                        Text(set.name).font(.subheadline.weight(.medium))
+                        Text(set.name).font(MemdoTypography.action)
                         Spacer()
-                        Text(set.summary).font(.subheadline).foregroundStyle(MemdoTheme.secondaryInk)
+                        Text(set.summary).font(MemdoTypography.subtitle).foregroundStyle(MemdoTheme.secondaryInk)
                     }
                     .padding(.horizontal, MemdoMetrics.pagePadding)
                     .padding(.vertical, 8)
@@ -301,10 +301,10 @@ private struct WorkoutStatCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Label(title, systemImage: icon)
-                .font(.caption.weight(.medium))
+                .font(MemdoTypography.captionEmphasis)
                 .foregroundStyle(MemdoTheme.secondaryInk)
             Text(value)
-                .font(.subheadline.weight(.semibold))
+                .font(MemdoTypography.action)
                 .foregroundStyle(MemdoTheme.ink)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -502,7 +502,7 @@ struct WorkoutLogEditorSheet: View {
                             Image(systemName: type.systemImage)
                                 .font(.system(size: 20, weight: .medium))
                             Text(type.label)
-                                .font(.caption.weight(.medium))
+                                .font(MemdoTypography.captionEmphasis)
                                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                                 .multilineTextAlignment(.center)
                         }
@@ -551,7 +551,7 @@ struct WorkoutLogEditorSheet: View {
                         .frame(width: 32).multilineTextAlignment(.center)
                         .keyboardType(.numberPad)
                     Text("세트").foregroundStyle(MemdoTheme.secondaryInk)
-                        .font(.caption)
+                        .font(MemdoTypography.caption)
                 }
             }
             .onDelete { exercisesBinding.wrappedValue.remove(atOffsets: $0) }
@@ -651,7 +651,7 @@ struct HealthKitImportSheet: View {
             VStack(spacing: 14) {
                 ProgressView()
                 Text(label)
-                    .font(.subheadline)
+                    .font(MemdoTypography.subtitle)
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -686,7 +686,7 @@ struct HealthKitImportSheet: View {
                                       ? "checkmark.circle.fill" : "circle")
                                     .foregroundStyle(selected.contains(workout.id)
                                                      ? MemdoTheme.brand : MemdoTheme.secondaryInk)
-                                    .font(.title3)
+                                    .font(MemdoTypography.title3)
                             }
                             .contentShape(Rectangle())
                         }
@@ -707,7 +707,7 @@ struct HealthKitImportSheet: View {
                             selected = Set(pending.map(\.id))
                         }
                     }
-                    .font(.footnote)
+                    .font(MemdoTypography.footnote)
                 }
             }
         }
@@ -725,7 +725,7 @@ struct HealthKitImportSheet: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(workout.activityType.label)
-                    .font(.subheadline.weight(.semibold))
+                    .font(MemdoTypography.action)
                     .foregroundStyle(MemdoTheme.ink)
                 HStack(spacing: 6) {
                     Text(workout.startedAt.formatted(.dateTime.month().day().hour().minute()))
@@ -734,7 +734,7 @@ struct HealthKitImportSheet: View {
                     }
                     Text("·"); Text(workout.durationFormatted)
                 }
-                .font(.caption)
+                .font(MemdoTypography.caption)
                 .foregroundStyle(MemdoTheme.secondaryInk)
             }
         }

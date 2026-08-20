@@ -96,7 +96,7 @@ struct AppShellView: View {
     private var writeErrorToast: some View {
         if let message = scheduleStore.lastWriteError {
             Label(message, systemImage: "exclamationmark.triangle.fill")
-                .font(.footnote.weight(.medium))
+                .font(MemdoTypography.metric)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(
@@ -120,7 +120,7 @@ struct AppShellView: View {
     private var tourSkipHint: some View {
         if showTourSkipHint {
             Label("설정에서 '앱 투어 다시 보기'로 언제든 다시 볼 수 있어요.", systemImage: "info.circle")
-                .font(.footnote.weight(.medium))
+                .font(MemdoTypography.metric)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(

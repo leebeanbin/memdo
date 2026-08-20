@@ -47,7 +47,7 @@ struct ScheduleRow: View {
             if let onToggleDone {
                 Button(action: onToggleDone) {
                     Image(systemName: schedule.isDone ? "checkmark.circle.fill" : "circle")
-                        .font(.title3)
+                        .font(MemdoTypography.title3)
                         .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : activeColor)
                         .contentTransition(.symbolEffect(.replace.byLayer))
                         .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
@@ -56,7 +56,7 @@ struct ScheduleRow: View {
                 .accessibilityLabel(schedule.isDone ? "완료 취소" : "완료로 표시")
             } else {
                 Image(systemName: schedule.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
+                    .font(MemdoTypography.title3)
                     .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : activeColor)
                     .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                     .accessibilityHidden(true)
@@ -66,7 +66,7 @@ struct ScheduleRow: View {
         } else {
             ZStack {
                 Image(systemName: schedule.isExternal ? "calendar" : "clock")
-                    .font(.caption.weight(.semibold))
+                    .font(MemdoTypography.captionEmphasis)
                     .foregroundStyle(MemdoTheme.secondaryInk)
                 if let c = schedule.color {
                     Circle()
@@ -85,37 +85,37 @@ struct ScheduleRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 if context == .dated || dynamicTypeSize.isAccessibilitySize {
                     Text(context == .dated ? "\(schedule.dateText) · \(schedule.displayTime)" : schedule.displayTime)
-                        .font(.caption.monospacedDigit())
+                        .font(MemdoTypography.caption.monospacedDigit())
                         .foregroundStyle(MemdoTheme.secondaryInk)
                 }
 
                 HStack(spacing: 4) {
                     if let provider = schedule.meetingProvider {
                         Image(systemName: provider.systemImage)
-                            .font(.caption2)
+                            .font(MemdoTypography.caption2)
                             .foregroundStyle(MemdoTheme.brand)
                             .accessibilityLabel("\(provider.label) 회의")
                     }
                     if schedule.scheduleRuleId != nil {
                         Image(systemName: "repeat")
-                            .font(.caption2)
+                            .font(MemdoTypography.caption2)
                             .foregroundStyle(MemdoTheme.secondaryInk)
                             .accessibilityLabel("반복 일정")
                     }
                     if let emoji = schedule.emoji, !emoji.isEmpty {
                         Text(emoji)
-                            .font(.subheadline)
+                            .font(MemdoTypography.subtitle)
                             .accessibilityHidden(true)
                     }
                     Text(schedule.title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(MemdoTypography.action)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
                         .strikethrough(schedule.isDone)
                         .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : MemdoTheme.ink)
                 }
 
                 Text(metadata)
-                    .font(.caption)
+                    .font(MemdoTypography.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
                     .lineLimit(1)
             }
@@ -123,7 +123,7 @@ struct ScheduleRow: View {
 
             if onOpen != nil && !dynamicTypeSize.isAccessibilitySize {
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(MemdoTypography.captionEmphasis)
                     .foregroundStyle(MemdoTheme.secondaryInk)
                     .accessibilityHidden(true)
             }
@@ -155,7 +155,7 @@ private struct EventTimeMarker: View {
         Group {
             if schedule.isAllDay {
                 Text("종일")
-                    .font(.caption2.weight(.semibold))
+                    .font(MemdoTypography.caption2Emphasis)
             } else {
                 VStack(spacing: 4) {
                     Text(schedule.startTimeText)
@@ -164,7 +164,7 @@ private struct EventTimeMarker: View {
                         .frame(width: 1, height: 8)
                     Text(schedule.endTimeText)
                 }
-                .font(.caption2.monospacedDigit().weight(.semibold))
+                .font(MemdoTypography.caption2Emphasis.monospacedDigit())
             }
         }
         .foregroundStyle(MemdoTheme.secondaryInk)
@@ -179,7 +179,7 @@ struct ScheduleSourceIcon: View {
 
     var body: some View {
         Image(systemName: schedule.kind == .task ? "checkmark" : schedule.isExternal ? "calendar" : "clock")
-            .font(.caption.weight(.bold))
+            .font(MemdoTypography.captionEmphasis)
             .foregroundStyle(iconColor)
             .frame(width: 30, height: 30)
             .background(

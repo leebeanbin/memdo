@@ -184,7 +184,7 @@ struct EventCaptureSheet: View {
                         }
                         if !draft.provenance.isEmpty {
                             Label(draft.provenance.joined(separator: " · "), systemImage: "sparkles")
-                                .font(.caption)
+                                .font(MemdoTypography.caption)
                                 .foregroundStyle(MemdoTheme.secondaryInk)
                         }
                     }

@@ -224,7 +224,7 @@ struct MemdoSection<Content: View>: View {
         if let actionIcon {
             Button(action: action) {
                 MemdoIconButtonLabel(systemImage: actionIcon)
-                    .font(.caption.weight(.semibold))
+                    .font(MemdoTypography.captionEmphasis)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(actionLabel)
@@ -375,7 +375,7 @@ struct MemdoStatusRow: View {
     var body: some View {
         HStack(spacing: MemdoMetrics.rowSpacing) {
             Image(systemName: systemImage)
-                .font(.subheadline.weight(.semibold))
+                .font(MemdoTypography.action)
                 .foregroundStyle(tint)
                 .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                 .accessibilityHidden(true)

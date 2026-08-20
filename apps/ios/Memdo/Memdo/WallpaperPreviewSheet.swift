@@ -144,7 +144,7 @@ struct WallpaperPreviewSheet: View {
                         Label("사진에 저장", systemImage: "square.and.arrow.down")
                     }
                 }
-                .font(.subheadline.weight(.semibold))
+                .font(MemdoTypography.action)
                 .padding(.horizontal, 18)
                 .frame(minHeight: MemdoMetrics.touchTarget)
             }
@@ -155,7 +155,7 @@ struct WallpaperPreviewSheet: View {
 
             if case .failed(let message) = saveState {
                 Label(message, systemImage: "exclamationmark.circle.fill")
-                    .font(.caption)
+                    .font(MemdoTypography.caption)
                     .foregroundStyle(.red)
             }
         }
@@ -411,7 +411,7 @@ private struct WallpaperClock: View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             VStack(spacing: -4) {
                 Text(dateTitle(context.date))
-                    .font(.subheadline.weight(.semibold))
+                    .font(MemdoTypography.action)
                 Text(timeTitle(context.date))
                     .font(.system(size: 76, weight: .thin, design: .rounded))
                     .monospacedDigit()
@@ -450,17 +450,17 @@ private struct WallpaperCalendarPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Text(monthTitle)
-                    .font(.headline)
+                    .font(MemdoTypography.sectionTitle)
                 Spacer()
                 Text("\(monthScheduleCount)개 일정")
-                    .font(.caption.weight(.semibold))
+                    .font(MemdoTypography.captionEmphasis)
                     .foregroundStyle(.white.opacity(0.68))
             }
 
             LazyVGrid(columns: columns, spacing: 4) {
                 ForEach(weekdays, id: \.self) { weekday in
                     Text(weekday)
-                        .font(.caption2.weight(.semibold))
+                        .font(MemdoTypography.caption2Emphasis)
                         .foregroundStyle(.white.opacity(0.62))
                         .frame(maxWidth: .infinity)
                 }
@@ -512,7 +512,7 @@ private struct WallpaperCalendarDay: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 2) {
                 Text("\(Calendar.current.component(.day, from: date))")
-                    .font(.caption.weight(isToday ? .bold : .medium))
+                    .font(MemdoTypography.caption.monospacedDigit().weight(isToday ? .bold : .medium))
                     .foregroundStyle(isToday ? .black : .white.opacity(0.9))
                     .frame(width: 24, height: 24)
                     .background(isToday ? .white : .clear, in: Circle())
@@ -531,7 +531,7 @@ private struct WallpaperCalendarDay: View {
                             .fill(.white.opacity(0.72))
                             .frame(width: 2, height: 12)
                         Text(first)
-                            .font(.caption2.weight(.medium))
+                            .font(MemdoTypography.caption2Emphasis)
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
                     }

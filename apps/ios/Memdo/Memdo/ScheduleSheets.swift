@@ -256,7 +256,7 @@ private struct ScheduleDetailHeader: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(schedule.source)
-                        .font(.caption.bold())
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                     if let c = schedule.color {
                         Circle()
@@ -266,14 +266,14 @@ private struct ScheduleDetailHeader: View {
                 }
                 HStack(spacing: 4) {
                     if let emoji = schedule.emoji, !emoji.isEmpty {
-                        Text(emoji).font(.headline)
+                        Text(emoji).font(MemdoTypography.sectionTitle)
                     }
                     Text(schedule.title)
-                        .font(.headline)
+                        .font(MemdoTypography.sectionTitle)
                         .foregroundStyle(MemdoTheme.ink)
                 }
                 Text("\(schedule.dateText) · \(schedule.displayTime)")
-                    .font(.subheadline.weight(.semibold))
+                    .font(MemdoTypography.action)
                     .foregroundStyle(MemdoTheme.accent)
             }
         }
@@ -345,7 +345,7 @@ struct ScheduleEditorFields: View {
 
                 if !schedule.isTimeRangeValid {
                     Label("종료는 시작보다 뒤여야 해요", systemImage: "exclamationmark.circle")
-                        .font(.footnote)
+                        .font(MemdoTypography.footnote)
                         .foregroundStyle(.red)
                 }
             }
@@ -373,7 +373,7 @@ struct ScheduleEditorFields: View {
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .font(.subheadline)
+                        .font(MemdoTypography.subtitle)
                         .foregroundStyle(MemdoTheme.ink)
                     if schedule.meetingURLString != nil {
                         Button {
@@ -427,7 +427,7 @@ struct ScheduleEditorFields: View {
                     TextField("이모지", text: emojiBinding)
                         .frame(width: 36, alignment: .center)
                         .multilineTextAlignment(.center)
-                        .font(.title3)
+                        .font(MemdoTypography.title3)
                     Spacer()
                     HStack(spacing: 8) {
                         ForEach(ScheduleColor.allCases) { c in
@@ -464,7 +464,7 @@ struct ScheduleEditorFields: View {
                         Button("준비 항목 삽입", systemImage: "list.bullet", action: suggestPreparation)
                     } label: {
                         Label("빠른 서식", systemImage: "text.badge.checkmark")
-                            .font(.caption.weight(.semibold))
+                            .font(MemdoTypography.captionEmphasis)
                     }
                     .accessibilityLabel("빠른 서식 도구")
                 }
@@ -968,7 +968,7 @@ private struct AddCategorySheet: View {
                         TextField("🏷", text: $emoji)
                             .frame(width: 44)
                             .multilineTextAlignment(.center)
-                            .font(.title2)
+                            .font(MemdoTypography.title2)
                         TextField("이름 (예: 독서, 공부)", text: $name)
                     }
                 }
@@ -1083,7 +1083,7 @@ private struct LocationPickerView: View {
                         Image(systemName: query.isEmpty ? "magnifyingglass" : "mappin.slash")
                             .foregroundStyle(MemdoTheme.secondaryInk)
                         Text(query.isEmpty ? "건물명, 상호 또는 주소로 검색하세요" : "결과를 찾지 못했어요")
-                            .font(.subheadline)
+                            .font(MemdoTypography.subtitle)
                             .foregroundStyle(MemdoTheme.secondaryInk)
                     }
                     .padding(.vertical, 20)
@@ -1172,16 +1172,16 @@ private struct LocationPickerView: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.title3)
+                    .font(MemdoTypography.title3)
                     .foregroundStyle(tint)
                     .frame(width: 28)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
-                        .font(.subheadline.weight(.medium))
+                        .font(MemdoTypography.action)
                         .foregroundStyle(MemdoTheme.ink)
                     if let address {
                         Text(address)
-                            .font(.caption)
+                            .font(MemdoTypography.caption)
                             .foregroundStyle(MemdoTheme.secondaryInk)
                             .lineLimit(1)
                     }
@@ -1189,7 +1189,7 @@ private struct LocationPickerView: View {
                 Spacer(minLength: 4)
                 if isSelected {
                     Image(systemName: "checkmark")
-                        .font(.caption.weight(.bold))
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.brand)
                 }
             }
