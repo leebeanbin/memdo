@@ -571,7 +571,7 @@ private struct BriefingLeadStory: View {
                 selectedCategories: $selectedCategories
             )
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     BriefingCategoryBadge(category: item.category)
                     Text(item.category.rawValue)
@@ -581,11 +581,13 @@ private struct BriefingLeadStory: View {
                 Text(item.title)
                     .font(MemdoTypography.editorialTitle)
                     .foregroundStyle(MemdoTheme.ink)
+                    .lineSpacing(4)
                     .lineLimit(3)
                 if !item.summary.isEmpty {
                     Text(item.summary.compactBriefingText)
                         .font(MemdoTypography.subtitle)
                         .foregroundStyle(MemdoTheme.secondaryInk)
+                        .lineSpacing(3)
                         .lineLimit(2)
                 }
                 Text(item.metadata)
@@ -593,7 +595,7 @@ private struct BriefingLeadStory: View {
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
             .multilineTextAlignment(.leading)
-            .padding(16)
+            .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
@@ -655,13 +657,14 @@ private struct BriefingNewsRow: View {
                 selectedCategories: $selectedCategories
             )
         } label: {
-            HStack(spacing: MemdoMetrics.rowSpacing) {
+            HStack(alignment: .top, spacing: MemdoMetrics.rowSpacing) {
                 BriefingOrdinalBadge(number: number, category: item.category)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 5) {
                     Text(item.title)
                         .font(MemdoTypography.action)
                         .foregroundStyle(MemdoTheme.ink)
+                        .lineSpacing(3)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
@@ -670,15 +673,18 @@ private struct BriefingNewsRow: View {
                         .foregroundStyle(MemdoTheme.secondaryInk)
                         .lineLimit(1)
                 }
+                .padding(.top, 3)
 
                 Spacer(minLength: 8)
 
                 Image(systemName: "chevron.right")
                     .font(MemdoTypography.caption2Emphasis)
                     .foregroundStyle(MemdoTheme.secondaryInk)
+                    .padding(.top, 6)
             }
             .padding(.horizontal, MemdoMetrics.rowInset)
-            .frame(minHeight: 52)
+            .padding(.vertical, 14)
+            .frame(minHeight: MemdoMetrics.touchTarget)
             .contentShape(Rectangle())
         }
         .buttonStyle(MemdoScaleButtonStyle())
@@ -697,7 +703,7 @@ private struct BriefingStoryDetail: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
                         BriefingCategoryBadge(category: item.category)
                         Text(item.category.rawValue)
@@ -707,21 +713,32 @@ private struct BriefingStoryDetail: View {
                     Text(item.title)
                         .font(MemdoTypography.detailTitle)
                         .foregroundStyle(MemdoTheme.ink)
+                        .lineSpacing(5)
                     Text(item.metadata)
                         .font(MemdoTypography.caption)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                 }
 
                 if !item.summary.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 12) {
                         Text("핵심 내용")
                             .font(MemdoTypography.sectionTitle)
                         Text(item.summary.compactBriefingText)
                             .font(MemdoTypography.body)
                             .foregroundStyle(MemdoTheme.ink)
+                            .lineSpacing(5)
                     }
-                    .padding(.vertical, 16)
-                    .memdoRowGroup()
+                    .padding(.horizontal, MemdoMetrics.pagePadding)
+                    .padding(.vertical, 18)
+                    .background(
+                        MemdoTheme.surface,
+                        in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                            .stroke(MemdoTheme.outline, lineWidth: 0.5)
+                    }
+                    .padding(.horizontal, -MemdoMetrics.pagePadding)
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -754,7 +771,7 @@ private struct BriefingStoryDetail: View {
                         .frame(minHeight: MemdoMetrics.settingsRowHeight)
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(MemdoScaleButtonStyle())
                     .memdoRowGroup()
                     .accessibilityHint("관련 기사를 살펴보고 관심사에 추가할 수 있습니다")
                 }
@@ -828,19 +845,21 @@ private struct BriefingTopicView: View {
                         } label: {
                             HStack(alignment: .top, spacing: MemdoMetrics.rowSpacing) {
                                 BriefingOrdinalBadge(number: index + 1, category: item.category)
-                                VStack(alignment: .leading, spacing: 3) {
+                                VStack(alignment: .leading, spacing: 5) {
                                     Text(item.title)
                                         .font(MemdoTypography.action)
                                         .foregroundStyle(MemdoTheme.ink)
+                                        .lineSpacing(3)
                                         .lineLimit(2)
                                     Text(item.metadata)
                                         .font(MemdoTypography.caption)
                                         .foregroundStyle(MemdoTheme.secondaryInk)
                                 }
+                                .padding(.top, 3)
                                 Spacer(minLength: 8)
                             }
                             .multilineTextAlignment(.leading)
-                            .padding(.vertical, 10)
+                            .padding(.vertical, 14)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(MemdoScaleButtonStyle())
