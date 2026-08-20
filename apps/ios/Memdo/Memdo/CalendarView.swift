@@ -445,7 +445,9 @@ private struct CalendarMonthCard: View {
                 .onEnded { _ in onOpen(date) }
         )
         .accessibilityHint("길게 누르면 하루 일정 메뉴가 열립니다")
-        .accessibilityLabel(date.formatted(.dateTime.month().day().weekday(.wide)))
+        .accessibilityLabel(
+            date.formatted(.dateTime.month().day().weekday(.wide).locale(Locale(identifier: "ko_KR")))
+        )
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityValue("일정 \(count)개\(hasWorkout ? ", 운동 있음" : "")\(isSelected ? ", 선택됨" : "")")
         .accessibilityAction(named: "하루 일정 메뉴 열기") { onOpen(date) }

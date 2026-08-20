@@ -212,7 +212,7 @@ actor BriefingRepository {
             return FetchedItem(
                 id: item.link.isEmpty ? item.title : item.link,
                 title: item.title,
-                summary: String(item.description.prefix(200)),
+                summary: Self.truncatedSummary(item.description),
                 url: URL(string: item.link),
                 sourceName: feed.name,
                 category: feed.category,
@@ -220,6 +220,18 @@ actor BriefingRepository {
                 matchedKeyword: matched
             )
         }
+    }
+
+    /// `prefix(200)` alone cuts mid-word (a real RSS description ending
+    /// "...조 대법" instead of "...조 대법원장을" is what this fixes) --
+    /// backs off to the last word boundary within the limit and marks the
+    /// cut with "…" so a shortened summary reads as shortened, not broken.
+    private static func truncatedSummary(_ text: String, limit: Int = 200) -> String {
+        guard text.count > limit else { return text }
+        let cutoff = text.index(text.startIndex, offsetBy: limit)
+        let truncated = text[..<cutoff]
+        let boundary = truncated.lastIndex(of: " ") ?? cutoff
+        return String(truncated[..<boundary]) + "…"
     }
 
     private func parseDate(_ string: String) -> Date? {

@@ -124,7 +124,7 @@ struct TodayWeekIndex: View {
 
         return Button { onSelect(date) } label: {
                     VStack(spacing: 4) {
-                        Text(date.formatted(.dateTime.weekday(.narrow)))
+                        Text(date.formatted(.dateTime.weekday(.narrow).locale(Locale(identifier: "ko_KR"))))
                             .font(MemdoTypography.captionEmphasis)
                         Text("\(Calendar.current.component(.day, from: date))")
                             .font(MemdoTypography.action.monospacedDigit())
@@ -138,7 +138,9 @@ struct TodayWeekIndex: View {
                     .background(isSelected ? MemdoTheme.accent : Color.clear)
                     .clipShape(Capsule())
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel(date.formatted(.dateTime.month().day().weekday(.wide)))
+                    .accessibilityLabel(
+                        date.formatted(.dateTime.month().day().weekday(.wide).locale(Locale(identifier: "ko_KR")))
+                    )
         }
         .buttonStyle(.plain)
         .simultaneousGesture(
@@ -253,6 +255,12 @@ struct TodayScheduleSection: View {
 
 struct TodayBriefingSection: View {
     @State private var items: [BriefingRepository.FetchedItem] = []
+    /// The full fetch (up to 20 items across every category), kept
+    /// separately from `items` (the 5 curated for the sheet's visible list)
+    /// so BriefingTopicView has more than 1-3 items to filter down to when
+    /// browsing a single category -- `items` alone was too thin a pool for
+    /// "먼저 살펴보고" (browse first) to mean anything.
+    @State private var topicPool: [BriefingRepository.FetchedItem] = []
     @State private var isLoading = false
     @State private var aiSummary: String?
     @State private var showsBriefing = false
@@ -293,6 +301,7 @@ struct TodayBriefingSection: View {
         .sheet(isPresented: $showsBriefing) {
             BriefingSheet(
                 items: Array(items.prefix(5)),
+                topicPool: topicPool,
                 summary: aiSummary,
                 selectedCategories: $selectedCategories
             )
@@ -319,6 +328,7 @@ struct TodayBriefingSection: View {
         )
         let curated = Self.curatedItems(fetched, selectedCategories: selectedCategories)
         items = curated
+        topicPool = fetched
         isLoading = false
 
         if #available(iOS 26, *) {
@@ -422,6 +432,11 @@ private struct BriefingPreview: View {
 private struct BriefingSheet: View {
     @Environment(\.dismiss) private var dismiss
     let items: [BriefingRepository.FetchedItem]
+    /// Passed to BriefingLeadStory/BriefingNewsRow as `relatedItems` instead
+    /// of `items` -- the full fetch, not just the 5 curated for this sheet's
+    /// visible list, so BriefingTopicView has a real pool to filter by
+    /// category from. `items` stays what's actually rendered here.
+    let topicPool: [BriefingRepository.FetchedItem]
     let summary: String?
     @Binding var selectedCategories: Set<BriefingFeedCategory>
 
@@ -430,7 +445,11 @@ private struct BriefingSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(Date.now.formatted(.dateTime.month().day().weekday(.wide)))
+                        Text(
+                            Date.now.formatted(
+                                .dateTime.month().day().weekday(.wide).locale(Locale(identifier: "ko_KR"))
+                            )
+                        )
                             .font(MemdoTypography.captionEmphasis)
                             .foregroundStyle(MemdoTheme.secondaryInk)
                         Text("오늘 꼭 알아둘 \(items.count)개")
@@ -459,7 +478,7 @@ private struct BriefingSheet: View {
                     if let lead = items.first {
                         BriefingLeadStory(
                             item: lead,
-                            relatedItems: items,
+                            relatedItems: topicPool,
                             selectedCategories: $selectedCategories
                         )
                     }
@@ -470,7 +489,7 @@ private struct BriefingSheet: View {
                                 BriefingNewsRow(
                                     number: index + 2,
                                     item: item,
-                                    relatedItems: items,
+                                    relatedItems: topicPool,
                                     selectedCategories: $selectedCategories
                                 )
                                 if item.id != items.last?.id {
