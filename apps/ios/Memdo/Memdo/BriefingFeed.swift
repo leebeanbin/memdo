@@ -22,6 +22,23 @@ enum BriefingFeedCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Reuses ScheduleColor -- the app's one existing hue set (schedule
+    /// category tinting) -- rather than a second, briefing-only palette.
+    /// Every row in a 5-item briefing rendered identically apart from text
+    /// before this (same icon-less number, same gray metadata, amber used
+    /// only once for whichever item happened to be the AI's pick) --
+    /// per-category color is what actually lets you tell "경제" apart from
+    /// "글로벌" at a glance instead of reading every line.
+    var accentColor: ScheduleColor {
+        switch self {
+        case .economy: .sage
+        case .tech:    .sky
+        case .startup: .violet
+        case .world:   .indigo
+        case .general: .coral
+        }
+    }
+
     // All RSS URLs verified reachable as of 2026-08. Update here when feeds move.
     var feeds: [BriefingFeedSource] {
         switch self {

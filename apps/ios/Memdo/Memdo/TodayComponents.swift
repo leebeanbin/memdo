@@ -515,6 +515,38 @@ private struct BriefingSheet: View {
     }
 }
 
+/// Colored circle for a briefing category -- an icon variant for the lead
+/// story (where the category is the only label, no ordinal) and a
+/// number-in-circle variant for list rows (where read-order still matters).
+/// Reuses ScheduleColor rather than inventing a second palette -- see
+/// BriefingFeedCategory.accentColor.
+private struct BriefingCategoryBadge: View {
+    let category: BriefingFeedCategory
+
+    var body: some View {
+        Image(systemName: category.systemImage)
+            .font(MemdoTypography.caption2Emphasis)
+            .foregroundStyle(category.accentColor.swiftUIColor)
+            .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.rowLeadingWidth)
+            .background(category.accentColor.softSwiftUIColor, in: Circle())
+            .accessibilityHidden(true)
+    }
+}
+
+private struct BriefingOrdinalBadge: View {
+    let number: Int
+    let category: BriefingFeedCategory
+
+    var body: some View {
+        Text(String(format: "%02d", number))
+            .font(MemdoTypography.metric.monospacedDigit())
+            .foregroundStyle(category.accentColor.swiftUIColor)
+            .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.rowLeadingWidth)
+            .background(category.accentColor.softSwiftUIColor, in: Circle())
+            .accessibilityHidden(true)
+    }
+}
+
 private struct BriefingLeadStory: View {
     let item: BriefingRepository.FetchedItem
     let relatedItems: [BriefingRepository.FetchedItem]
@@ -529,9 +561,12 @@ private struct BriefingLeadStory: View {
             )
         } label: {
             VStack(alignment: .leading, spacing: 8) {
-                Text("01 · \(item.category.rawValue)")
-                    .font(MemdoTypography.captionEmphasis)
-                    .foregroundStyle(MemdoTheme.brand)
+                HStack(spacing: 8) {
+                    BriefingCategoryBadge(category: item.category)
+                    Text(item.category.rawValue)
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(item.category.accentColor.swiftUIColor)
+                }
                 Text(item.title)
                     .font(MemdoTypography.editorialTitle)
                     .foregroundStyle(MemdoTheme.ink)
@@ -599,10 +634,7 @@ private struct BriefingNewsRow: View {
             )
         } label: {
             HStack(spacing: MemdoMetrics.rowSpacing) {
-                Text(String(format: "%02d", number))
-                    .font(MemdoTypography.metric.monospacedDigit())
-                    .foregroundStyle(MemdoTheme.secondaryInk)
-                    .frame(width: MemdoMetrics.rowLeadingWidth, alignment: .leading)
+                BriefingOrdinalBadge(number: number, category: item.category)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
@@ -644,9 +676,12 @@ private struct BriefingStoryDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(item.category.rawValue)
-                        .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.brand)
+                    HStack(spacing: 8) {
+                        BriefingCategoryBadge(category: item.category)
+                        Text(item.category.rawValue)
+                            .font(MemdoTypography.captionEmphasis)
+                            .foregroundStyle(item.category.accentColor.swiftUIColor)
+                    }
                     Text(item.title)
                         .font(MemdoTypography.detailTitle)
                         .foregroundStyle(MemdoTheme.ink)
@@ -679,9 +714,7 @@ private struct BriefingStoryDetail: View {
                         )
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: item.category.systemImage)
-                                .foregroundStyle(MemdoTheme.secondaryInk)
-                                .frame(width: 24)
+                            BriefingCategoryBadge(category: item.category)
                             Text(item.category.rawValue)
                                 .font(MemdoTypography.action)
                             Spacer()
@@ -738,7 +771,10 @@ private struct BriefingTopicView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Image(systemName: category.systemImage)
                         .font(MemdoTypography.title3)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .foregroundStyle(category.accentColor.swiftUIColor)
+                        .frame(width: 44, height: 44)
+                        .background(category.accentColor.softSwiftUIColor, in: Circle())
+                        .accessibilityHidden(true)
                     Text(category.rawValue)
                         .font(MemdoTypography.detailTitle)
                     Text("관련 기사 \(items.count)개를 먼저 살펴보고 관심사에 추가할 수 있어요.")
@@ -769,10 +805,7 @@ private struct BriefingTopicView: View {
                             if let url = item.url { safariItem = BriefingLink(url: url) }
                         } label: {
                             HStack(alignment: .top, spacing: MemdoMetrics.rowSpacing) {
-                                Text(String(format: "%02d", index + 1))
-                                    .font(MemdoTypography.metric.monospacedDigit())
-                                    .foregroundStyle(MemdoTheme.secondaryInk)
-                                    .frame(width: MemdoMetrics.rowLeadingWidth, alignment: .leading)
+                                BriefingOrdinalBadge(number: index + 1, category: item.category)
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(item.title)
                                         .font(MemdoTypography.action)
