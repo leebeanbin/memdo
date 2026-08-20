@@ -586,6 +586,29 @@ final class ScheduleStore {
             .sorted { $0.timeSortKey(on: date) < $1.timeSortKey(on: date) }
     }
 
+    /// Groups `items` by every day they occur on within `interval` -- a
+    /// multi-day event appears under each day it spans, not just its start
+    /// day, matching `occurs(on:)`'s per-day semantics rather than a plain
+    /// `scheduledDate` range check (which CalendarView.scheduleCounts and
+    /// updateWidgetSnapshot both independently pre-filter-then-day-by-day-
+    /// scan for the same reason -- this is that shared scan, not a flat
+    /// range query, since a flat dedup list can't represent "this same item
+    /// counts on 3 different days").
+    static func groupedByOccurrenceDay(
+        _ items: [ScheduleDetail],
+        in interval: DateInterval,
+        calendar: Calendar = .current
+    ) -> [Date: [ScheduleDetail]] {
+        var result: [Date: [ScheduleDetail]] = [:]
+        var day = calendar.startOfDay(for: interval.start)
+        while day < interval.end {
+            let dayItems = items.filter { $0.occurs(on: day) }
+            if !dayItems.isEmpty { result[day] = dayItems }
+            day = calendar.date(byAdding: .day, value: 1, to: day) ?? interval.end
+        }
+        return result
+    }
+
     func load() async {
         guard state != .loading else { return }
         state = .loading
@@ -1146,18 +1169,16 @@ final class ScheduleStore {
         let now = Date.now
         let start = calendar.dateInterval(of: .month, for: now)?.start ?? calendar.startOfDay(for: now)
         let end = calendar.date(byAdding: .month, value: 2, to: start) ?? now
-        // Scans day by day (matching CalendarView.scheduleCounts) rather than
-        // grouping by exact scheduledDate, so a multi-day event appears on every
-        // day it spans, not just its start day. `schedules` is unbounded (grows
-        // with ensureLoaded() and is never evicted) and this runs on every
-        // write, so pre-filter to what could possibly intersect [start, end)
-        // before the O(days) scan rather than re-scanning everything per day.
+        // `schedules` is unbounded (grows with ensureLoaded() and is never
+        // evicted) and this runs on every write, so pre-filter to what could
+        // possibly intersect [start, end) before groupedByOccurrenceDay's
+        // O(days) scan rather than re-scanning everything per day.
         let candidates = schedules.filter { $0.scheduledDate < end && ($0.endAt ?? $0.scheduledDate) >= start }
+        let byDay = Self.groupedByOccurrenceDay(candidates, in: DateInterval(start: start, end: end), calendar: calendar)
         var days: [MemdoWidgetDay] = []
         var day = start
         while day < end {
-            let dayCandidates = candidates.filter { $0.occurs(on: day) }
-            if !dayCandidates.isEmpty {
+            if let dayCandidates = byDay[day] {
                 let sorted = dayCandidates.sorted { $0.timeSortKey(on: day) < $1.timeSortKey(on: day) }
                 days.append(MemdoWidgetDay(
                     date: day,

@@ -49,22 +49,16 @@ struct CalendarView: View {
         let calendar = Calendar.current
         guard let monthInterval = calendar.dateInterval(of: .month, for: displayedMonth)
         else { return [:] }
-        // Hoisted out of the loop: these were being re-evaluated (a fresh array
-        // filter, and Calendar.current's lookup) once per day of the month on
-        // every body re-render. Also pre-filtered to what could possibly
-        // intersect this month before the day-by-day scan.
+        // Pre-filtered to what could possibly intersect this month before
+        // groupedByOccurrenceDay's day-by-day scan.
         let schedules = filteredSchedules.filter {
             !$0.isDone && $0.scheduledDate < monthInterval.end &&
                 ($0.endAt ?? $0.scheduledDate) >= monthInterval.start
         }
-        var counts: [Int: Int] = [:]
-        var day = monthInterval.start
-        while day < monthInterval.end {
-            let count = schedules.count { $0.occurs(on: day) }
-            if count > 0 { counts[calendar.component(.day, from: day)] = count }
-            day = calendar.date(byAdding: .day, value: 1, to: day) ?? monthInterval.end
+        let byDay = ScheduleStore.groupedByOccurrenceDay(schedules, in: monthInterval, calendar: calendar)
+        return byDay.reduce(into: [:]) { counts, entry in
+            counts[calendar.component(.day, from: entry.key)] = entry.value.count
         }
-        return counts
     }
 
     var body: some View {

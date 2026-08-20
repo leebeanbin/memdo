@@ -46,6 +46,37 @@ final class ScheduleModelTests: XCTestCase {
         XCTAssertFalse(task.occurs(on: nextDay))
     }
 
+    @MainActor
+    func testGroupedByOccurrenceDayCountsAMultiDayEventOnEveryDayItSpans() throws {
+        // CalendarView.scheduleCounts and ScheduleModel.updateWidgetSnapshot
+        // both independently pre-filtered then ran this exact day-by-day
+        // scan -- this pins the shared version's core reason for existing: a
+        // flat range filter on scheduledDate would only find this event on
+        // its start day, undercounting every day it actually spans.
+        let systemCalendar = Calendar(identifier: .gregorian)
+        let start = try XCTUnwrap(systemCalendar.date(from: DateComponents(year: 2026, month: 8, day: 9, hour: 23)))
+        let end = try XCTUnwrap(systemCalendar.date(from: DateComponents(year: 2026, month: 8, day: 11, hour: 1)))
+        let trip = ScheduleDetail(scheduledDate: start, startAt: start, endAt: end, title: "출장", calendar: calendar)
+
+        let monthStart = try XCTUnwrap(systemCalendar.date(from: DateComponents(year: 2026, month: 8, day: 1)))
+        let monthEnd = try XCTUnwrap(systemCalendar.date(from: DateComponents(year: 2026, month: 9, day: 1)))
+        let byDay = ScheduleStore.groupedByOccurrenceDay(
+            [trip],
+            in: DateInterval(start: monthStart, end: monthEnd),
+            calendar: systemCalendar
+        )
+
+        let day9 = try XCTUnwrap(systemCalendar.date(from: DateComponents(year: 2026, month: 8, day: 9)))
+        let day10 = try XCTUnwrap(systemCalendar.date(from: DateComponents(year: 2026, month: 8, day: 10)))
+        let day11 = try XCTUnwrap(systemCalendar.date(from: DateComponents(year: 2026, month: 8, day: 11)))
+        let day12 = try XCTUnwrap(systemCalendar.date(from: DateComponents(year: 2026, month: 8, day: 12)))
+
+        XCTAssertEqual(byDay[day9]?.count, 1)
+        XCTAssertEqual(byDay[day10]?.count, 1)
+        XCTAssertEqual(byDay[day11]?.count, 1)
+        XCTAssertNil(byDay[day12])
+    }
+
     func testDateFormattingKoreanUsesKoreanLocale() {
         // AssistantView/SlackNotifier/NotificationScheduler/BriefingFeed each
         // used to build their own DateFormatter and set this locale by hand.
