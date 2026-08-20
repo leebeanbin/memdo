@@ -791,13 +791,13 @@ private struct BriefingStoryDetail: View {
                                             .controlSize(.small)
                                             .tint(MemdoTheme.brand)
                                     } else {
-                                        Label("정리", systemImage: "sparkles")
+                                        Label("AI 요약", systemImage: "sparkles")
                                     }
                                 }
                                 .font(MemdoTypography.captionEmphasis)
                                 .foregroundStyle(MemdoTheme.brand)
                                 .disabled(isCleaningUp)
-                                .accessibilityLabel("Agent로 자연스럽게 정리하기")
+                                .accessibilityLabel("AI 요약으로 다시 정리하기")
                                 .transition(.opacity)
                             }
                         }
