@@ -59,8 +59,8 @@ quick_actions:
       prompt: 오늘 빈 시간에 집중 일정 1시간 추가해줘
     - label: 하루 정리
       prompt: 오늘 일정 핵심만 요약해줘
-    - label: 미완료 정리
-      prompt: 남은 할 일을 어떻게 처리할지 알려줘
+    - label: 완료 처리
+      prompt: 오늘 끝낸 할 일이 있으면 완료 처리해줘
 
 briefing:
   headline_instructions: |
