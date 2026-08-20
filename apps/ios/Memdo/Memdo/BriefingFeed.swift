@@ -183,6 +183,25 @@ actor BriefingRepository {
 
     static let shared = BriefingRepository()
 
+    private static let selectedCategoriesKey = "briefing-selected-categories"
+
+    /// Backed directly by UserDefaults rather than actor-isolated state, so
+    /// it can be read synchronously from a SwiftUI @State initializer and
+    /// written synchronously from .onChange -- matches AIConsent/
+    /// CloudAgentModelPreference's established pattern for UserDefaults-
+    /// backed preferences elsewhere in this app (AssistantView.swift).
+    nonisolated static var selectedCategories: Set<BriefingFeedCategory> {
+        get {
+            Set(
+                (UserDefaults.standard.stringArray(forKey: selectedCategoriesKey) ?? [])
+                    .compactMap(BriefingFeedCategory.init(rawValue:))
+            )
+        }
+        set {
+            UserDefaults.standard.set(newValue.map(\.rawValue).sorted(), forKey: selectedCategoriesKey)
+        }
+    }
+
     /// Fetch articles for the given categories, optionally filtered by keywords.
     /// Returns at most 20 items sorted newest-first, deduplicated by URL.
     func fetch(categories: [BriefingFeedCategory], keywords: [String]) async -> [FetchedItem] {

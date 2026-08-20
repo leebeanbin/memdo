@@ -259,16 +259,7 @@ struct TodayBriefingSection: View {
     @State private var isLoading = false
     @State private var aiSummary: String?
     @State private var showsBriefing = false
-    @State private var selectedCategories: Set<BriefingFeedCategory> = Self.storedCategories()
-
-    private static func storedCategories() -> Set<BriefingFeedCategory> {
-        (UserDefaults.standard.stringArray(forKey: "briefing-selected-categories") ?? [])
-            .reduce(into: []) { result, rawValue in
-                if let category = BriefingFeedCategory(rawValue: rawValue) {
-                    result.insert(category)
-                }
-            }
-    }
+    @State private var selectedCategories: Set<BriefingFeedCategory> = BriefingRepository.selectedCategories
 
     var body: some View {
         MemdoSection(
@@ -303,10 +294,7 @@ struct TodayBriefingSection: View {
         }
         .task(id: briefingTaskID) { await loadBriefing() }
         .onChange(of: selectedCategories) { _, categories in
-            UserDefaults.standard.set(
-                categories.map(\.rawValue).sorted(),
-                forKey: "briefing-selected-categories"
-            )
+            BriefingRepository.selectedCategories = categories
         }
     }
 
