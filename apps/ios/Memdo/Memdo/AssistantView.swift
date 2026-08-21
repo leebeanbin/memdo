@@ -284,14 +284,8 @@ struct AgentSheet: View {
         dispatchToModel(prompt)
     }
 
-    /// Turns already-settled messages into the flat history the stateless
-    /// cloud endpoint expects (it has no session of its own -- every call
-    /// resends the conversation so far, same as every other request in this
-    /// app being independently authenticated rather than session-based).
     private func cloudHistory() -> [AgentChatTurnDTO] {
-        messages
-            .filter { !$0.isStreaming && !$0.isError }
-            .map { AgentChatTurnDTO(role: $0.role == .user ? "user" : "assistant", content: $0.text) }
+        agentCloudHistory(from: messages)
     }
 
     private func sendWithCloudAgent(_ prompt: String) async {

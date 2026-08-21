@@ -210,6 +210,33 @@ final class ScheduleModelTests: XCTestCase {
         XCTAssertNotEqual(weekPrompts.map(\.1), monthPrompts.map(\.1))
     }
 
+    func testAgentCloudHistoryExcludesCurrentTurnAndUnsettledMessages() {
+        // send()/retry() both append (or leave) the current user turn as
+        // messages.last before calling this -- it must drop that trailing
+        // turn or the same turn gets sent twice (once as the last history
+        // entry, once again as the request's separate `message` field).
+        let previousUser = AgentMessage(role: .user, text: "이전 질문")
+        let previousAssistant = AgentMessage(role: .assistant, text: "이전 답변")
+        let currentUser = AgentMessage(role: .user, text: "현재 질문")
+
+        XCTAssertEqual(
+            agentCloudHistory(from: [previousUser, previousAssistant, currentUser]).map(\.content),
+            ["이전 질문", "이전 답변"]
+        )
+
+        let errorAssistant = AgentMessage(role: .assistant, text: "오류", isError: true)
+        XCTAssertEqual(
+            agentCloudHistory(from: [previousUser, errorAssistant, currentUser]).map(\.content),
+            ["이전 질문"]
+        )
+
+        let streamingAssistant = AgentMessage(role: .assistant, text: "...", isStreaming: true)
+        XCTAssertEqual(
+            agentCloudHistory(from: [previousUser, streamingAssistant, currentUser]).map(\.content),
+            ["이전 질문"]
+        )
+    }
+
     @MainActor
     func testAgentScheduleUpdateProposalStateTransitions() {
         // propose_schedule_update's state class had no View reading it for a
