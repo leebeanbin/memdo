@@ -20,21 +20,6 @@ func agentCloudHistory(from messages: [AgentMessage]) -> [AgentChatTurnDTO] {
 
 // MARK: - Schedule Proposal (Tool result)
 
-/// Resolves an agent-supplied date token ("today" | "tomorrow" | "yyyy-MM-dd")
-/// to a local calendar day. Shared by ProposedScheduleDraft and
-/// AgentScheduleUpdateProposal so the two proposal kinds agree on what these
-/// tokens mean.
-func resolveAgentDateToken(_ token: String) -> Date {
-    let cal = Calendar.current
-    switch token {
-    case "today":    return cal.startOfDay(for: .now)
-    case "tomorrow": return cal.startOfDay(for: cal.date(byAdding: .day, value: 1, to: .now) ?? .now)
-    default:
-        let f = DateFormatting.posix("yyyy-MM-dd")
-        return f.date(from: token).map { cal.startOfDay(for: $0) } ?? cal.startOfDay(for: .now)
-    }
-}
-
 /// Parses an agent-supplied "HH:mm" time onto the given day.
 func parseAgentTime(_ s: String, on date: Date) -> Date? {
     let parts = s.split(separator: ":").compactMap { Int($0) }
@@ -50,7 +35,15 @@ func displayAgentDateToken(_ token: String) -> String {
     case "today":    return "오늘"
     case "tomorrow": return "내일"
     default:
-        return DateFormatting.korean("M월 d일").string(from: resolveAgentDateToken(token))
+        // By the time a token reaches display, it was already validated via
+        // AgentDateExpression(token:) at whichever staging boundary produced
+        // it (ProposeScheduleTool/UpdateScheduleTool's call(arguments:), or
+        // AssistantView's cloud-response staging) -- this branch should only
+        // ever see an already-valid explicit yyyy-MM-dd. Falls back to the
+        // raw token text, not "오늘", if that invariant is ever violated, so
+        // a bug here is visible instead of silently mislabeled as today.
+        guard let expr = AgentDateExpression(token: token) else { return token }
+        return DateFormatting.korean("M월 d일").string(from: expr.resolvedDate())
     }
 }
 
@@ -70,7 +63,13 @@ struct ProposedScheduleDraft: Sendable, Equatable {
         return start + (endTimeString.map { " – \($0)" } ?? "")
     }
 
-    func scheduledDate() -> Date { resolveAgentDateToken(dateString) }
+    /// Same "already validated by the time this exists" invariant as
+    /// displayAgentDateToken -- ProposeScheduleTool.call(arguments:) and
+    /// AssistantView's cloud-response staging both reject an unparseable
+    /// date before a draft with that dateString is ever created.
+    func scheduledDate() -> Date {
+        AgentDateExpression(token: dateString)?.resolvedDate() ?? Calendar.current.startOfDay(for: .now)
+    }
 
     func toScheduleDetail(calendar: ScheduleCalendar) -> ScheduleDetail {
         let date    = scheduledDate()
@@ -218,6 +217,11 @@ struct ProposeScheduleTool: Tool {
     let existing: [ExistingItem]
 
     func call(arguments: Arguments) async throws -> String {
+        // Reject before staging anything -- an unparseable date must never
+        // silently become "today" (Issue A-04).
+        guard AgentDateExpression(token: arguments.date) != nil else {
+            return "날짜를 이해하지 못했어요. 다시 말씀해 주세요."
+        }
         let draft = ProposedScheduleDraft(
             title:           arguments.title,
             dateString:      arguments.date,
@@ -273,9 +277,20 @@ struct FindFreeSlotTool: Tool {
 
     let snapshot: [ScheduleInterval]
 
+    /// Same 15...480 minute bound the backend's findFreeSlotsArgsSchema
+    /// enforces (Issue A-04/B-04) -- clamping a model-supplied value that's
+    /// too small/large would silently answer a different question than
+    /// asked, so this rejects instead of clamping.
+    static let allowedDurationMinutes = 15...480
+
     func call(arguments: Arguments) async throws -> String {
-        let dates    = expandScope(arguments.scope)
-        let duration = TimeInterval(max(15, arguments.durationMinutes) * 60)
+        guard let dates = validScopeDates(arguments.scope) else {
+            return "요청한 기간을 이해하지 못했어요."
+        }
+        guard Self.allowedDurationMinutes.contains(arguments.durationMinutes) else {
+            return "요청한 시간이 너무 짧거나 길어요. 15분에서 8시간(480분) 사이로 다시 말씀해 주세요."
+        }
+        let duration = TimeInterval(arguments.durationMinutes * 60)
 
         var lines: [String] = []
         for date in dates {
@@ -289,7 +304,9 @@ struct FindFreeSlotTool: Tool {
         return lines.isEmpty ? "요청한 조건에 맞는 빈 시간을 찾지 못했어요." : lines.joined(separator: "\n")
     }
 
-    private func expandScope(_ scope: String) -> [Date] {
+    /// nil means the model produced a scope this tool doesn't understand --
+    /// callers must reject the call rather than defaulting to today.
+    private func validScopeDates(_ scope: String) -> [Date]? {
         let cal   = Calendar.current
         let today = cal.startOfDay(for: .now)
         switch scope {
@@ -297,8 +314,8 @@ struct FindFreeSlotTool: Tool {
         case "tomorrow":  return [cal.date(byAdding: .day, value: 1, to: today) ?? today]
         case "this_week": return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: today) }
         default:
-            let f = DateFormatting.posix("yyyy-MM-dd")
-            return [f.date(from: scope).map { cal.startOfDay(for: $0) } ?? today]
+            guard let expr = AgentDateExpression(token: scope) else { return nil }
+            return [expr.resolvedDate(calendar: cal)]
         }
     }
 
@@ -394,13 +411,26 @@ struct UpdateScheduleTool: Tool {
     let existing: [ExistingItem]
 
     func call(arguments: Arguments) async throws -> String {
+        guard let action = AgentUpdateAction(rawValue: arguments.action) else {
+            return "요청하신 작업을 이해하지 못했어요."
+        }
         guard let match = bestMatch(for: arguments.title) else {
             return "'\(arguments.title)'과(와) 일치하는 일정을 찾지 못했어요."
         }
 
+        // Reschedule requires a real target date -- an empty or unparseable
+        // one must be rejected outright, not silently treated as today
+        // (Issue A-04). complete/delete never carry a date at all.
+        var rescheduleDay: Date?
+        if action == .reschedule {
+            guard !arguments.date.isEmpty, let expr = AgentDateExpression(token: arguments.date) else {
+                return "옮길 날짜를 이해하지 못했어요. 다시 말씀해 주세요."
+            }
+            rescheduleDay = expr.resolvedDate()
+        }
+
         var conflict: ExistingItem?
-        if arguments.action == "reschedule", !arguments.date.isEmpty, !arguments.startTime.isEmpty {
-            let day = resolveAgentDateToken(arguments.date)
+        if let day = rescheduleDay, !arguments.startTime.isEmpty {
             if let start = parseAgentTime(arguments.startTime, on: day) {
                 let end = arguments.endTime.isEmpty
                     ? start.addingTimeInterval(3_600)
@@ -411,7 +441,7 @@ struct UpdateScheduleTool: Tool {
 
         await proposal.propose(
             id: match.id,
-            action: arguments.action,
+            action: action.rawValue,
             title: match.title,
             dateString: arguments.date.isEmpty ? nil : arguments.date,
             startTimeString: arguments.startTime.isEmpty ? nil : arguments.startTime,

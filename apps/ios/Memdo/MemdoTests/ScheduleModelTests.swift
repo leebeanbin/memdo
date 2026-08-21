@@ -86,8 +86,8 @@ final class ScheduleModelTests: XCTestCase {
     }
 
     func testDateFormattingPosixParsesRegardlessOfDeviceLocale() {
-        // AssistantView's two "yyyy-MM-dd" parse sites (resolveAgentDateToken,
-        // FindFreeSlotTool.expandScope) and BriefingFeed's currentDateString()
+        // AssistantView's two "yyyy-MM-dd" parse sites (AgentDateExpression.init?,
+        // FindFreeSlotTool.validScopeDates) and BriefingFeed's currentDateString()
         // built a bare DateFormatter() with no locale at all -- Apple's
         // documented fix for "fixed-format" parsing being silently affected
         // by the device's actual locale/calendar is `en_US_POSIX`, which
@@ -412,5 +412,77 @@ final class ScheduleModelTests: XCTestCase {
         let result = try await tool.call(arguments: .init(title: "존재하지 않는 일정", action: "delete", date: "", startTime: "", endTime: ""))
         XCTAssertFalse(proposal.isPending)
         XCTAssertTrue(result.contains("찾지 못했어요"))
+    }
+
+    func testAgentDateExpressionRejectsInvalidTokens() {
+        XCTAssertNil(AgentDateExpression(token: "2026-99-40"))
+        XCTAssertNil(AgentDateExpression(token: "banana"))
+        XCTAssertNil(AgentDateExpression(token: "someday"))
+        XCTAssertEqual(AgentDateExpression(token: "today"), .today)
+        XCTAssertEqual(AgentDateExpression(token: "tomorrow"), .tomorrow)
+        XCTAssertNotNil(AgentDateExpression(token: "2026-09-01"))
+    }
+
+    func testAgentUpdateActionRejectsUnknownValues() {
+        XCTAssertNil(AgentUpdateAction(rawValue: "cancel"))
+        XCTAssertNil(AgentUpdateAction(rawValue: ""))
+        XCTAssertEqual(AgentUpdateAction(rawValue: "complete"), .complete)
+        XCTAssertEqual(AgentUpdateAction(rawValue: "reschedule"), .reschedule)
+        XCTAssertEqual(AgentUpdateAction(rawValue: "delete"), .delete)
+    }
+
+    @available(iOS 26, *)
+    @MainActor
+    func testUpdateScheduleToolRejectsInvalidActionOrRescheduleDate() async throws {
+        // Issue A-04: an invalid action or an unparseable/missing reschedule
+        // date must never reach updateProposal -- checking the returned
+        // string alone isn't enough, since a bug could return an error
+        // while still having mutated state first (mutation-absence).
+        let cal = Calendar(identifier: .gregorian)
+        let today = cal.startOfDay(for: .now)
+        let existing = [
+            UpdateScheduleTool.ExistingItem(id: "id-1", title: "팀 회의", scheduledDate: today, startAt: nil, endAt: nil),
+        ]
+        let proposal = AgentScheduleUpdateProposal()
+        let tool = UpdateScheduleTool(proposal: proposal, existing: existing)
+
+        _ = try await tool.call(arguments: .init(title: "팀 회의", action: "cancel", date: "", startTime: "", endTime: ""))
+        XCTAssertFalse(proposal.isPending)
+
+        _ = try await tool.call(arguments: .init(title: "팀 회의", action: "reschedule", date: "", startTime: "", endTime: ""))
+        XCTAssertFalse(proposal.isPending)
+
+        _ = try await tool.call(arguments: .init(title: "팀 회의", action: "reschedule", date: "banana", startTime: "", endTime: ""))
+        XCTAssertFalse(proposal.isPending)
+    }
+
+    @available(iOS 26, *)
+    @MainActor
+    func testProposeScheduleToolRejectsInvalidDate() async throws {
+        let proposal = AgentScheduleProposal()
+        let tool = ProposeScheduleTool(proposal: proposal, existing: [])
+
+        let result = try await tool.call(arguments: .init(
+            title: "치과", date: "banana", startTime: "15:00", endTime: "", isTask: false, note: ""
+        ))
+        XCTAssertNil(proposal.draft)
+        XCTAssertTrue(result.contains("이해하지 못했어요"))
+    }
+
+    @available(iOS 26, *)
+    func testFindFreeSlotToolRejectsScopeAndDurationOutsideContract() async throws {
+        // Same 15...480 minute bound the backend's findFreeSlotsArgsSchema
+        // enforces (Issue A-04/B-04) -- neither end should be silently
+        // clamped into range, both must be rejected outright.
+        let tool = FindFreeSlotTool(snapshot: [])
+
+        let badScope = try await tool.call(arguments: .init(scope: "someday", durationMinutes: 30, windowStart: "", windowEnd: ""))
+        XCTAssertTrue(badScope.contains("이해하지 못했어요"))
+
+        let tooShort = try await tool.call(arguments: .init(scope: "today", durationMinutes: 5, windowStart: "", windowEnd: ""))
+        XCTAssertTrue(tooShort.contains("짧거나 길어요"))
+
+        let tooLong = try await tool.call(arguments: .init(scope: "today", durationMinutes: 999, windowStart: "", windowEnd: ""))
+        XCTAssertTrue(tooLong.contains("짧거나 길어요"))
     }
 }

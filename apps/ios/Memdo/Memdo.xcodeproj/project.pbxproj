@@ -53,6 +53,7 @@
 		BFC6AD583CB383FAF7ABE782 /* SlackNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 420E092EB2A4627375577F43 /* SlackNotifier.swift */; };
 		C535C49F5AF818D049EE98AE /* GoogleCalendarSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E9F76C022917F1D22E0D1CE /* GoogleCalendarSettings.swift */; };
 		C760F0C4525ACB0698EEC474 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = 766260AB78CE2A6DF35FC443 /* Yams */; };
+		C87861497E1330A80544FE13 /* AgentIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D11582497A9B52756B755E /* AgentIntent.swift */; };
 		C937284F923DF277B8EE53B3 /* Pretendard-SemiBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 38E5C3282FBC0EF28AA5FBD5 /* Pretendard-SemiBold.otf */; };
 		CA69FB6F6D5B184690B56D4A /* ScheduleModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3F01099D4577BD460F6C20F /* ScheduleModelTests.swift */; };
 		D2A3E9135268890871957A27 /* CloudAgentSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15F344D2A79A26B779462E85 /* CloudAgentSettings.swift */; };
@@ -143,6 +144,7 @@
 		83EC68D64631B324F171F399 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8640DA0A68D661636709CCDD /* Pretendard-Bold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pretendard-Bold.otf"; sourceTree = "<group>"; };
 		8996DE47EAC9D1762FB6DCAD /* SlackSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackSettings.swift; sourceTree = "<group>"; };
+		89D11582497A9B52756B755E /* AgentIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIntent.swift; sourceTree = "<group>"; };
 		8FD6B2D482673663626353C2 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
 		97B6BAE4945DFFB47769CA5C /* Pretendard-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Pretendard-LICENSE.txt"; sourceTree = "<group>"; };
 		99214A59192502A52C8A73AD /* MemdoGuideSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoGuideSheet.swift; sourceTree = "<group>"; };
@@ -251,6 +253,7 @@
 			isa = PBXGroup;
 			children = (
 				B892B8303D8BC814A1CFDC23 /* AgentComponents.swift */,
+				89D11582497A9B52756B755E /* AgentIntent.swift */,
 				4CCEC3682202DC527390D6C3 /* AgentPrompts.swift */,
 				DC83A92A9DA90179F3E5254E /* AgentTabBridge.swift */,
 				C6D1987E0D3F1E0418371476 /* AgentTools.swift */,
@@ -482,6 +485,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F4F9034A72064E154F3CB506 /* AgentComponents.swift in Sources */,
+				C87861497E1330A80544FE13 /* AgentIntent.swift in Sources */,
 				567B8523F98FA34B84994096 /* AgentPrompts.swift in Sources */,
 				190B58650DDB5E6EBE7AD2AC /* AgentTabBridge.swift in Sources */,
 				2E79B85E1483FF6B965024C6 /* AgentTools.swift in Sources */,

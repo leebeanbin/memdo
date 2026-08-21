@@ -318,31 +318,47 @@ struct AgentSheet: View {
                     messages[index].text += delta
                 }
             }
+            // Trust-boundary re-validation: agent-tool-contract.ts already
+            // rejects an invalid date before staging server-side, so this
+            // should be unreachable in production -- it defends against a
+            // client/backend version skew (either side shipped
+            // independently) rather than distrusting a healthy backend.
+            // Never stage a proposal this client can't itself render/resolve
+            // correctly (Issue A-04).
             if let proposed = result.proposedSchedule {
-                proposal.propose(
-                    ProposedScheduleDraft(
-                        title: proposed.title,
-                        dateString: proposed.date,
-                        startTimeString: proposed.startTime?.isEmpty == false ? proposed.startTime : nil,
-                        endTimeString: proposed.endTime?.isEmpty == false ? proposed.endTime : nil,
-                        isTask: proposed.isTask,
-                        note: proposed.note?.isEmpty == false ? proposed.note : nil
-                    ),
-                    conflictTitle: proposed.conflictTitle,
-                    conflictCheckFailed: proposed.conflictCheckFailed ?? false
-                )
+                if AgentDateExpression(token: proposed.date) != nil {
+                    proposal.propose(
+                        ProposedScheduleDraft(
+                            title: proposed.title,
+                            dateString: proposed.date,
+                            startTimeString: proposed.startTime?.isEmpty == false ? proposed.startTime : nil,
+                            endTimeString: proposed.endTime?.isEmpty == false ? proposed.endTime : nil,
+                            isTask: proposed.isTask,
+                            note: proposed.note?.isEmpty == false ? proposed.note : nil
+                        ),
+                        conflictTitle: proposed.conflictTitle,
+                        conflictCheckFailed: proposed.conflictCheckFailed ?? false
+                    )
+                } else {
+                    appendRecoverableErrorIfNoAssistantText(messageID: messageID)
+                }
             }
             if let proposedUpdate = result.proposedScheduleUpdate {
-                updateProposal.propose(
-                    id: proposedUpdate.id,
-                    action: proposedUpdate.action,
-                    title: proposedUpdate.title,
-                    dateString: proposedUpdate.date,
-                    startTimeString: proposedUpdate.startTime?.isEmpty == false ? proposedUpdate.startTime : nil,
-                    endTimeString: proposedUpdate.endTime?.isEmpty == false ? proposedUpdate.endTime : nil,
-                    conflictTitle: proposedUpdate.conflictTitle,
-                    conflictCheckFailed: proposedUpdate.conflictCheckFailed ?? false
-                )
+                let dateIsValid = proposedUpdate.date.map { AgentDateExpression(token: $0) != nil } ?? true
+                if dateIsValid {
+                    updateProposal.propose(
+                        id: proposedUpdate.id,
+                        action: proposedUpdate.action,
+                        title: proposedUpdate.title,
+                        dateString: proposedUpdate.date,
+                        startTimeString: proposedUpdate.startTime?.isEmpty == false ? proposedUpdate.startTime : nil,
+                        endTimeString: proposedUpdate.endTime?.isEmpty == false ? proposedUpdate.endTime : nil,
+                        conflictTitle: proposedUpdate.conflictTitle,
+                        conflictCheckFailed: proposedUpdate.conflictCheckFailed ?? false
+                    )
+                } else {
+                    appendRecoverableErrorIfNoAssistantText(messageID: messageID)
+                }
             }
         } catch ScheduleAPIError.server(_, let code, _, _) where code == "RESOURCE_NOT_FOUND" {
             if let index = messages.firstIndex(where: { $0.id == messageID }) {
@@ -362,6 +378,17 @@ struct AgentSheet: View {
                 messages[index].isError = true
             }
         }
+    }
+
+    /// Only shown when there's no useful assistant text already on screen --
+    /// the backend typically already told the model INVALID_AGENT_ARGUMENT,
+    /// which usually produces its own clarifying reply in the streamed text,
+    /// so adding a second error here on top of that would just duplicate it.
+    private func appendRecoverableErrorIfNoAssistantText(messageID: AgentMessage.ID) {
+        guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
+        guard messages[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        messages[index].text = "요청하신 내용을 정확히 이해하지 못했어요. 다시 말씀해 주시겠어요?"
+        messages[index].isError = true
     }
 
     private func resetConversation() {
@@ -392,12 +419,22 @@ struct AgentSheet: View {
     /// up the exact same offline-outbox/optimistic-rollback/version-conflict
     /// handling those already have, instead of a second, divergent path.
     private func confirmScheduleUpdateProposal() {
-        guard let idString = updateProposal.id, let id = UUID(uuidString: idString),
-              let action = updateProposal.action else { return }
+        guard let idString = updateProposal.id, let id = UUID(uuidString: idString) else { return }
         let title = updateProposal.title ?? "일정"
 
+        // Both staging points (UpdateScheduleTool.call(arguments:) on-device,
+        // the cloud-response staging block above) already validate action/
+        // date before ever reaching updateProposal -- this guard should be
+        // unreachable, but on failure it surfaces an explicit error rather
+        // than silently doing nothing (the old `default: break`).
+        guard let action = updateProposal.action.flatMap(AgentUpdateAction.init(rawValue:)) else {
+            messages.append(AgentMessage(role: .assistant, text: "요청하신 작업을 처리하지 못했어요.", isError: true))
+            withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
+            return
+        }
+
         switch action {
-        case "complete":
+        case .complete:
             // toggleDone silently no-ops for a non-task item (events have no
             // completion state in this app) -- check first so the confirmation
             // message never claims a change that didn't happen.
@@ -407,8 +444,13 @@ struct AgentSheet: View {
             } else {
                 messages.append(AgentMessage(role: .assistant, text: "'\(title)'은(는) 완료 처리할 수 없는 일정이에요.", isError: true))
             }
-        case "reschedule":
-            let day = resolveAgentDateToken(updateProposal.dateString ?? "today")
+        case .reschedule:
+            guard let dateString = updateProposal.dateString,
+                  let expr = AgentDateExpression(token: dateString) else {
+                messages.append(AgentMessage(role: .assistant, text: "옮길 날짜를 처리하지 못했어요.", isError: true))
+                break
+            }
+            let day = expr.resolvedDate()
             var startAt: Date?
             var endAt: Date?
             if let startString = updateProposal.startTimeString,
@@ -419,11 +461,9 @@ struct AgentSheet: View {
             }
             scheduleStore.move(id: id, to: day, startAt: startAt, endAt: endAt)
             messages.append(AgentMessage(role: .assistant, text: "'\(title)' 일정을 옮겼어요 ✓"))
-        case "delete":
+        case .delete:
             scheduleStore.delete(id: id)
             messages.append(AgentMessage(role: .assistant, text: "'\(title)' 일정을 삭제했어요 ✓"))
-        default:
-            break
         }
         withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
     }
