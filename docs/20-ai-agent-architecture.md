@@ -160,18 +160,18 @@ LLM은 Agent 그 자체가 아니라 **자연어를 제한된 도구 호출로 �
 
 **Invalid Model Output 정책(목표)**: 도구 인자가 계약을 벗어나면 그 필드를 조용한 기본값으로 메우지 않고, 명시적으로 실패시키거나(도구 결과에 에러를 돌려줘 모델이 재시도/재질문하게 함) 확인 카드 자체를 띄우지 않는다. `propose_schedule`의 서버측 Reflection이 충돌 조회 실패를 `conflictCheckFailed=true`로 분리해 절대 "충돌 없음"으로 조용히 넘어가지 않는 것이 이미 이 정책을 따르는 예다.
 
-**v1 기준 실제 상태**(2026-08-22 코드 감사):
+**v1 기준 실제 상태**(2026-08-22 코드 감사, Sprint 1 "Agent Correctness Baseline" 완료 후 갱신):
 
 | 항목 | 상태 |
 |---|---|
 | `systemPrompt()`의 "오늘"이 `resolveDate`와 다른 타임존 기준을 쓰던 문제 | **해결됨** — `agent-cloud-chat/index.ts`가 이제 `resolveDate('today', today)`를 그대로 사용 |
 | `propose_schedule`/`find_free_slots`의 서버측 시간 충돌 재검사 | **이미 정책 준수** — 모델이 `search_schedules`를 먼저 안 불러도 서버가 강제 재검사, 실패 시 fail-closed |
-| `find_free_slots`의 JSON 도구 스키마 (`scope`/`windowStart`/`windowEnd`/`durationMinutes`) | **미해결** — `enum`/`pattern`/`maximum` 없음. `windowStart`/`windowEnd`는 파싱 실패 시 08:00/22:00 기본값으로 안전하게 폴백하지만(위험하지 않음), `durationMinutes`는 상한이 없다 |
-| `propose_schedule`/`propose_schedule_update`의 `date` 필드가 `resolveDate`를 통과 못 하는 임의 문자열일 때 | **미해결** — `resolveDate`는 `today`/`tomorrow`/`yesterday`가 아니면 토큰을 그대로 반환하므로(`agent-cloud-contract.ts:298`), 잘못된 날짜 문자열이 그대로 제안에 실려 클라이언트까지 간다 |
-| iOS `resolveAgentDateToken`이 파싱 실패한 날짜 토큰을 처리하는 방식 (`AgentTools.swift:17`) | **미해결, 가장 위험** — `?? cal.startOfDay(for: .now)`로 조용히 "오늘"로 대체한다. 위 항목과 이어지면: 모델이 잘못된 날짜 문자열을 만듦 → 서버는 그대로 제안에 담아 전달 → 클라이언트는 조용히 "오늘"로 표시된 확인 카드를 띄움 → 사용자가 대충 승인하면 의도한 날짜가 아닌 오늘 날짜로 일정이 생성/이동됨. 온디바이스·클라우드 확인 카드가 공유하는 함수라 두 경로 모두 영향받는다 |
-| `propose_routine_update`/`propose_review_actions`의 확인 카드 | **미구현** — 서버는 정상적으로 제안을 staging해서 `done` payload에 싣지만(§8), iOS `ScheduleAPI.swift`의 Decodable DTO에 해당 필드가 없어 조용히 무시된다. 지금 이 두 도구를 모델이 호출하면 화면에 아무 반응도 없다 |
+| `find_free_slots`의 JSON 도구 스키마 (`scope`/`windowStart`/`windowEnd`/`durationMinutes`) | **해결됨** — `_shared/agent-tool-contract.ts`의 `findFreeSlotsArgsSchema`가 `scope` enum + `durationMinutes` 15~480 상하한을 실제로 강제(`parseAgentToolCall`이 `dispatchToolCall`의 handler 실행 전에 거부). iOS `FindFreeSlotTool`도 같은 15~480 범위를 clamp 대신 reject로 통일 |
+| `propose_schedule`/`propose_schedule_update`의 `date` 필드가 `resolveDate`를 통과 못 하는 임의 문자열일 때 | **해결됨** — `dateExpressionSchema`(`today`/`tomorrow`/실제 존재하는 `yyyy-MM-dd`, `z.iso.date()`)가 `parseAgentToolCall`에서 먼저 검증되므로, `resolveDate`는 이제 이미 유효한 토큰만 받는다 |
+| iOS `resolveAgentDateToken`이 파싱 실패한 날짜 토큰을 처리하는 방식 | **해결됨** — 함수 자체를 제거하고 실패 가능한 `AgentDateExpression(token:)`(`AgentIntent.swift`)로 대체. `ProposeScheduleTool`/`UpdateScheduleTool`/`FindFreeSlotTool.call(arguments:)`와 `AssistantView`의 클라우드 응답 스테이징 지점 모두 파싱 실패 시 스테이징하지 않고 설명 문자열만 반환한다. `UpdateScheduleTool.Arguments.action`도 제약 없는 `String`에서 `AgentUpdateAction` enum 검증으로 바뀌었고, `AssistantView`의 `switch action`도 `default: break`가 아니라 명시적 에러 메시지를 남긴다 |
+| `propose_routine_update`/`propose_review_actions`의 확인 카드 | **미구현, Sprint 1 범위 밖** — 서버는 정상적으로 제안을 staging해서 `done` payload에 싣지만(§8), iOS `ScheduleAPI.swift`의 Decodable DTO에 해당 필드가 없어 조용히 무시된다. 지금 이 두 도구를 모델이 호출하면 화면에 아무 반응도 없다 |
 
-**v1에서 하지 않은 것**: 위 미해결 항목의 실제 코드 수정, Eval Dataset 구축(§14), 모델 capability 기반 registry(§15 확장 조건과 별개로 아직 시작 전). 이 절은 목표 정책과 현재 상태의 격차를 기록하는 감사이지, 전부 고쳤다는 뜻이 아니다.
+**v1에서 하지 않은 것**: `propose_routine_update`/`propose_review_actions` 확인 카드, Eval Dataset 구축(§14), 모델 capability 기반 registry(§15), 완전한 `AgentIntent`/`CLARIFICATION_REQUIRED` union(Epic B의 B-03/B-05, `eval/agent-v0/README.md`도 이 라벨들을 "runtime enum 아님"으로 명시). 위 표의 나머지 항목은 Sprint 1(A-01~A-04, B-01/B-02/B-04)에서 실제로 고쳤다 — `memdo-backend`의 `_shared/agent-tool-contract.ts`, `apps/ios/Memdo/Memdo/AgentIntent.swift`가 그 결과물이다.
 
 ## 6. 도구 네이밍
 
@@ -274,13 +274,13 @@ search_schedules/findFreeSlots 결과: limit(200) -- 페이지네이션 없음
 - 인증 사용자 ID는 `context.userClaims`에서 서버가 주입 -- 모델 입력이 아님(원래 설계대로 유지)
 - `search_schedules`/`findFreeSlots` 결과는 200건으로 제한
 - SQL·URL·토큰을 도구 인자로 받는 도구 없음
-- **미달**: 개별 도구 인자의 JSON Schema에 `enum`/`pattern`/`maximum` 같은 강한 제약이 없다(§5-1) -- 요청 레벨(`chatRequestSchema`)은 검증되지만 tool-call 인자는 `JSON.parse` 이후 바로 쓰인다
+- 개별 도구 인자는 `_shared/agent-tool-contract.ts`의 `parseAgentToolCall`이 `dispatchToolCall`의 handler 실행 전에 Zod로 검증(§5-1) -- `cloudAgentTools`의 JSON Schema 자체는 여전히 느슨하지만(모델에게 보여주는 안내일 뿐, 강제력 없음), 실제 강제는 이 Zod 레이어가 한다
 
 ### 출력
 
 - `propose_schedule_update`는 존재하지 않는(또는 삭제된) id를 `fetchScheduleById`가 `null`로 걸러 거부
 - `propose_schedule`/`propose_schedule_update` 모두 서버가 직접 재조회해 충돌을 검사(모델이 `search_schedules`를 먼저 안 불렀어도 강제) -- 실패 시 "충돌 없음"으로 조용히 넘기지 않고 `conflictCheckFailed`로 분리(fail-closed)
-- **미달**: "허용 범위 밖의 필드 제거"에 해당하는 명시적 화이트리스트 필터링은 없다 -- `state.proposedSchedule = args`처럼 모델 인자를 거의 그대로 staging 후 클라이언트에 전달한다
+- "허용 범위 밖의 필드 제거"는 Zod 스키마의 기본 strip 동작(정의 안 된 키는 조용히 제거)으로 이미 이루어진다 -- `propose_schedule_update`는 한 걸음 더 나가 `action`별 `.strict()` discriminated union이라 `complete`/`delete`에 `date`/`startTime`이 섞여 오면 필드를 조용히 버리지 않고 아예 `INVALID_AGENT_ARGUMENT`로 거부한다
 - 최대 작업 수 5개는 `MAX_TOOL_ITERATIONS`로 반영(§10)
 
 ## 13. 감사와 추적 (실제 상태)
