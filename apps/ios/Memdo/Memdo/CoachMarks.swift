@@ -194,17 +194,17 @@ private struct CoachMarkOverlay: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("\(index + 1) / \(count)")
-                    .font(.caption.weight(.semibold))
+                    .font(MemdoTypography.captionEmphasis)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("건너뛰기", action: onSkip)
-                    .font(.caption.weight(.semibold))
+                    .font(MemdoTypography.captionEmphasis)
             }
             Text(step.title)
-                .font(.headline)
+                .font(MemdoTypography.sectionTitle)
                 .accessibilityFocused($isFocused)
             Text(step.message)
-                .font(.subheadline)
+                .font(MemdoTypography.subtitle)
                 .foregroundStyle(.secondary)
             HStack {
                 if index > 0 {

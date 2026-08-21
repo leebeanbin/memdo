@@ -1,3 +1,4 @@
+import FoundationModels
 import SafariServices
 import SwiftUI
 
@@ -36,7 +37,7 @@ struct TodayHeader: View {
     private var guideButton: some View {
         Button(action: onOpenGuide) {
             Image(systemName: "questionmark.circle")
-                .font(.title3)
+                .font(MemdoTypography.title3)
                 .foregroundStyle(MemdoTheme.secondaryInk)
                 .frame(width: 40, height: 48)
                 .contentShape(Rectangle())
@@ -48,13 +49,13 @@ struct TodayHeader: View {
     private var titleGroup: some View {
         VStack(alignment: .leading, spacing: 4) {
                 Text(eyebrow)
-                    .font(.caption.weight(.bold))
+                    .font(MemdoTypography.captionEmphasis)
                     .foregroundStyle(MemdoTheme.brand)
                 Text(title)
                     .font(.system(.title2, design: .rounded, weight: .bold))
                     .foregroundStyle(MemdoTheme.ink)
                 Text(subtitle)
-                    .font(.subheadline.weight(.medium))
+                    .font(MemdoTypography.action)
                     .foregroundStyle(MemdoTheme.secondaryInk)
         }
     }
@@ -70,9 +71,9 @@ struct TodayHeader: View {
                         .rotationEffect(.degrees(-90))
                     VStack(spacing: 0) {
                         Text("\(completedCount)/\(totalCount)")
-                            .font(.caption.weight(.bold))
+                            .font(MemdoTypography.metric.monospacedDigit())
                         Text("완료")
-                            .font(.caption2.weight(.semibold))
+                            .font(MemdoTypography.caption2Emphasis)
                             .foregroundStyle(MemdoTheme.secondaryInk)
                     }
             }
@@ -124,10 +125,10 @@ struct TodayWeekIndex: View {
 
         return Button { onSelect(date) } label: {
                     VStack(spacing: 4) {
-                        Text(date.formatted(.dateTime.weekday(.narrow)))
-                            .font(.caption2.weight(.semibold))
+                        Text(date.formatted(.dateTime.weekday(.narrow).locale(Locale(identifier: "ko_KR"))))
+                            .font(MemdoTypography.captionEmphasis)
                         Text("\(Calendar.current.component(.day, from: date))")
-                            .font(.subheadline.weight(.semibold))
+                            .font(MemdoTypography.action.monospacedDigit())
                         MemdoScheduleCountDots(
                             count: count,
                             isEmphasized: isSelected
@@ -138,7 +139,9 @@ struct TodayWeekIndex: View {
                     .background(isSelected ? MemdoTheme.accent : Color.clear)
                     .clipShape(Capsule())
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel(date.formatted(.dateTime.month().day().weekday(.wide)))
+                    .accessibilityLabel(
+                        date.formatted(.dateTime.month().day().weekday(.wide).locale(Locale(identifier: "ko_KR")))
+                    )
         }
         .buttonStyle(.plain)
         .simultaneousGesture(
@@ -162,20 +165,20 @@ struct TodayIntentionPrompt: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("오늘의 방향", systemImage: "sparkle")
-                        .font(.caption.weight(.bold))
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.brand)
                     Text(isToday ? "오늘은 어떤 하루를 보내고 싶나요?" : "이날에는 어떤 시간을 보내고 싶나요?")
-                        .font(.headline)
+                        .font(MemdoTypography.sectionTitle)
                         .foregroundStyle(MemdoTheme.ink)
                     Text("계획이 비어 있을 때 가볍게 시작해보세요")
-                        .font(.subheadline)
+                        .font(MemdoTypography.subtitle)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                 }
 
                 Spacer(minLength: 0)
                 if !dynamicTypeSize.isAccessibilitySize {
                     Image(systemName: "plus")
-                        .font(.subheadline.weight(.bold))
+                        .font(MemdoTypography.action)
                         .foregroundStyle(MemdoTheme.brand)
                         .frame(width: 36, height: 36)
                         .background(MemdoTheme.brandSoft, in: Circle())
@@ -256,87 +259,98 @@ struct TodayBriefingSection: View {
     @State private var isLoading = false
     @State private var aiSummary: String?
     @State private var showsBriefing = false
-    // Seeded from UserDefaults and kept in sync via didChangeNotification so
-    // interest edits in Settings show up here without an app relaunch.
-    @State private var selectedCategories: [BriefingFeedCategory] = Self.storedCategories()
-    @State private var selectedKeywords: [String] = Self.storedKeywords()
-
-    private static func storedCategories() -> [BriefingFeedCategory] {
-        (UserDefaults.standard.stringArray(forKey: "briefing-selected-categories") ?? [])
-            .compactMap { BriefingFeedCategory(rawValue: $0) }
-    }
-
-    private static func storedKeywords() -> [String] {
-        UserDefaults.standard.stringArray(forKey: "briefing-selected-keywords") ?? []
-    }
-
-    private var isEnabled: Bool { !selectedCategories.isEmpty || !selectedKeywords.isEmpty }
+    @State private var selectedCategories: Set<BriefingFeedCategory> = BriefingRepository.selectedCategories
 
     var body: some View {
-        Group {
-            if isEnabled {
-                MemdoSection(
-                    title: "오늘의 브리핑",
-                    trailing: isLoading && items.isEmpty ? "업데이트 중" : nil
-                ) {
-                    if isLoading && items.isEmpty {
-                        BriefingLoadingRow()
-                    } else if items.isEmpty {
-                        MemdoStatusRow(
-                            title: "불러온 기사가 없어요",
-                            systemImage: "newspaper",
-                            detail: "관심 분야와 키워드를 확인해주세요.",
-                            tint: MemdoTheme.secondaryInk
-                        )
-                    } else {
-                        BriefingPreview(
-                            summary: aiSummary,
-                            item: items[0],
-                            count: min(items.count, 5),
-                            onTap: { showsBriefing = true }
-                        )
-                    }
-                }
-                .sheet(isPresented: $showsBriefing) {
-                    BriefingSheet(items: Array(items.prefix(5)), summary: aiSummary)
-                        .memdoSheetPresentation([.medium, .large])
-                }
+        MemdoSection(
+            title: "오늘의 브리핑",
+            trailing: isLoading && items.isEmpty ? "업데이트 중" : nil
+        ) {
+            if isLoading && items.isEmpty {
+                BriefingLoadingRow()
+            } else if items.isEmpty {
+                MemdoStatusRow(
+                    title: "브리핑을 준비하지 못했어요",
+                    systemImage: "newspaper",
+                    detail: "잠시 후 최신 뉴스를 다시 확인해주세요.",
+                    tint: MemdoTheme.secondaryInk
+                )
+            } else {
+                BriefingPreview(
+                    summary: aiSummary,
+                    item: items[0],
+                    count: min(items.count, 5),
+                    onTap: { showsBriefing = true }
+                )
             }
         }
+        .sheet(isPresented: $showsBriefing) {
+            BriefingSheet(
+                items: Array(items.prefix(5)),
+                summary: aiSummary,
+                selectedCategories: $selectedCategories
+            )
+            .memdoSheetPresentation([.large])
+        }
         .task(id: briefingTaskID) { await loadBriefing() }
-        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
-            let categories = Self.storedCategories()
-            let keywords = Self.storedKeywords()
-            if categories != selectedCategories { selectedCategories = categories }
-            if keywords != selectedKeywords { selectedKeywords = keywords }
+        .onChange(of: selectedCategories) { _, categories in
+            BriefingRepository.selectedCategories = categories
         }
     }
 
-    // Re-runs the fetch whenever interests change (task(id:) cancels the old one).
     private var briefingTaskID: String {
-        selectedCategories.map(\.rawValue).joined(separator: ",")
-            + "|" + selectedKeywords.joined(separator: ",")
+        selectedCategories.map(\.rawValue).sorted().joined(separator: ",")
     }
 
     private func loadBriefing() async {
-        guard isEnabled else {
-            items = []
-            aiSummary = nil
-            return
-        }
         isLoading = true
-        let cats = selectedCategories
-        let kws  = selectedKeywords
-        let fetched = await BriefingRepository.shared.fetchWithCache(categories: cats, keywords: kws)
-        items = fetched
+        let fetched = await BriefingRepository.shared.fetchWithCache(
+            categories: BriefingFeedCategory.allCases,
+            keywords: []
+        )
+        let curated = Self.curatedItems(fetched, selectedCategories: selectedCategories)
+        items = curated
         isLoading = false
 
-        // AI summary runs after articles are visible (returns instantly from cache if same day)
         if #available(iOS 26, *) {
             aiSummary = await BriefingRepository.shared.summarize(
-                items: fetched, categories: cats, keywords: kws
+                items: curated,
+                categories: selectedCategories.isEmpty
+                    ? BriefingFeedCategory.allCases
+                    : BriefingFeedCategory.allCases.filter(selectedCategories.contains),
+                keywords: []
             )
+        } else {
+            aiSummary = nil
         }
+    }
+
+    static func curatedItems(
+        _ items: [BriefingRepository.FetchedItem],
+        selectedCategories: Set<BriefingFeedCategory>,
+        limit: Int = 5
+    ) -> [BriefingRepository.FetchedItem] {
+        guard limit > 0 else { return [] }
+
+        var result = selectedCategories.isEmpty
+            ? []
+            : Array(items.filter { selectedCategories.contains($0.category) }.prefix(min(3, limit)))
+        var usedIDs = Set(result.map(\.id))
+        var representedCategories = Set(result.map(\.category))
+
+        for item in items where result.count < limit {
+            guard !usedIDs.contains(item.id), !representedCategories.contains(item.category) else { continue }
+            result.append(item)
+            usedIDs.insert(item.id)
+            representedCategories.insert(item.category)
+        }
+
+        for item in items where result.count < limit {
+            guard usedIDs.insert(item.id).inserted else { continue }
+            result.append(item)
+        }
+
+        return result
     }
 }
 
@@ -356,30 +370,30 @@ private struct BriefingPreview: View {
     }
 
     private var metadata: String {
-        count > 1 ? "\(item.sourceName) 외 \(count - 1)개 · 1분" : "\(item.sourceName) · 1분"
+        "\(count)개 · 약 3분"
     }
 
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 8) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Label("AI 요약", systemImage: "sparkles")
-                        .font(.caption2.weight(.semibold))
+                    Text("오늘 꼭 알아둘 변화")
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.brand)
                     Text(previewText)
-                        .font(.headline.weight(.semibold))
+                        .font(MemdoTypography.sectionTitle)
                         .foregroundStyle(MemdoTheme.ink)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
 
                 HStack(spacing: 8) {
-                    Text(metadata)
-                        .font(.caption)
+                    Text("\(item.sourceName) · \(metadata)")
+                        .font(MemdoTypography.caption)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                     Spacer(minLength: 8)
                     Image(systemName: "arrow.right")
-                        .font(.caption.weight(.semibold))
+                        .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                         .accessibilityHidden(true)
                 }
@@ -398,47 +412,78 @@ private struct BriefingPreview: View {
 
 private struct BriefingSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var safariItem: BriefingLink?
     let items: [BriefingRepository.FetchedItem]
     let summary: String?
+    @Binding var selectedCategories: Set<BriefingFeedCategory>
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(
+                            Date.now.formatted(
+                                .dateTime.month().day().weekday(.wide).locale(Locale(identifier: "ko_KR"))
+                            )
+                        )
+                            .font(MemdoTypography.captionEmphasis)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                        Text("오늘 꼭 알아둘 \(items.count)개")
+                            .font(MemdoTypography.editorialTitle)
+                            .foregroundStyle(MemdoTheme.ink)
+                        Text("분야를 고르지 않아도 새로운 이야기를 먼저 보여드려요.")
+                            .font(MemdoTypography.subtitle)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                    }
+                    .padding(.horizontal, MemdoMetrics.pagePadding)
+
                     if let summary {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Label("AI 요약", systemImage: "sparkles")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(MemdoTheme.brand)
+                        HStack(alignment: .top, spacing: 10) {
+                            Rectangle()
+                                .fill(MemdoTheme.brand)
+                                .frame(width: 3)
                             Text(summary.compactBriefingText)
-                                .font(.headline.weight(.semibold))
+                                .font(MemdoTypography.action)
                                 .foregroundStyle(MemdoTheme.ink)
-                                .lineLimit(2)
                         }
                         .padding(.horizontal, MemdoMetrics.pagePadding)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("오늘의 흐름, \(summary.compactBriefingText)")
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("기사 \(items.count)개")
-                            .font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, MemdoMetrics.pagePadding)
-
+                    // One row group, not a card plus a separate list -- DESIGN.md
+                    // 5.8: "반복 항목은 카드 여러 개가 아니라 하나의 그룹 안에
+                    // 행으로 배치하며 카드 안에 카드를 넣지 않는다", and the
+                    // surface-card treatment is reserved for the empty-state
+                    // intention prompt specifically, not for content rows.
+                    if !items.isEmpty {
                         VStack(spacing: 0) {
-                            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                                BriefingNewsRow(item: item) {
-                                    if let url = item.url { safariItem = BriefingLink(url: url) }
+                            if let lead = items.first {
+                                BriefingLeadStory(
+                                    item: lead,
+                                    selectedCategories: $selectedCategories
+                                )
+                                if items.count > 1 {
+                                    Divider().padding(.leading, MemdoMetrics.rowContentLeading)
                                 }
-                                if index < items.count - 1 {
+                            }
+                            ForEach(Array(items.dropFirst().enumerated()), id: \.element.id) { index, item in
+                                BriefingNewsRow(
+                                    number: index + 2,
+                                    item: item,
+                                    selectedCategories: $selectedCategories
+                                )
+                                if item.id != items.last?.id {
                                     Divider().padding(.leading, MemdoMetrics.rowContentLeading)
                                 }
                             }
                         }
                         .memdoRowGroup()
+                        .padding(.horizontal, MemdoMetrics.pagePadding)
                     }
                 }
-                .padding(.top, 12)
-                .padding(.bottom, 24)
+                .padding(.top, 16)
+                .padding(.bottom, 32)
             }
             .background(MemdoTheme.background)
             .navigationTitle("오늘의 브리핑")
@@ -449,17 +494,115 @@ private struct BriefingSheet: View {
                 }
             }
         }
-        .sheet(item: $safariItem) { link in
-            BriefingSafariView(url: link.url).ignoresSafeArea()
+    }
+}
+
+/// Colored circle for a briefing category -- an icon variant for the lead
+/// story (where the category is the only label, no ordinal) and a
+/// number-in-circle variant for list rows (where read-order still matters).
+/// Reuses ScheduleColor rather than inventing a second palette -- see
+/// BriefingFeedCategory.accentColor.
+/// Same shape/size as ScheduleSourceIcon (ScheduleRow.swift) -- rounded
+/// square at MemdoMetrics.iconRadius, not a circle. That's the app's one
+/// existing "icon in a tinted badge" convention (icon color = the item's
+/// ScheduleColor, background = its soft variant); these badges match it
+/// exactly rather than introducing a second badge shape.
+private struct BriefingCategoryBadge: View {
+    let category: BriefingFeedCategory
+
+    var body: some View {
+        Image(systemName: category.systemImage)
+            .font(MemdoTypography.captionEmphasis)
+            .foregroundStyle(category.accentColor.swiftUIColor)
+            .frame(width: 30, height: 30)
+            .background(
+                category.accentColor.softSwiftUIColor,
+                in: RoundedRectangle(cornerRadius: MemdoMetrics.iconRadius, style: .continuous)
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+private struct BriefingOrdinalBadge: View {
+    let number: Int
+    let category: BriefingFeedCategory
+
+    var body: some View {
+        Text(String(format: "%02d", number))
+            .font(MemdoTypography.metric.monospacedDigit())
+            .foregroundStyle(category.accentColor.swiftUIColor)
+            .frame(width: 30, height: 30)
+            .background(
+                category.accentColor.softSwiftUIColor,
+                in: RoundedRectangle(cornerRadius: MemdoMetrics.iconRadius, style: .continuous)
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+private struct BriefingLeadStory: View {
+    let item: BriefingRepository.FetchedItem
+    @Binding var selectedCategories: Set<BriefingFeedCategory>
+
+    var body: some View {
+        NavigationLink {
+            BriefingStoryDetail(item: item, selectedCategories: $selectedCategories)
+        } label: {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    BriefingCategoryBadge(category: item.category)
+                    Text(item.category.rawValue)
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(item.category.accentColor.swiftUIColor)
+                }
+                Text(item.title)
+                    .font(MemdoTypography.editorialTitle)
+                    .foregroundStyle(MemdoTheme.ink)
+                    .lineSpacing(4)
+                    .lineLimit(3)
+                if !item.summary.isEmpty {
+                    Text(item.summary.compactBriefingText)
+                        .font(MemdoTypography.subtitle)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .lineSpacing(3)
+                        .lineLimit(2)
+                }
+                Text(item.metadataWithoutCategory)
+                    .font(MemdoTypography.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+            .multilineTextAlignment(.leading)
+            .padding(.horizontal, MemdoMetrics.rowInset)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(MemdoScaleButtonStyle())
+        .accessibilityLabel("첫 번째 기사, \(item.title), \(item.metadata)")
+        .accessibilityHint("기사 요약을 엽니다")
     }
 }
 
 private extension String {
+    /// RSS description fields from Korean news aggregators are commonly a
+    /// list of unpunctuated clause fragments, one per line ("A안 찬성 47%\n
+    /// B는 반대\n..."), not full sentences. Replacing "\n" with a bare space
+    /// (the old behavior) ran them together into a single unpunctuated wall
+    /// of text -- e.g. "...47.4% 반대 41.9%보다 다소 높아 2030은 반대 55%
+    /// 넘어서 이준석 "당사자 빠진 설계"여성도..." with no marker between
+    /// distinct points. Joins with " · " instead -- the same separator this
+    /// app already uses everywhere else for "several distinct facts on one
+    /// line" (e.g. "매일경제 · 5개 · 약 3분"), so a multi-clause summary
+    /// reads the same way the rest of the UI already presents grouped facts.
     var compactBriefingText: String {
-        replacingOccurrences(of: "**", with: "")
+        let cleaned = replacingOccurrences(of: "**", with: "")
             .replacingOccurrences(of: "* ", with: "")
-            .replacingOccurrences(of: "\n", with: " ")
+        let clauses = cleaned
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return clauses
+            .joined(separator: " · ")
             .trimmingCharacters(in: CharacterSet(charactersIn: ".。"))
     }
 }
@@ -471,7 +614,7 @@ private struct BriefingLoadingRow: View {
         HStack(spacing: 10) {
             ProgressView().scaleEffect(0.85)
             Text("최신 뉴스를 가져오는 중...")
-                .font(.subheadline)
+                .font(MemdoTypography.subtitle)
                 .foregroundStyle(MemdoTheme.secondaryInk)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -481,43 +624,225 @@ private struct BriefingLoadingRow: View {
 }
 
 private struct BriefingNewsRow: View {
+    let number: Int
     let item: BriefingRepository.FetchedItem
-    let onTap: () -> Void
+    @Binding var selectedCategories: Set<BriefingFeedCategory>
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: MemdoMetrics.rowSpacing) {
-                VStack(alignment: .leading, spacing: 3) {
+        NavigationLink {
+            BriefingStoryDetail(item: item, selectedCategories: $selectedCategories)
+        } label: {
+            HStack(alignment: .top, spacing: MemdoMetrics.rowSpacing) {
+                BriefingOrdinalBadge(number: number, category: item.category)
+
+                VStack(alignment: .leading, spacing: 5) {
                     Text(item.title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(MemdoTypography.action)
                         .foregroundStyle(MemdoTheme.ink)
-                        .lineLimit(1)
+                        .lineSpacing(3)
+                        .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
-                    Text(metadata)
-                        .font(.caption2)
+                    Text(item.metadataWithoutCategory)
+                        .font(MemdoTypography.caption)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                         .lineLimit(1)
                 }
+                .padding(.top, 3)
 
                 Spacer(minLength: 8)
 
                 Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
+                    .font(MemdoTypography.caption2Emphasis)
                     .foregroundStyle(MemdoTheme.secondaryInk)
+                    .padding(.top, 6)
             }
             .padding(.horizontal, MemdoMetrics.rowInset)
-            .frame(minHeight: 52)
+            .padding(.vertical, 14)
+            .frame(minHeight: MemdoMetrics.touchTarget)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MemdoScaleButtonStyle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.category.rawValue), \(item.sourceName), \(item.title)")
-        .accessibilityHint("탭하면 원문을 열어요")
+        .accessibilityLabel("\(number)번째 기사, \(item.title), \(item.metadata)")
+        .accessibilityHint("기사 요약을 엽니다")
+    }
+}
+
+private struct BriefingStoryDetail: View {
+    @State private var safariItem: BriefingLink?
+    @State private var cleanedSummary: String?
+    @State private var isCleaningUp = false
+    let item: BriefingRepository.FetchedItem
+    @Binding var selectedCategories: Set<BriefingFeedCategory>
+
+    private var isFollowed: Bool { selectedCategories.contains(item.category) }
+
+    private var canCleanUp: Bool {
+        guard #available(iOS 26, *) else { return false }
+        guard case .available = SystemLanguageModel.default.availability else { return false }
+        return true
     }
 
-    private var metadata: String {
-        [item.sourceName, item.relativeTime, item.matchedKeyword ?? item.category.rawValue]
+    @available(iOS 26, *)
+    private func runCleanup() async {
+        isCleaningUp = true
+        let result = await BriefingRepository.shared.cleanUpSummary(for: item)
+        isCleaningUp = false
+        guard let result else { return }
+        withAnimation(.easeOut(duration: 0.4)) {
+            cleanedSummary = result
+        }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Category is shown here already, so it doesn't need its
+                    // own separate "이 이야기의 주제" section/screen below --
+                    // the follow toggle that section's sole real function
+                    // (관심사에 추가/제거) now lives right next to it instead.
+                    HStack(spacing: 8) {
+                        BriefingCategoryBadge(category: item.category)
+                        Text(item.category.rawValue)
+                            .font(MemdoTypography.captionEmphasis)
+                            .foregroundStyle(item.category.accentColor.swiftUIColor)
+                        Spacer()
+                        Button {
+                            if isFollowed {
+                                selectedCategories.remove(item.category)
+                            } else {
+                                selectedCategories.insert(item.category)
+                            }
+                        } label: {
+                            Label(
+                                isFollowed ? "관심 해제" : "관심 추가",
+                                systemImage: isFollowed ? "checkmark.circle.fill" : "plus.circle"
+                            )
+                        }
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(isFollowed ? MemdoTheme.secondaryInk : item.category.accentColor.swiftUIColor)
+                        .accessibilityValue(isFollowed ? "관심 분야로 등록됨" : "관심 분야 아님")
+                    }
+                    Text(item.title)
+                        .font(MemdoTypography.detailTitle)
+                        .foregroundStyle(MemdoTheme.ink)
+                        .lineSpacing(5)
+                    // Byline -- source name is the one piece of provenance a
+                    // reader actually orients on, so it gets its own line at
+                    // a readable size instead of being buried in a single
+                    // small caption alongside the timestamp.
+                    HStack(spacing: 6) {
+                        Image(systemName: "building.columns")
+                            .font(MemdoTypography.caption2)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                        Text(item.sourceName)
+                            .font(MemdoTypography.action)
+                            .foregroundStyle(MemdoTheme.ink)
+                        if !item.relativeTime.isEmpty {
+                            Text("·")
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                            Text(item.relativeTime)
+                                .font(MemdoTypography.caption)
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                        }
+                    }
+                }
+
+                if !item.summary.isEmpty {
+                    VStack(alignment: .leading, spacing: MemdoMetrics.sectionContentSpacing) {
+                        HStack {
+                            Text("핵심 내용")
+                                .font(MemdoTypography.sectionTitle)
+                            Spacer()
+                            // Some source feeds glue two fields together with
+                            // no separator at all (verified against
+                            // 매일경제's raw RSS -- not fixable by any
+                            // client-side string transform), so this offers
+                            // an on-device rewrite instead of trying to parse
+                            // around it. Compact, inline, next to the header
+                            // it affects -- not a full-width button below;
+                            // this is a one-off touch-up, not this screen's
+                            // main action. DESIGN.md 5.8 requires a text
+                            // label (not icon-only) for an "AI 실행" action,
+                            // so it keeps a short label rather than going
+                            // icon-only like the 관심 추가 toggle above.
+                            if canCleanUp, cleanedSummary == nil {
+                                Button {
+                                    if #available(iOS 26, *) {
+                                        Task { await runCleanup() }
+                                    }
+                                } label: {
+                                    if isCleaningUp {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                            .tint(MemdoTheme.brand)
+                                    } else {
+                                        Label("AI 요약", systemImage: "sparkles")
+                                    }
+                                }
+                                .font(MemdoTypography.captionEmphasis)
+                                .foregroundStyle(MemdoTheme.brand)
+                                .disabled(isCleaningUp)
+                                .accessibilityLabel("AI 요약으로 다시 정리하기")
+                                .transition(.opacity)
+                            }
+                        }
+                        Text(cleanedSummary ?? item.summary.compactBriefingText)
+                            .font(MemdoTypography.body)
+                            .foregroundStyle(MemdoTheme.ink)
+                            .lineSpacing(5)
+                            .id(cleanedSummary)
+                            .transition(.blurReplace)
+                    }
+                    .padding(.vertical, 18)
+                    .memdoRowGroup()
+                }
+            }
+            .padding(.horizontal, MemdoMetrics.pagePadding)
+            .padding(.top, 20)
+            .padding(.bottom, 32)
+        }
+        .background(MemdoTheme.background)
+        .navigationTitle("기사")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // "원문 읽기" moved off the page and into the nav bar -- opening
+            // the source externally is a secondary, one-off action here, not
+            // the screen's main event, so it doesn't need a full-width
+            // primary-button treatment.
+            if item.url != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        if let url = item.url { safariItem = BriefingLink(url: url) }
+                    } label: {
+                        Label("원문", systemImage: "arrow.up.right")
+                    }
+                }
+            }
+        }
+        .sheet(item: $safariItem) { link in
+            BriefingSafariView(url: link.url).ignoresSafeArea()
+        }
+    }
+}
+
+private extension BriefingRepository.FetchedItem {
+    /// Full provenance (source, time, category) -- used for accessibility
+    /// labels, where category is worth saying even though sighted users
+    /// already see it via the row's category badge.
+    var metadata: String {
+        [sourceName, relativeTime, category.rawValue]
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+
+    /// Same as `metadata` without category -- every briefing row already
+    /// shows category via its badge, so repeating the name a second time
+    /// in the visible metadata line was redundant.
+    var metadataWithoutCategory: String {
+        [sourceName, relativeTime]
             .filter { !$0.isEmpty }
             .joined(separator: " · ")
     }

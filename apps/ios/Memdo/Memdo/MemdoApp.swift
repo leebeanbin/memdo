@@ -14,6 +14,7 @@ struct MemdoApp: App {
         WindowGroup {
             MemdoRootView(session: session)
                 .environment(session)
+                .font(MemdoTypography.body)
                 .dynamicTypeSize(.xSmall ... .accessibility3)
                 .onOpenURL { session.handle($0) }
                 .task { await session.observe() }
@@ -300,7 +301,7 @@ private struct MemdoLaunchView: View {
             VStack(spacing: 16) {
                 MemdoBrandMark(size: 72)
                 Text("Memdo")
-                    .font(.system(.title2, design: .rounded, weight: .bold))
+                    .font(MemdoTypography.brand)
                     .tracking(-0.3)
             }
         }
@@ -376,10 +377,10 @@ struct MemdoSignInView: View {
                         .font(.system(size: 40))
                         .foregroundStyle(MemdoTheme.brand)
                     Text(gateTitle)
-                        .font(.title2.bold())
+                        .font(MemdoTypography.detailTitle)
                     if let gateSubtitle {
                         Text(gateSubtitle)
-                            .font(.subheadline)
+                            .font(MemdoTypography.subtitle)
                             .foregroundStyle(MemdoTheme.secondaryInk)
                             .multilineTextAlignment(.center)
                     }
@@ -411,13 +412,13 @@ struct MemdoSignInView: View {
     private var signInFeedback: some View {
         if session.isBusy {
             ProgressView("로그인 화면을 여는 중")
-                .font(.caption)
+                .font(MemdoTypography.caption)
                 .padding(.top, 12)
         }
 
         if let errorMessage = session.errorMessage {
             Label(errorMessage, systemImage: "exclamationmark.circle.fill")
-                .font(.caption)
+                .font(MemdoTypography.caption)
                 .foregroundStyle(.red)
                 .padding(.top, 12)
                 .accessibilityLabel("로그인 오류: \(errorMessage)")
@@ -436,7 +437,7 @@ struct MemdoSignInView: View {
                     .scaledToFit()
                     .frame(width: 20, height: 20)
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(MemdoTypography.action)
                     .lineLimit(1)
             }
             // Google's white-background variant requires a subtle border so the
@@ -478,7 +479,7 @@ struct MemdoSignInView: View {
                     .font(.system(size: 18, weight: .medium))
                     .frame(width: 20, height: 20)
                 Text("Apple로 계속")
-                    .font(.subheadline.weight(.semibold))
+                    .font(MemdoTypography.action)
                     .lineLimit(1)
             }
             .allowsHitTesting(false)

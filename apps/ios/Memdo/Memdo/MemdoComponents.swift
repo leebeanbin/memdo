@@ -120,7 +120,7 @@ struct MemdoPageHeader: View {
         VStack(alignment: .leading, spacing: 4) {
             if !eyebrow.isEmpty {
                 Text(eyebrow)
-                    .font(.caption.weight(.bold))
+                    .font(MemdoTypography.captionEmphasis)
                     .foregroundStyle(MemdoTheme.brand)
             }
             Text(title)
@@ -128,7 +128,7 @@ struct MemdoPageHeader: View {
                 .foregroundStyle(MemdoTheme.ink)
             if !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(MemdoTypography.subtitle)
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
         }
@@ -206,7 +206,7 @@ struct MemdoSection<Content: View>: View {
 
     private var sectionTitle: some View {
         Text(title)
-            .font(.headline)
+            .font(MemdoTypography.sectionTitle)
             .foregroundStyle(MemdoTheme.ink)
     }
 
@@ -214,7 +214,7 @@ struct MemdoSection<Content: View>: View {
     private var trailingText: some View {
         if let trailing {
             Text(trailing)
-                .font(.caption.bold())
+                .font(MemdoTypography.captionEmphasis)
                 .foregroundStyle(MemdoTheme.secondaryInk)
         }
     }
@@ -224,7 +224,7 @@ struct MemdoSection<Content: View>: View {
         if let actionIcon {
             Button(action: action) {
                 MemdoIconButtonLabel(systemImage: actionIcon)
-                    .font(.caption.weight(.semibold))
+                    .font(MemdoTypography.captionEmphasis)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(actionLabel)
@@ -247,7 +247,7 @@ struct MemdoPrimaryActionButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.body.weight(.semibold))
+            .font(MemdoTypography.buttonLabel)
             .lineLimit(1)
             .foregroundStyle(MemdoTheme.onBrand)
             .padding(.horizontal, 16)
@@ -267,7 +267,7 @@ struct MemdoSecondaryActionButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.body.weight(.semibold))
+            .font(MemdoTypography.buttonLabel)
             .lineLimit(1)
             .foregroundStyle(MemdoTheme.secondaryInk)
             .padding(.horizontal, 16)
@@ -287,7 +287,7 @@ struct MemdoDestructiveActionButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.body.weight(.semibold))
+            .font(MemdoTypography.buttonLabel)
             .lineLimit(1)
             .foregroundStyle(MemdoTheme.onDestructive)
             .padding(.horizontal, 16)
@@ -351,7 +351,7 @@ struct MemdoChoiceButton: View {
                 Text(title)
                     .lineLimit(1)
             }
-                .font(.subheadline.weight(.semibold))
+                .font(MemdoTypography.action)
                 .foregroundStyle(isSelected ? MemdoTheme.onAccent : MemdoTheme.ink)
                 .padding(.horizontal, 12)
                 .frame(height: 36)
@@ -375,16 +375,16 @@ struct MemdoStatusRow: View {
     var body: some View {
         HStack(spacing: MemdoMetrics.rowSpacing) {
             Image(systemName: systemImage)
-                .font(.subheadline.weight(.semibold))
+                .font(MemdoTypography.action)
                 .foregroundStyle(tint)
                 .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(MemdoTypography.action)
                 if let detail {
                     Text(detail)
-                        .font(.caption)
+                        .font(MemdoTypography.caption)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                 }
             }
@@ -412,11 +412,11 @@ struct MemdoDisclosureRow: View {
                     systemImage: isExpanded ? "chevron.up" : "chevron.down"
                 )
                 Text("총 \(totalCount)개")
-                    .font(.caption)
+                    .font(MemdoTypography.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
                     .frame(maxWidth: .infinity, alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .trailing)
             }
-            .font(.subheadline.weight(.semibold))
+            .font(MemdoTypography.action)
             .foregroundStyle(MemdoTheme.accent)
             .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
             .padding(.horizontal, 16)

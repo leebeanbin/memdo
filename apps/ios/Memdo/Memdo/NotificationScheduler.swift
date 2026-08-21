@@ -225,26 +225,17 @@ enum NotificationScheduler {
     }
 
     private static func reminderTimeRange(start: Date, end: Date?) -> String {
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "ko_KR")
-        fmt.dateFormat = "a h:mm"
+        let fmt = DateFormatting.korean("a h:mm")
         var text = fmt.string(from: start)
         if let end { text += " – " + fmt.string(from: end) }
         return text
     }
 
+    // Derived from ScheduleColor.swiftUIColor (MemdoTheme.swift) rather than
+    // redeclaring the same six dynamic light/dark RGB pairs here -- this file
+    // previously had its own copy that had to be kept in sync by hand.
     private static func colorUIColor(for color: ScheduleColor) -> UIColor {
-        UIColor { t in
-            let dark = t.userInterfaceStyle == .dark
-            switch color {
-            case .coral:  return dark ? UIColor(red: 1.00, green: 0.60, blue: 0.55, alpha: 1) : UIColor(red: 0.95, green: 0.36, blue: 0.29, alpha: 1)
-            case .amber:  return dark ? UIColor(red: 1.00, green: 0.82, blue: 0.45, alpha: 1) : UIColor(red: 0.95, green: 0.65, blue: 0.14, alpha: 1)
-            case .sage:   return dark ? UIColor(red: 0.62, green: 0.86, blue: 0.65, alpha: 1) : UIColor(red: 0.31, green: 0.67, blue: 0.35, alpha: 1)
-            case .sky:    return dark ? UIColor(red: 0.55, green: 0.80, blue: 1.00, alpha: 1) : UIColor(red: 0.19, green: 0.61, blue: 0.92, alpha: 1)
-            case .indigo: return dark ? UIColor(red: 0.72, green: 0.67, blue: 1.00, alpha: 1) : UIColor(red: 0.36, green: 0.30, blue: 0.72, alpha: 1)
-            case .violet: return dark ? UIColor(red: 0.90, green: 0.65, blue: 1.00, alpha: 1) : UIColor(red: 0.64, green: 0.28, blue: 0.84, alpha: 1)
-            }
-        }
+        UIColor(color.swiftUIColor)
     }
 
     // Generates a small rounded-rectangle PNG and returns a UNNotificationAttachment

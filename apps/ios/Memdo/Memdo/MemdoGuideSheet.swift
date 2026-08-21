@@ -61,7 +61,7 @@ struct MemdoGuideSheet: View {
                     Toggle("모든 Memdo 위젯에서 일정명 가리기", isOn: $hideWidgetContent)
                         .memdoToggle()
                     Text("켜면 시간과 개수는 유지하고 제목만 '비공개 일정'으로 표시해요. 잠금 중 노출 여부는 iPhone의 Face ID 및 암호 설정도 함께 따릅니다.")
-                        .font(.footnote)
+                        .font(MemdoTypography.footnote)
                         .foregroundStyle(MemdoTheme.secondaryInk)
                 } header: {
                     Text("위젯 개인정보")

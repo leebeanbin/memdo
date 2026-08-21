@@ -62,7 +62,8 @@ Memdo는 Apple의 모양을 복제하지 않고 역할 분리 전략을 따른�
 | 최신 iOS/iPadOS UI Kit | 화면 설계·리뷰 | 시스템 컴포넌트 크기·배치·상태 비교용 Figma 기준 | Figma 픽셀을 하드코딩하거나 전체 화면을 SwiftUI로 수작업 복제 |
 | App Icon Template + Icon Composer | 앱 아이콘 제작 | Light/Dark 및 지원 appearance를 가진 계층형 앱 아이콘 | 화면 안의 일반 아이콘을 앱 아이콘 레이어로 제작 |
 | SF Symbols | 기능 아이콘 선택 | 의미·weight·scale·현지화가 일관된 심벌 | 유니코드 문자, 서로 다른 아이콘 패밀리 혼용, 의미가 불명확한 장식 아이콘 |
-| SF Pro 계열 | 앱 타이포그래피 | SwiftUI 시스템 폰트와 Dynamic Type | 앱 번들에 SF Pro를 넣거나 고정 크기로 시스템 적응 차단 |
+| SF Pro 계열 | 한국어·네이티브 조작부 | SwiftUI 시스템 폰트와 Dynamic Type | 앱 번들에 SF Pro를 넣거나 고정 크기로 시스템 적응 차단 |
+| Work Sans | 브랜드명·영문·숫자·뉴스 편집 요소 | 정자 가변 폰트 1개와 상대 텍스트 스타일 | 한국어 본문 강제 적용, 미사용 이탤릭 번들, 고정 크기 |
 | Sign in with Apple assets | 해당 인증을 실제 제공할 때 | Apple 규격 로그인 버튼·로고 | 미구현 기능의 장식용 로고, 임의 변형 |
 | Product Bezels | App Store·소개 이미지 제작 때 | 공식 기기 프레임의 마케팅 이미지 | 앱 UI 내부 장식 |
 

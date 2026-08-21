@@ -9,22 +9,28 @@
 /* Begin PBXBuildFile section */
 		00D267B5D29A0D25FE6E98FA /* MemdoTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F29F2315ADA3175E0D4A894C /* MemdoTheme.swift */; };
 		048C8F30632F364BD0918E91 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 54A9DCC8471814155094BAFF /* AppIcon.icon */; };
+		04DF8C7446EC772D7022AE9A /* AgentPrompts.yml in Resources */ = {isa = PBXBuildFile; fileRef = F8BB7B0BC6E2F7CAF1981DF2 /* AgentPrompts.yml */; };
 		05A16520EDB91AFE6AA6B061 /* ShareWorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9BC3B0CEFE2D4C6854CE6D /* ShareWorkoutView.swift */; };
 		07C63312BBCA02E3A38CDA86 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 592EA12B6FF1AB799EF6869C /* ShareViewController.swift */; };
 		08DE99AB607725B2E3D52207 /* MemdoShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7E846EC17F4BCC9B7757596E /* MemdoShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		09F92AF7FB120FDD80087A27 /* DateFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81842BD1CFF4ED836A2E09A7 /* DateFormatting.swift */; };
 		0F660EFC0579CCC6223DB2B9 /* WorkoutViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE3D42537298C53BC842A35 /* WorkoutViews.swift */; };
 		0FDA22493E17D874CFE3A6A4 /* MemdoGuideSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99214A59192502A52C8A73AD /* MemdoGuideSheet.swift */; };
 		127639652BAACB34DA1E4279 /* MemdoLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F83C89D78FD9D59E7C1EE3 /* MemdoLiveActivity.swift */; };
 		190B58650DDB5E6EBE7AD2AC /* AgentTabBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC83A92A9DA90179F3E5254E /* AgentTabBridge.swift */; };
 		1A1518E2534696A7B7A56C55 /* MemdoLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F83C89D78FD9D59E7C1EE3 /* MemdoLiveActivity.swift */; };
 		1ACFAEEBEB53F95656F314FC /* MemdoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4EA7A02C55094DEBD06AF37 /* MemdoWidget.swift */; };
+		1F8672E2C40ED8E8853E55EA /* Pretendard-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 97B6BAE4945DFFB47769CA5C /* Pretendard-LICENSE.txt */; };
 		27F704F7116840EA5D152218 /* WallpaperIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFB1F40579E7D5062404CC55 /* WallpaperIntent.swift */; };
 		28ACEBD7EE2EC6276D9F3CFE /* WorkoutAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67DDB3585BB47A7B725E0F95 /* WorkoutAPI.swift */; };
 		2A29175D38335F059C4AE766 /* MemdoComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42994A317F898780763B33D4 /* MemdoComponents.swift */; };
+		2E79B85E1483FF6B965024C6 /* AgentTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6D1987E0D3F1E0418371476 /* AgentTools.swift */; };
 		34C226C7140C637FA392B0B1 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = BA381B15831EFB2DC3181BCA /* Supabase */; };
+		47980E617A1DA64917EB0AEB /* BriefingFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = D74BAC4CE2DAFC9BABA5244E /* BriefingFeed.swift */; };
 		480BC8CB74B2601AFEEF5DBD /* ScheduleSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F8C4864695656352FE70BA3 /* ScheduleSheets.swift */; };
 		4CE9071DE9A5E1E5F3D45F0A /* AppShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4D119A0D929FA9AE7D47773 /* AppShellView.swift */; };
 		55306D301F120767611231F5 /* MemdoWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AE1B6FFACC369DADAFC99ADB /* MemdoWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		567B8523F98FA34B84994096 /* AgentPrompts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CCEC3682202DC527390D6C3 /* AgentPrompts.swift */; };
 		5AFEEBA9CD4F0FEBBA50F09B /* ScheduleModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B46ABED061C6BD316DB8F3 /* ScheduleModel.swift */; };
 		5C8DB08635A4922DF0808F7B /* TodayComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E81203EAFA09124BA54F8AE7 /* TodayComponents.swift */; };
 		6330199617D23E6B9A705C4A /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC29E0621A97339E19CDC2C1 /* Preferences.swift */; };
@@ -38,21 +44,29 @@
 		8440D2E9F99B1C9848CF21ED /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD6B2D482673663626353C2 /* CalendarView.swift */; };
 		84884B9604E82F5666617F18 /* WallpaperPreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C12B14694C882524384138 /* WallpaperPreviewSheet.swift */; };
 		87E2689DFF3C0F8C22A74D06 /* CoachMarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD366DE45CA454C72F2BBC3 /* CoachMarks.swift */; };
+		8D2EE9F6F32DD94165E33E60 /* Pretendard-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = 5DD8651FBD4E38159886A3B3 /* Pretendard-Regular.otf */; };
 		90F89ECA1FB60194F0A9A09C /* ScheduleAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA8A453029530AB440AFEB03 /* ScheduleAPI.swift */; };
+		978C5FA035AB40F7D66F00F9 /* Pretendard-Bold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 8640DA0A68D661636709CCDD /* Pretendard-Bold.otf */; };
 		98172737F1AC51B31154A93D /* ScheduleRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19BD21007334C06C0B2028F9 /* ScheduleRow.swift */; };
 		A09C21CAE62B67DF6753F375 /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C57EC467343059432D7D60D /* AssistantView.swift */; };
-		B91BF223302DF18F003636DD /* BriefingFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B91BF222302DF18F003636DD /* BriefingFeed.swift */; };
 		B9BE1E1D72E8D516A1E5022D /* MemdoWidgetSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7840EFE57EB95989FBC7696 /* MemdoWidgetSchedule.swift */; };
 		BFC6AD583CB383FAF7ABE782 /* SlackNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 420E092EB2A4627375577F43 /* SlackNotifier.swift */; };
+		C535C49F5AF818D049EE98AE /* GoogleCalendarSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E9F76C022917F1D22E0D1CE /* GoogleCalendarSettings.swift */; };
+		C760F0C4525ACB0698EEC474 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = 766260AB78CE2A6DF35FC443 /* Yams */; };
+		C87861497E1330A80544FE13 /* AgentIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D11582497A9B52756B755E /* AgentIntent.swift */; };
+		C937284F923DF277B8EE53B3 /* Pretendard-SemiBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 38E5C3282FBC0EF28AA5FBD5 /* Pretendard-SemiBold.otf */; };
 		CA69FB6F6D5B184690B56D4A /* ScheduleModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3F01099D4577BD460F6C20F /* ScheduleModelTests.swift */; };
+		D2A3E9135268890871957A27 /* CloudAgentSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15F344D2A79A26B779462E85 /* CloudAgentSettings.swift */; };
 		D51C8D4F2F01CBD92D0CFDB3 /* OutboxQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FC52CA73A8785841A1E45A0 /* OutboxQueue.swift */; };
 		E117E6A55D78273E89DFAAC0 /* ScheduleSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9B39D6188C70A056DA658E /* ScheduleSearchView.swift */; };
 		E13CC110F4ADD28CD689DC33 /* HealthKitImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF37F31C681B18584711EBD0 /* HealthKitImporter.swift */; };
 		E49AD453117D9B5AB53EA8CE /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257B3BF059A0E5D9A80D8E50 /* TodayView.swift */; };
 		E62B9C0643A47C6E12B4F08A /* PendingWorkoutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CF4B965CFF4FE3ACB3B3D33 /* PendingWorkoutStore.swift */; };
+		E654D89C787094926BDFF8AE /* SlackSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8996DE47EAC9D1762FB6DCAD /* SlackSettings.swift */; };
 		EAD86635B870F07E38DF7E19 /* LiveActivityScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 282B54EFD5EB0ED2655D512E /* LiveActivityScheduler.swift */; };
 		F3426B7FCF7A6E73261D2D93 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 027C4773F8BAC3F78AF09125 /* NotificationScheduler.swift */; };
 		F419353E585BF3E497A45906 /* PendingWorkoutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CF4B965CFF4FE3ACB3B3D33 /* PendingWorkoutStore.swift */; };
+		F4F9034A72064E154F3CB506 /* AgentComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B892B8303D8BC814A1CFDC23 /* AgentComponents.swift */; };
 		F63E8DD2470DCBE30FA93063 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02910E4D9DB4CBEE1D8C7C10 /* SettingsView.swift */; };
 		F8D4CF99953AB55A8AF78167 /* AppShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25993FA0A6C348E04CC8573E /* AppShortcuts.swift */; };
 /* End PBXBuildFile section */
@@ -100,6 +114,7 @@
 		027C4773F8BAC3F78AF09125 /* NotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationScheduler.swift; sourceTree = "<group>"; };
 		02910E4D9DB4CBEE1D8C7C10 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		07B46ABED061C6BD316DB8F3 /* ScheduleModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleModel.swift; sourceTree = "<group>"; };
+		15F344D2A79A26B779462E85 /* CloudAgentSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudAgentSettings.swift; sourceTree = "<group>"; };
 		19BD21007334C06C0B2028F9 /* ScheduleRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleRow.swift; sourceTree = "<group>"; };
 		1A687B41FD8CDA929BCB463B /* MemdoTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MemdoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1F8C4864695656352FE70BA3 /* ScheduleSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleSheets.swift; sourceTree = "<group>"; };
@@ -110,19 +125,28 @@
 		282B54EFD5EB0ED2655D512E /* LiveActivityScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityScheduler.swift; sourceTree = "<group>"; };
 		2C57EC467343059432D7D60D /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
 		2E4BAF77735FE322B2A29952 /* MemdoShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MemdoShare.entitlements; sourceTree = "<group>"; };
+		38E5C3282FBC0EF28AA5FBD5 /* Pretendard-SemiBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pretendard-SemiBold.otf"; sourceTree = "<group>"; };
 		3CB5605FC7B8059A8343A9D8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		420E092EB2A4627375577F43 /* SlackNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackNotifier.swift; sourceTree = "<group>"; };
 		42994A317F898780763B33D4 /* MemdoComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoComponents.swift; sourceTree = "<group>"; };
+		4CCEC3682202DC527390D6C3 /* AgentPrompts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentPrompts.swift; sourceTree = "<group>"; };
+		4E9F76C022917F1D22E0D1CE /* GoogleCalendarSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCalendarSettings.swift; sourceTree = "<group>"; };
 		54A9DCC8471814155094BAFF /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		592EA12B6FF1AB799EF6869C /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		5DD8651FBD4E38159886A3B3 /* Pretendard-Regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pretendard-Regular.otf"; sourceTree = "<group>"; };
 		5DE3D42537298C53BC842A35 /* WorkoutViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutViews.swift; sourceTree = "<group>"; };
 		6561C352731005322618C740 /* DailySummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySummaryView.swift; sourceTree = "<group>"; };
 		67DDB3585BB47A7B725E0F95 /* WorkoutAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutAPI.swift; sourceTree = "<group>"; };
 		6A32B5F7D73399A9F62D92CA /* WorkoutModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutModel.swift; sourceTree = "<group>"; };
-		7687EBCFF670FFE2F6CA37D2 /* Memdo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Memdo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7687EBCFF670FFE2F6CA37D2 /* Memdo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Memdo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7E846EC17F4BCC9B7757596E /* MemdoShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MemdoShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		81842BD1CFF4ED836A2E09A7 /* DateFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateFormatting.swift; sourceTree = "<group>"; };
 		83EC68D64631B324F171F399 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		8640DA0A68D661636709CCDD /* Pretendard-Bold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pretendard-Bold.otf"; sourceTree = "<group>"; };
+		8996DE47EAC9D1762FB6DCAD /* SlackSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackSettings.swift; sourceTree = "<group>"; };
+		89D11582497A9B52756B755E /* AgentIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIntent.swift; sourceTree = "<group>"; };
 		8FD6B2D482673663626353C2 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
+		97B6BAE4945DFFB47769CA5C /* Pretendard-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Pretendard-LICENSE.txt"; sourceTree = "<group>"; };
 		99214A59192502A52C8A73AD /* MemdoGuideSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoGuideSheet.swift; sourceTree = "<group>"; };
 		9B25474359568B8C6264B6E8 /* MemdoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoApp.swift; sourceTree = "<group>"; };
 		9CF4B965CFF4FE3ACB3B3D33 /* PendingWorkoutStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingWorkoutStore.swift; sourceTree = "<group>"; };
@@ -131,12 +155,14 @@
 		AE1B6FFACC369DADAFC99ADB /* MemdoWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MemdoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B159571A9900C21AA6BE4349 /* SecureSessionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureSessionStorage.swift; sourceTree = "<group>"; };
 		B4D119A0D929FA9AE7D47773 /* AppShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellView.swift; sourceTree = "<group>"; };
-		B91BF222302DF18F003636DD /* BriefingFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefingFeed.swift; sourceTree = "<group>"; };
+		B892B8303D8BC814A1CFDC23 /* AgentComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentComponents.swift; sourceTree = "<group>"; };
 		BFB1F40579E7D5062404CC55 /* WallpaperIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperIntent.swift; sourceTree = "<group>"; };
 		C4EA7A02C55094DEBD06AF37 /* MemdoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoWidget.swift; sourceTree = "<group>"; };
+		C6D1987E0D3F1E0418371476 /* AgentTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTools.swift; sourceTree = "<group>"; };
 		CC29E0621A97339E19CDC2C1 /* Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preferences.swift; sourceTree = "<group>"; };
 		CF37F31C681B18584711EBD0 /* HealthKitImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitImporter.swift; sourceTree = "<group>"; };
 		D4F83C89D78FD9D59E7C1EE3 /* MemdoLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoLiveActivity.swift; sourceTree = "<group>"; };
+		D74BAC4CE2DAFC9BABA5244E /* BriefingFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BriefingFeed.swift; sourceTree = "<group>"; };
 		D7840EFE57EB95989FBC7696 /* MemdoWidgetSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoWidgetSchedule.swift; sourceTree = "<group>"; };
 		D9B3823CB01B28F0EFA5C1AD /* MemdoWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MemdoWidget.entitlements; sourceTree = "<group>"; };
 		DA9BC3B0CEFE2D4C6854CE6D /* ShareWorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareWorkoutView.swift; sourceTree = "<group>"; };
@@ -147,6 +173,7 @@
 		EA8A453029530AB440AFEB03 /* ScheduleAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleAPI.swift; sourceTree = "<group>"; };
 		F29F2315ADA3175E0D4A894C /* MemdoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoTheme.swift; sourceTree = "<group>"; };
 		F2C12B14694C882524384138 /* WallpaperPreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperPreviewSheet.swift; sourceTree = "<group>"; };
+		F8BB7B0BC6E2F7CAF1981DF2 /* AgentPrompts.yml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = AgentPrompts.yml; sourceTree = "<group>"; };
 		F9442BC0734AAE004616103C /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		F9CC492AD2A5C7D2A9F13061 /* Memdo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Memdo.entitlements; sourceTree = "<group>"; };
 		FC9B39D6188C70A056DA658E /* ScheduleSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleSearchView.swift; sourceTree = "<group>"; };
@@ -158,6 +185,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				34C226C7140C637FA392B0B1 /* Supabase in Frameworks */,
+				C760F0C4525ACB0698EEC474 /* Yams in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -185,6 +213,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		2935AD640DE9B72D0D9A24BF /* Prompts */ = {
+			isa = PBXGroup;
+			children = (
+				F8BB7B0BC6E2F7CAF1981DF2 /* AgentPrompts.yml */,
+			);
+			path = Prompts;
+			sourceTree = "<group>";
+		};
 		2EF9D59B18ADAF5A2707CBB6 /* MemdoTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -204,20 +240,37 @@
 			path = MemdoShare;
 			sourceTree = "<group>";
 		};
+		519B599F787D6B6D491AB20B /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				F80F39A232557DEBA6405DAD /* Fonts */,
+				2935AD640DE9B72D0D9A24BF /* Prompts */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		5D4D14025AC0E221E668A0F8 /* Memdo */ = {
 			isa = PBXGroup;
 			children = (
+				B892B8303D8BC814A1CFDC23 /* AgentComponents.swift */,
+				89D11582497A9B52756B755E /* AgentIntent.swift */,
+				4CCEC3682202DC527390D6C3 /* AgentPrompts.swift */,
 				DC83A92A9DA90179F3E5254E /* AgentTabBridge.swift */,
+				C6D1987E0D3F1E0418371476 /* AgentTools.swift */,
 				54A9DCC8471814155094BAFF /* AppIcon.icon */,
 				B4D119A0D929FA9AE7D47773 /* AppShellView.swift */,
 				25993FA0A6C348E04CC8573E /* AppShortcuts.swift */,
 				A5FCF0E385E87960B56A11F4 /* Assets.xcassets */,
 				2C57EC467343059432D7D60D /* AssistantView.swift */,
+				D74BAC4CE2DAFC9BABA5244E /* BriefingFeed.swift */,
 				8FD6B2D482673663626353C2 /* CalendarView.swift */,
+				15F344D2A79A26B779462E85 /* CloudAgentSettings.swift */,
 				DBD366DE45CA454C72F2BBC3 /* CoachMarks.swift */,
 				F9442BC0734AAE004616103C /* Config.xcconfig */,
 				6561C352731005322618C740 /* DailySummaryView.swift */,
+				81842BD1CFF4ED836A2E09A7 /* DateFormatting.swift */,
 				AB3E052299D1A953107E411D /* EventCapture.swift */,
+				4E9F76C022917F1D22E0D1CE /* GoogleCalendarSettings.swift */,
 				CF37F31C681B18584711EBD0 /* HealthKitImporter.swift */,
 				83EC68D64631B324F171F399 /* Info.plist */,
 				282B54EFD5EB0ED2655D512E /* LiveActivityScheduler.swift */,
@@ -240,6 +293,7 @@
 				B159571A9900C21AA6BE4349 /* SecureSessionStorage.swift */,
 				02910E4D9DB4CBEE1D8C7C10 /* SettingsView.swift */,
 				420E092EB2A4627375577F43 /* SlackNotifier.swift */,
+				8996DE47EAC9D1762FB6DCAD /* SlackSettings.swift */,
 				E81203EAFA09124BA54F8AE7 /* TodayComponents.swift */,
 				257B3BF059A0E5D9A80D8E50 /* TodayView.swift */,
 				BFB1F40579E7D5062404CC55 /* WallpaperIntent.swift */,
@@ -247,7 +301,7 @@
 				67DDB3585BB47A7B725E0F95 /* WorkoutAPI.swift */,
 				6A32B5F7D73399A9F62D92CA /* WorkoutModel.swift */,
 				5DE3D42537298C53BC842A35 /* WorkoutViews.swift */,
-				B91BF222302DF18F003636DD /* BriefingFeed.swift */,
+				519B599F787D6B6D491AB20B /* Resources */,
 			);
 			path = Memdo;
 			sourceTree = "<group>";
@@ -261,6 +315,17 @@
 				1C97FF6EDE54AD00BE4A0A37 /* MemdoWidget */,
 				2529AEF2A11C53E361FF1210 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		F80F39A232557DEBA6405DAD /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				8640DA0A68D661636709CCDD /* Pretendard-Bold.otf */,
+				97B6BAE4945DFFB47769CA5C /* Pretendard-LICENSE.txt */,
+				5DD8651FBD4E38159886A3B3 /* Pretendard-Regular.otf */,
+				38E5C3282FBC0EF28AA5FBD5 /* Pretendard-SemiBold.otf */,
+			);
+			path = Fonts;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -319,6 +384,7 @@
 			name = Memdo;
 			packageProductDependencies = (
 				BA381B15831EFB2DC3181BCA /* Supabase */,
+				766260AB78CE2A6DF35FC443 /* Yams */,
 			);
 			productName = Memdo;
 			productReference = 7687EBCFF670FFE2F6CA37D2 /* Memdo.app */;
@@ -349,6 +415,8 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
 			};
 			buildConfigurationList = 19005277C9F7D659B325E203 /* Build configuration list for PBXProject "Memdo" */;
 			developmentRegion = en;
@@ -361,6 +429,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				8CB5E0622EFDAEE425383438 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				5E1819744222B853F1397914 /* XCRemoteSwiftPackageReference "Yams" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2529AEF2A11C53E361FF1210 /* Products */;
@@ -380,8 +449,13 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				04DF8C7446EC772D7022AE9A /* AgentPrompts.yml in Resources */,
 				048C8F30632F364BD0918E91 /* AppIcon.icon in Resources */,
 				78FEB722CFF3DC8EE7034FBD /* Assets.xcassets in Resources */,
+				978C5FA035AB40F7D66F00F9 /* Pretendard-Bold.otf in Resources */,
+				1F8672E2C40ED8E8853E55EA /* Pretendard-LICENSE.txt in Resources */,
+				8D2EE9F6F32DD94165E33E60 /* Pretendard-Regular.otf in Resources */,
+				C937284F923DF277B8EE53B3 /* Pretendard-SemiBold.otf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -410,14 +484,22 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F4F9034A72064E154F3CB506 /* AgentComponents.swift in Sources */,
+				C87861497E1330A80544FE13 /* AgentIntent.swift in Sources */,
+				567B8523F98FA34B84994096 /* AgentPrompts.swift in Sources */,
 				190B58650DDB5E6EBE7AD2AC /* AgentTabBridge.swift in Sources */,
+				2E79B85E1483FF6B965024C6 /* AgentTools.swift in Sources */,
 				4CE9071DE9A5E1E5F3D45F0A /* AppShellView.swift in Sources */,
 				F8D4CF99953AB55A8AF78167 /* AppShortcuts.swift in Sources */,
 				A09C21CAE62B67DF6753F375 /* AssistantView.swift in Sources */,
+				47980E617A1DA64917EB0AEB /* BriefingFeed.swift in Sources */,
 				8440D2E9F99B1C9848CF21ED /* CalendarView.swift in Sources */,
+				D2A3E9135268890871957A27 /* CloudAgentSettings.swift in Sources */,
 				87E2689DFF3C0F8C22A74D06 /* CoachMarks.swift in Sources */,
 				78F5DD11294A40F25A5A9524 /* DailySummaryView.swift in Sources */,
+				09F92AF7FB120FDD80087A27 /* DateFormatting.swift in Sources */,
 				76D234B343C9376873066059 /* EventCapture.swift in Sources */,
+				C535C49F5AF818D049EE98AE /* GoogleCalendarSettings.swift in Sources */,
 				E13CC110F4ADD28CD689DC33 /* HealthKitImporter.swift in Sources */,
 				EAD86635B870F07E38DF7E19 /* LiveActivityScheduler.swift in Sources */,
 				6D52CEFC8B695B018FB30EAD /* MemdoApp.swift in Sources */,
@@ -438,10 +520,10 @@
 				7E76ED8B0A95132D8C445E02 /* SecureSessionStorage.swift in Sources */,
 				F63E8DD2470DCBE30FA93063 /* SettingsView.swift in Sources */,
 				BFC6AD583CB383FAF7ABE782 /* SlackNotifier.swift in Sources */,
+				E654D89C787094926BDFF8AE /* SlackSettings.swift in Sources */,
 				5C8DB08635A4922DF0808F7B /* TodayComponents.swift in Sources */,
 				E49AD453117D9B5AB53EA8CE /* TodayView.swift in Sources */,
 				27F704F7116840EA5D152218 /* WallpaperIntent.swift in Sources */,
-				B91BF223302DF18F003636DD /* BriefingFeed.swift in Sources */,
 				84884B9604E82F5666617F18 /* WallpaperPreviewSheet.swift in Sources */,
 				28ACEBD7EE2EC6276D9F3CFE /* WorkoutAPI.swift in Sources */,
 				6D563326AB9CE5FDE9058501 /* WorkoutModel.swift in Sources */,
@@ -806,6 +888,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		5E1819744222B853F1397914 /* XCRemoteSwiftPackageReference "Yams" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/jpsim/Yams";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.0.0;
+			};
+		};
 		8CB5E0622EFDAEE425383438 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift";
@@ -817,6 +907,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		766260AB78CE2A6DF35FC443 /* Yams */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5E1819744222B853F1397914 /* XCRemoteSwiftPackageReference "Yams" */;
+			productName = Yams;
+		};
 		BA381B15831EFB2DC3181BCA /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 8CB5E0622EFDAEE425383438 /* XCRemoteSwiftPackageReference "supabase-swift" */;

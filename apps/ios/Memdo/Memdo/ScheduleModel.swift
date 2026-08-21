@@ -414,6 +414,12 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         return Calendar.current.startOfDay(for: day)
     }
     var kindLabel: String { kind.label }
+    /// A title of only whitespace isn't a real title -- checked at every
+    /// save-gate alongside isTimeRangeValid, so it lives next to it rather
+    /// than being re-derived inline at each call site.
+    var hasValidTitle: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
     var isTimeRangeValid: Bool {
         switch (startAt, endAt) {
         case let (startAt?, endAt?): endAt > startAt
@@ -561,7 +567,7 @@ final class ScheduleStore {
         history: [AgentChatTurnDTO],
         model: String?,
         onDelta: @escaping @MainActor (String) -> Void
-    ) async throws -> CloudProposedScheduleDTO? {
+    ) async throws -> AgentCloudChatResult {
         try await repository.agentCloudChat(message: message, history: history, model: model, onDelta: onDelta)
     }
 
@@ -578,6 +584,29 @@ final class ScheduleStore {
         schedules
             .filter { $0.isActive && $0.occurs(on: date) }
             .sorted { $0.timeSortKey(on: date) < $1.timeSortKey(on: date) }
+    }
+
+    /// Groups `items` by every day they occur on within `interval` -- a
+    /// multi-day event appears under each day it spans, not just its start
+    /// day, matching `occurs(on:)`'s per-day semantics rather than a plain
+    /// `scheduledDate` range check (which CalendarView.scheduleCounts and
+    /// updateWidgetSnapshot both independently pre-filter-then-day-by-day-
+    /// scan for the same reason -- this is that shared scan, not a flat
+    /// range query, since a flat dedup list can't represent "this same item
+    /// counts on 3 different days").
+    static func groupedByOccurrenceDay(
+        _ items: [ScheduleDetail],
+        in interval: DateInterval,
+        calendar: Calendar = .current
+    ) -> [Date: [ScheduleDetail]] {
+        var result: [Date: [ScheduleDetail]] = [:]
+        var day = calendar.startOfDay(for: interval.start)
+        while day < interval.end {
+            let dayItems = items.filter { $0.occurs(on: day) }
+            if !dayItems.isEmpty { result[day] = dayItems }
+            day = calendar.date(byAdding: .day, value: 1, to: day) ?? interval.end
+        }
+        return result
     }
 
     func load() async {
@@ -966,7 +995,11 @@ final class ScheduleStore {
         save(schedules[index])
     }
 
-    func move(id: UUID, to date: Date) {
+    /// `startAt`/`endAt` override the moved time explicitly (e.g. an Agent
+    /// propose_schedule_update reschedule with a new time, not just a new
+    /// day) -- when both are nil, the original time-of-day is preserved on
+    /// the new date, same as a plain drag-to-a-different-day move.
+    func move(id: UUID, to date: Date, startAt: Date? = nil, endAt: Date? = nil) {
         guard !pendingWriteIDs.contains(id) else { return }
         guard let index = schedules.firstIndex(where: { $0.id == id }) else { return }
         let original = schedules[index]
@@ -975,7 +1008,10 @@ final class ScheduleStore {
         let oldDate = moved.scheduledDate
         moved.scheduledDate = calendar.startOfDay(for: date)
 
-        if let oldStart = moved.startAt, let oldEnd = moved.endAt {
+        if let startAt, let endAt {
+            moved.startAt = startAt
+            moved.endAt = endAt
+        } else if let oldStart = moved.startAt, let oldEnd = moved.endAt {
             let duration = oldEnd.timeIntervalSince(oldStart)
             let time = calendar.dateComponents([.hour, .minute, .second], from: oldStart)
             guard let newStart = calendar.date(
@@ -1133,18 +1169,16 @@ final class ScheduleStore {
         let now = Date.now
         let start = calendar.dateInterval(of: .month, for: now)?.start ?? calendar.startOfDay(for: now)
         let end = calendar.date(byAdding: .month, value: 2, to: start) ?? now
-        // Scans day by day (matching CalendarView.scheduleCounts) rather than
-        // grouping by exact scheduledDate, so a multi-day event appears on every
-        // day it spans, not just its start day. `schedules` is unbounded (grows
-        // with ensureLoaded() and is never evicted) and this runs on every
-        // write, so pre-filter to what could possibly intersect [start, end)
-        // before the O(days) scan rather than re-scanning everything per day.
+        // `schedules` is unbounded (grows with ensureLoaded() and is never
+        // evicted) and this runs on every write, so pre-filter to what could
+        // possibly intersect [start, end) before groupedByOccurrenceDay's
+        // O(days) scan rather than re-scanning everything per day.
         let candidates = schedules.filter { $0.scheduledDate < end && ($0.endAt ?? $0.scheduledDate) >= start }
+        let byDay = Self.groupedByOccurrenceDay(candidates, in: DateInterval(start: start, end: end), calendar: calendar)
         var days: [MemdoWidgetDay] = []
         var day = start
         while day < end {
-            let dayCandidates = candidates.filter { $0.occurs(on: day) }
-            if !dayCandidates.isEmpty {
+            if let dayCandidates = byDay[day] {
                 let sorted = dayCandidates.sorted { $0.timeSortKey(on: day) < $1.timeSortKey(on: day) }
                 days.append(MemdoWidgetDay(
                     date: day,

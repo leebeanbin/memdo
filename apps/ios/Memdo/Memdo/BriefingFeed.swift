@@ -22,6 +22,23 @@ enum BriefingFeedCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Reuses ScheduleColor -- the app's one existing hue set (schedule
+    /// category tinting) -- rather than a second, briefing-only palette.
+    /// Every row in a 5-item briefing rendered identically apart from text
+    /// before this (same icon-less number, same gray metadata, amber used
+    /// only once for whichever item happened to be the AI's pick) --
+    /// per-category color is what actually lets you tell "경제" apart from
+    /// "글로벌" at a glance instead of reading every line.
+    var accentColor: ScheduleColor {
+        switch self {
+        case .economy: .sage
+        case .tech:    .sky
+        case .startup: .violet
+        case .world:   .indigo
+        case .general: .coral
+        }
+    }
+
     // All RSS URLs verified reachable as of 2026-08. Update here when feeds move.
     var feeds: [BriefingFeedSource] {
         switch self {
@@ -166,6 +183,25 @@ actor BriefingRepository {
 
     static let shared = BriefingRepository()
 
+    private static let selectedCategoriesKey = "briefing-selected-categories"
+
+    /// Backed directly by UserDefaults rather than actor-isolated state, so
+    /// it can be read synchronously from a SwiftUI @State initializer and
+    /// written synchronously from .onChange -- matches AIConsent/
+    /// CloudAgentModelPreference's established pattern for UserDefaults-
+    /// backed preferences elsewhere in this app (AssistantView.swift).
+    nonisolated static var selectedCategories: Set<BriefingFeedCategory> {
+        get {
+            Set(
+                (UserDefaults.standard.stringArray(forKey: selectedCategoriesKey) ?? [])
+                    .compactMap(BriefingFeedCategory.init(rawValue:))
+            )
+        }
+        set {
+            UserDefaults.standard.set(newValue.map(\.rawValue).sorted(), forKey: selectedCategoriesKey)
+        }
+    }
+
     /// Fetch articles for the given categories, optionally filtered by keywords.
     /// Returns at most 20 items sorted newest-first, deduplicated by URL.
     func fetch(categories: [BriefingFeedCategory], keywords: [String]) async -> [FetchedItem] {
@@ -212,7 +248,7 @@ actor BriefingRepository {
             return FetchedItem(
                 id: item.link.isEmpty ? item.title : item.link,
                 title: item.title,
-                summary: String(item.description.prefix(200)),
+                summary: Self.truncatedSummary(item.description),
                 url: URL(string: item.link),
                 sourceName: feed.name,
                 category: feed.category,
@@ -222,11 +258,21 @@ actor BriefingRepository {
         }
     }
 
+    /// `prefix(200)` alone cuts mid-word (a real RSS description ending
+    /// "...조 대법" instead of "...조 대법원장을" is what this fixes) --
+    /// backs off to the last word boundary within the limit and marks the
+    /// cut with "…" so a shortened summary reads as shortened, not broken.
+    private static func truncatedSummary(_ text: String, limit: Int = 200) -> String {
+        guard text.count > limit else { return text }
+        let cutoff = text.index(text.startIndex, offsetBy: limit)
+        let truncated = text[..<cutoff]
+        let boundary = truncated.lastIndex(of: " ") ?? cutoff
+        return String(truncated[..<boundary]) + "…"
+    }
+
     private func parseDate(_ string: String) -> Date? {
         // RFC 2822: "Wed, 13 Aug 2026 08:30:00 +0900"
-        let rfc2822 = DateFormatter()
-        rfc2822.locale = Locale(identifier: "en_US_POSIX")
-        rfc2822.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
+        let rfc2822 = DateFormatting.posix("EEE, dd MMM yyyy HH:mm:ss Z")
         if let d = rfc2822.date(from: string) { return d }
 
         // ISO 8601 with/without fractional seconds
@@ -263,9 +309,7 @@ actor BriefingRepository {
     }
 
     private func currentDateString() -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: .now)
+        DateFormatting.posix("yyyy-MM-dd").string(from: .now)
     }
 
     // MARK: - On-device AI Summary
@@ -297,9 +341,7 @@ actor BriefingRepository {
             "\(i + 1). [\(item.category.rawValue)] \(item.title)"
         }.joined(separator: "\n")
 
-        let session = LanguageModelSession(
-            instructions: "관심 분야 뉴스에서 연결되는 구체적인 변화 하나를 한국어 편집 헤드라인으로 써. 숫자·기업명·기술명 중 하나를 반드시 포함하고, 독자가 다음 내용을 궁금해하게 만들어. 과장과 낚시는 금지해. 22~36자, 최대 두 줄, 마침표 없이 제목만 출력해. '미치는 영향', '전망', '동향', '주목', '가속화', '혁신' 같은 추상 표현은 쓰지 마."
-        )
+        let session = LanguageModelSession(instructions: AgentPrompts.briefingHeadlineInstructions)
         let prompt = "오늘의 주요 뉴스:\n\(headlines)\n\n기사 사이의 연결이 보이는 구체적인 제목 하나를 써줘."
 
         guard let response = try? await session.respond(to: prompt) else { return nil }
@@ -309,6 +351,40 @@ actor BriefingRepository {
         let entry = SummaryCache(date: today, catKey: catKey, kwKey: kwKey, summary: text)
         if let data = try? JSONEncoder().encode(entry) {
             UserDefaults.standard.set(data, forKey: Self.summaryCacheKey)
+        }
+        return text
+    }
+
+    private static let cleanupCacheKey = "briefing-cleanup-cache-v1"
+
+    /// On-demand, per-article version of the same idea as `summarize()`
+    /// above, but rewriting rather than distilling: some source feeds glue
+    /// a deck fragment straight onto the article's lead paragraph with zero
+    /// separator (verified directly against 매일경제's RSS -- not a "\n" or
+    /// truncation issue, so no client-side string transform reliably
+    /// un-glues it). Explicitly told to preserve facts/numbers and not add
+    /// anything -- this is a rewrite for readability, not a re-summary.
+    /// Cached per item id so re-opening the same article doesn't re-run it.
+    @available(iOS 26, *)
+    func cleanUpSummary(for item: FetchedItem) async -> String? {
+        guard !item.summary.isEmpty else { return nil }
+
+        var cache = (UserDefaults.standard.data(forKey: Self.cleanupCacheKey))
+            .flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
+        if let cached = cache[item.id] { return cached }
+
+        guard case .available = SystemLanguageModel.default.availability else { return nil }
+
+        let session = LanguageModelSession(instructions: AgentPrompts.briefingCleanupInstructions)
+        let prompt = "다음 뉴스 요약을 다듬어줘:\n\(item.summary)"
+
+        guard let response = try? await session.respond(to: prompt) else { return nil }
+        let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+
+        cache[item.id] = text
+        if let data = try? JSONEncoder().encode(cache) {
+            UserDefaults.standard.set(data, forKey: Self.cleanupCacheKey)
         }
         return text
     }
