@@ -5,16 +5,13 @@
 > 트랜잭션: [트랜잭션 경계](./19-transaction-boundaries.md)  
 > 외부 통합: [외부 API 통합](./15-external-integrations-and-naming.md)
 
-> **실제 구현 현황(2026-08-17)**: 이 문서의 "1. 선택"이 서술하는 `OpenAI Responses API +
-> 서버 오케스트레이션` 단일 경로는 [ADR-073](./10-decisions-and-open-questions.md)으로 대체됐다.
-> 실제로 배포한 구조는 (1) 기기 내 Apple FoundationModels(`LanguageModelSession`, Reflection
-> 포함, `apps/ios/Memdo/Memdo/AssistantView.swift`)를 기본 경로로 쓰고, (2) 사용자가 원할 때만
-> 자신의 OpenRouter API 키(BYOK)로 클라우드 모델을 쓰는 2트랙 구조다. 클라우드 경로는
-> `memdo-backend/supabase/functions/agent-cloud-chat`가 OpenRouter Chat Completions를 SSE로
-> 스트리밍하고, `propose_schedule` 도구 호출마다 서버가 직접 시간 충돌을 재검사한다(6절 이하가
-> 말하는 Consent Gate·Read Tools·Structured Proposal의 취지는 유지했지만 실제 도구 이름·개수·
-> Responses API 세부 계약은 이 문서와 다르다). 아래 절은 원래 설계 의도와 확장 조건을 남겨 두는
-> 참고 자료로 유지한다.
+> **개정(2026-08-22)**: 이 문서는 [ADR-073](./10-decisions-and-open-questions.md)이 대체한
+> `OpenAI Responses API + 서버 오케스트레이션` 단일 경로 설계를 실제 구현(온디바이스
+> FoundationModels + 사용자 BYOK OpenRouter 2트랙) 기준으로 다시 썼다. 1·2·5·5-1·8·9·10·11·12·13·14절과
+> 15절의 "Model registry"는 `apps/ios/Memdo/Memdo/AssistantView.swift`·`AgentTools.swift`와
+> `memdo-backend/supabase/functions/agent-cloud-chat`·`_shared/agent-cloud-contract.ts`를 정답으로
+> 삼아 갱신했다. 3·4절과 15절의 나머지 하위 절(의미 검색·Agents SDK·다중 Agent·MCP)은 원래 설계와
+> 실제 구현이 여전히 같은 방향이라 유지했다.
 
 ## 0. 실제 제공 경로와 비용 경계
 
@@ -31,43 +28,36 @@
 
 ## 1. 선택
 
-MVP는 `LLM Gateway + 서버 함수 도구 + 단일 Memdo Agent`를 사용한다. production 기본 adapter는 OpenAI Responses API이고 개발·명시적 self-host adapter는 llama.cpp다.
+Agent는 서버 상시 오케스트레이션 하나가 아니라 **온디바이스/클라우드 2트랙**이다([ADR-073](./10-decisions-and-open-questions.md)).
 
-초기에는 Agents SDK, 다중 Agent, handoff를 사용하지 않는다. iOS 내부 Agent는 MCP를 거치지 않으며 외부 client용 MCP는 같은 Memdo API를 호출한다.
+- **온디바이스**: 지원 기기(iOS 26+)에서는 Apple FoundationModels(`LanguageModelSession`)가 기본 경로다. 서버 비용이 없고, 도구는 Swift `Tool` 프로토콜로 앱 프로세스 안에서 직접 실행된다(`AgentTools.swift`).
+- **클라우드**: 온디바이스를 지원하지 않는 기기이거나 사용자가 더 큰 모델을 원할 때, 사용자 자신의 OpenRouter API 키(BYOK)로 `memdo-backend/supabase/functions/agent-cloud-chat`를 거친다. 이 함수는 OpenRouter Chat Completions(OpenAI 호환)를 SSE로 스트리밍하고, 도구 호출을 직접 dispatch한다.
 
-이유:
+두 경로 모두 Agents SDK나 별도 오케스트레이션 프레임워크를 쓰지 않는다: 온디바이스는 Apple의 `Tool` 루프, 클라우드는 `_shared/agent-cloud-contract.ts`의 tool-name → handler 조회 테이블(`dispatchToolCall`)이 전부다. 도구 집합이 작고(9개 클라우드 + 3개 온디바이스), 다중 Agent나 handoff가 필요한 독립 전문 영역이 아직 없기 때문이다.
 
-- 계획·검색·브리핑이라는 작은 도구 집합
-- 사용자가 승인하기 전 쓰기 금지
-- Supabase Edge Functions의 TypeScript 실행 환경
-- 직접 오케스트레이션이 더 짧고 명시적
-- 다중 Agent가 해결할 독립 전문 영역이 아직 없음
-
-Agents SDK는 도구 호출 루프, 세션, guardrail, handoff, tracing 관리가 필요해질 때 도입 후보로 둔다. 공식 문서상 Agents SDK도 OpenAI 모델에 Responses API를 기본 사용하며, SDK는 그 위의 오케스트레이션 계층이다.
+두 경로는 **같은 계약을 따로 구현**한다 — 도구 이름과 인자 모양이 최대한 겹치도록 맞춰져 있을 뿐(`propose_schedule`/`proposeSchedule`, `find_free_slots`/`findFreeSlots`, `propose_schedule_update`/`updateSchedule`), 공유 코드는 없다. `get_day_context`/`get_routine_preferences`/`get_review_history`/`propose_routine_update`/`propose_review_actions` 5개는 현재 클라우드 전용이고 온디바이스 대응 도구가 없다(§5).
 
 ## 2. 전체 구조
 
 ```mermaid
 flowchart TD
-    U["사용자 메시지"] --> C["Consent Gate"]
-    C --> A["Memdo Agent"]
-    A --> LLM["LLM Gateway"]
-    LLM --> OPENAI["OpenAI Responses"]
-    LLM --> LOCAL["llama.cpp local/self-host"]
-    A --> RT["Read Tools"]
-    RT --> SEARCH["search_todos"]
-    RT --> DAY["get_day_context"]
-    RT --> PREF["get_user_preferences"]
-    RT --> FREE["find_free_time"]
-    A --> OUT["Structured Proposal"]
-    OUT --> UI["사용자 확인 UI"]
-    UI -->|승인| CMD["Command API"]
+    U["사용자 메시지"] --> C{"AI 동의 켜짐?"}
+    C -->|아니오| DECLINE["동의 안내 메시지만 표시"]
+    C -->|예| D{"온디바이스 모델 사용 가능?"}
+    D -->|예| OD["FoundationModels + 온디바이스 Tool"]
+    D -->|아니오| CL["OpenRouter BYOK + agent-cloud-chat"]
+    OD --> DISPATCH["도구 dispatch"]
+    CL --> DISPATCH
+    DISPATCH --> READ["조회 도구\nsearch_schedules / get_day_context 등"]
+    DISPATCH --> PROPOSE["제안 도구\npropose_schedule 등"]
+    PROPOSE --> REFLECT["서버측 Reflection\n(충돌 재검사, fail-closed)"]
+    REFLECT --> CARD["사용자 확인 카드"]
+    CARD -->|승인| CMD["기존 Command API\n(todos/rules/preferences 등)"]
     CMD --> DB[("PostgreSQL")]
-    UI -->|수정| A
-    UI -->|취소| END["변경 없음"]
+    CARD -->|거절| END["변경 없음"]
 ```
 
-Agent는 조회하고 제안한다. 실제 쓰기는 Agent 도구가 아니라 승인된 Command API가 수행한다.
+Agent는 조회하고 제안한다. 실제 쓰기는 Agent 전용 API가 아니라 이미 존재하는 일반 Command API(`todos`, `rules`, `preferences` 등)가 사용자 승인 이후에 수행한다 — Agent가 DB에 직접 쓰는 경로는 없다.
 
 ## 3. Agent 이름
 
@@ -117,52 +107,81 @@ PersonalAGI
 
 ## 5. 도구 목록
 
-### 조회 도구
+클라우드 9개(`_shared/agent-cloud-contract.ts`의 `AGENT_TOOL_NAMES`/`cloudAgentTools`), 온디바이스 3개(`AgentTools.swift`). 뉴스 브리핑 요약은 별도 Agent 도구가 아니라 온디바이스 요약 파이프라인이다([ADR-074](./10-decisions-and-open-questions.md), §21).
+
+### 조회 도구 (클라우드 전용, 온디바이스는 전체 스냅샷을 이미 메모리에 들고 있어 불필요)
 
 ```text
-search_todos
-get_todo
-get_day_context
-get_user_preferences
-find_free_time
-get_interest_topics
+search_schedules        기간 내 일정 검색 -- 클라우드는 이 결과의 id가 있어야 update/delete 제안 가능
+get_day_context         하루 완료/미완료 요약 + 그날 회고 존재 여부
+get_routine_preferences 하루 시작·정리·뉴스브리핑 시각, 알림 on/off
+get_review_history      최근 회고 N개
 ```
 
-### 외부 정보 도구
+### 조회+제안 도구 (클라우드·온디바이스 양쪽에 존재, 인자 모양을 맞춤)
 
 ```text
-search_news
+find_free_slots / findFreeSlots   빈 시간 블록 검색
+propose_schedule / proposeSchedule   신규 일정/할 일 제안
+propose_schedule_update / updateSchedule   기존 항목 완료/이동/삭제 제안
 ```
 
-뉴스 동의가 있을 때만 활성화한다.
-
-### 제안 도구
-
-별도 DB 쓰기가 아니라 실행 결과의 구조를 만드는 도구:
+### 제안 도구 (클라우드 전용, 온디바이스 대응 없음 -- 확인 카드도 아직 없음, §5-1)
 
 ```text
-propose_plan_draft
-propose_todo_changes
-propose_schedule_rule
+propose_routine_update    루틴 설정 변경 제안
+propose_review_actions    회고 작성/수정 제안
 ```
 
-실제 변경 도구:
+### 실제 변경 도구
 
 ```text
 없음
 ```
 
-승인 후 앱이 일반 API를 호출한다.
+모든 `propose_*`는 제안만 staging하고, 승인 후 앱이 기존 일반 API(`todos`, `rules`, `preferences` 등)를 호출한다.
+
+## 5-1. LLM Responsibility Boundary v1
+
+LLM은 Agent 그 자체가 아니라 **자연어를 제한된 도구 호출로 바꾸는 확률적 컴포넌트**다. 아래 표가 Memdo에서 LLM과 코드의 책임 경계다. "LLM"으로 표시된 줄도 결과값은 반드시 코드가 재검증한다 — LLM의 판단이 곧 사실로 취급되는 지점은 없어야 한다.
+
+| 문제 | 책임 |
+|---|---|
+| 자연어 의도 이해, 도구 선택 | LLM |
+| 상대적 시간 표현("퇴근하고", "너무 늦지 않게")의 대략적 의미 | LLM |
+| `today`/`tomorrow`/`yyyy-MM-dd` 토큰의 실제 날짜 계산 | 코드 (`resolveDate`, `resolveAgentDateToken`) |
+| 타임존 계산 | 코드 (`DEFAULT_TIMEZONE_OFFSET_MINUTES`) |
+| 기존 일정 조회, 빈 시간 계산, 충돌 검사 | 코드 |
+| 인증·동의 범위 | 코드 (`AIConsent.granted`, `withApi`) |
+| 도구 인자의 타입·범위·형식 검증 | 코드 |
+| DB 쓰기 | 코드 (승인 후 일반 Command API) |
+| 제안 내용을 사용자에게 자연스럽게 설명 | LLM |
+| 승인 여부 | 사용자 |
+
+**Invalid Model Output 정책(목표)**: 도구 인자가 계약을 벗어나면 그 필드를 조용한 기본값으로 메우지 않고, 명시적으로 실패시키거나(도구 결과에 에러를 돌려줘 모델이 재시도/재질문하게 함) 확인 카드 자체를 띄우지 않는다. `propose_schedule`의 서버측 Reflection이 충돌 조회 실패를 `conflictCheckFailed=true`로 분리해 절대 "충돌 없음"으로 조용히 넘어가지 않는 것이 이미 이 정책을 따르는 예다.
+
+**v1 기준 실제 상태**(2026-08-22 코드 감사, Sprint 1 "Agent Correctness Baseline" 완료 후 갱신):
+
+| 항목 | 상태 |
+|---|---|
+| `systemPrompt()`의 "오늘"이 `resolveDate`와 다른 타임존 기준을 쓰던 문제 | **해결됨** — `agent-cloud-chat/index.ts`가 이제 `resolveDate('today', today)`를 그대로 사용 |
+| `propose_schedule`/`find_free_slots`의 서버측 시간 충돌 재검사 | **이미 정책 준수** — 모델이 `search_schedules`를 먼저 안 불러도 서버가 강제 재검사, 실패 시 fail-closed |
+| `find_free_slots`의 JSON 도구 스키마 (`scope`/`windowStart`/`windowEnd`/`durationMinutes`) | **해결됨** — `_shared/agent-tool-contract.ts`의 `findFreeSlotsArgsSchema`가 `scope` enum + `durationMinutes` 15~480 상하한을 실제로 강제(`parseAgentToolCall`이 `dispatchToolCall`의 handler 실행 전에 거부). iOS `FindFreeSlotTool`도 같은 15~480 범위를 clamp 대신 reject로 통일 |
+| `propose_schedule`/`propose_schedule_update`의 `date` 필드가 `resolveDate`를 통과 못 하는 임의 문자열일 때 | **해결됨** — `dateExpressionSchema`(`today`/`tomorrow`/실제 존재하는 `yyyy-MM-dd`, `z.iso.date()`)가 `parseAgentToolCall`에서 먼저 검증되므로, `resolveDate`는 이제 이미 유효한 토큰만 받는다 |
+| iOS `resolveAgentDateToken`이 파싱 실패한 날짜 토큰을 처리하는 방식 | **해결됨** — 함수 자체를 제거하고 실패 가능한 `AgentDateExpression(token:)`(`AgentIntent.swift`)로 대체. `ProposeScheduleTool`/`UpdateScheduleTool`/`FindFreeSlotTool.call(arguments:)`와 `AssistantView`의 클라우드 응답 스테이징 지점 모두 파싱 실패 시 스테이징하지 않고 설명 문자열만 반환한다. `UpdateScheduleTool.Arguments.action`도 제약 없는 `String`에서 `AgentUpdateAction` enum 검증으로 바뀌었고, `AssistantView`의 `switch action`도 `default: break`가 아니라 명시적 에러 메시지를 남긴다 |
+| `propose_routine_update`/`propose_review_actions`의 확인 카드 | **미구현, Sprint 1 범위 밖** — 서버는 정상적으로 제안을 staging해서 `done` payload에 싣지만(§8), iOS `ScheduleAPI.swift`의 Decodable DTO에 해당 필드가 없어 조용히 무시된다. 지금 이 두 도구를 모델이 호출하면 화면에 아무 반응도 없다 |
+
+**v1에서 하지 않은 것**: `propose_routine_update`/`propose_review_actions` 확인 카드, Eval Dataset 구축(§14), 모델 capability 기반 registry(§15), 완전한 `AgentIntent`/`CLARIFICATION_REQUIRED` union(Epic B의 B-03/B-05, `eval/agent-v0/README.md`도 이 라벨들을 "runtime enum 아님"으로 명시). 위 표의 나머지 항목은 Sprint 1(A-01~A-04, B-01/B-02/B-04)에서 실제로 고쳤다 — `memdo-backend`의 `_shared/agent-tool-contract.ts`, `apps/ios/Memdo/Memdo/AgentIntent.swift`가 그 결과물이다.
 
 ## 6. 도구 네이밍
 
-모델 도구 이름은 lower snake_case 동사 + 명사:
+모델 도구 이름은 lower snake_case 동사 + 명사 (클라우드), 온디바이스는 Swift 컨벤션에 맞춰 lowerCamelCase로 같은 이름을 미러링한다:
 
 ```text
-search_todos
+search_schedules
 get_day_context
-find_free_time
-search_news
+find_free_slots / findFreeSlots
+propose_schedule / proposeSchedule
 ```
 
 도구 설명에는 반드시 다음을 포함한다.
@@ -177,148 +196,103 @@ search_news
 
 `execute`, `process`, `handle` 같은 모호한 동사는 사용하지 않는다.
 
-## 7. 실행 흐름
+## 7. 실행 흐름 (클라우드 경로 기준)
 
 ```text
-1. 인증 확인
-2. AI 동의와 세부 scope 확인
-3. 사용자 입력 검증
-4. Agent instructions 구성
-5. 허용된 도구만 등록
-6. Responses API 실행
-7. 도구 호출을 서버 도메인 함수로 처리
-8. 최종 structured output 검증
-9. PlanDraft 또는 Proposal 저장
-10. 사용자 승인 화면
-11. 승인 후 일반 Command API 실행
+1. withApi가 사용자 인증 확인 (JWT)
+2. AIConsent.granted 확인 -- 꺼져 있으면 tool 호출 없이 안내 메시지만 반환
+3. chatRequestSchema로 요청 검증 (message/history/model)
+4. rate limit 확인 (RATE_LIMIT_PER_HOUR, agent_chat_requests 테이블)
+5. systemPrompt(오늘 날짜) + 대화 history + 사용자 메시지로 구성
+6. OpenRouter Chat Completions를 SSE로 스트리밍 호출
+7. tool_call 델타를 누적, 완성되면 dispatchToolCall로 즉시 실행
+8. propose_* 도구는 서버측 Reflection(충돌 재검사)을 거쳐 상태에 staging
+9. MAX_TOOL_ITERATIONS 안에서 반복, 모델이 최종 텍스트를 낼 때까지
+10. done 메시지로 staged proposal + 사용량을 클라이언트에 전달
+11. 사용자가 확인 카드에서 승인 -- 그제서야 일반 Command API 호출
 ```
 
-## 8. 출력 타입
+온디바이스 경로는 2~4단계가 없고(로컬 실행, rate limit 무의미) 6~10단계가 Apple `Tool` 프로토콜의 자체 루프로 대체된다. 두 경로 모두 11단계는 동일한 확인 카드 컴포넌트(`ProposedScheduleCard`/`ProposedScheduleUpdateCard`)를 공유한다.
 
-### AgentResponse
+## 8. 출력 타입 (`done` 메시지, `buildDonePayload`)
 
 ```text
-kind:
-  answer
-  todo_search_results
-  plan_draft
-  todo_change_proposal
-  schedule_rule_proposal
-  clarification
-  refusal
-
-message
-evidence[]
-proposal?
-appliedScope
+message              모델의 최종 텍스트
+usage                 promptTokens/completionTokens/costUsd
+proposedSchedule?             CloudProposedScheduleDTO -- iOS가 디코딩함
+proposedScheduleUpdate?       CloudProposedScheduleUpdateDTO -- iOS가 디코딩함
+proposedRoutineUpdate?        아직 iOS DTO에 필드가 없어 조용히 무시됨 (§5-1)
+proposedReviewAction?         아직 iOS DTO에 필드가 없어 조용히 무시됨 (§5-1)
 ```
 
-### TodoChangeProposal
-
-```text
-proposalId
-expiresAt
-summary
-operations[]
-warnings[]
-```
-
-operation:
-
-```text
-create
-update
-reschedule
-complete
-skip
-```
-
-`complete`와 `skip`도 반드시 사용자 확인을 받는다.
+`kind`/`evidence[]`/`appliedScope` 같은 구조화 envelope은 없다 -- 모델의 자연어 응답과 최대 하나의 staged proposal을 함께 반환하는 평평한 구조다. `complete`/`reschedule`/`delete`(propose_schedule_update의 action) 모두 반드시 사용자가 카드에서 승인해야 한다.
 
 ## 9. 프롬프트 구조
 
-```text
-<role>
-개인형 데일리 캘린더의 계획 파트너
-</role>
-
-<product_rules>
-평가하지 않기
-완료 추측 금지
-승인 없는 변경 금지
-</product_rules>
-
-<privacy_scope>
-이번 실행에서 허용된 데이터 필드
-</privacy_scope>
-
-<tool_rules>
-조회 도구 사용 조건
-결과 한도
-재호출 제한
-</tool_rules>
-
-<output_contract>
-정확한 structured output schema
-</output_contract>
-
-<stop_conditions>
-최대 turn과 모호성 처리
-</stop_conditions>
-```
-
-## 10. 실행 제한
+구조화 envelope(XML 태그) 없이 **평문 지시문 목록**이다(`systemPrompt()`, `_shared/agent-cloud-contract.ts`):
 
 ```text
-max model turns: 6
-max tool calls: 8
-search_todos max results: 20
-news candidates before summary: 10
-whole request timeout: 20 seconds
-tool timeout: 3 seconds internal / 8 seconds external
+1. 한국어로만 답하라 (locale ko_KR)
+2. 어떤 페르소나로 행동하는가
+3. 오늘 날짜 (resolveDate('today', ...) 기준)
+4~9. 도구별 사용 조건 -- "생성/추가 요청이면 propose_schedule을 불러라, 텍스트로만 설명하지 마라" 형태로 도구 하나당 한 줄
+10. "직접 수정 금지, 모든 변경은 propose_* + 사용자 승인을 거쳐야 한다"
 ```
 
-한도를 넘으면 부분 결과와 명확한 실패 이유를 반환한다.
+온디바이스는 별도 메커니즘이다 -- `AgentPrompts.yml`(YAML) + `AgentPrompts.swift`가 컨텍스트별(오늘/캘린더/설정/요약 등) instructions와 빠른 요청 프롬프트를 관리한다. 클라우드 systemPrompt와 텍스트를 공유하지 않는다.
+
+## 10. 실행 제한 (실측치)
+
+```text
+MAX_TOOL_ITERATIONS: 5              (agent-cloud-contract.ts)
+RATE_LIMIT_PER_HOUR: 30             (사용자당, rolling hour, agent_chat_requests 카운트)
+history 최대 turn 수: 40             (chatRequestSchema)
+message 최대 길이: 2000자            (chatRequestSchema)
+search_schedules/findFreeSlots 결과: limit(200) -- 페이지네이션 없음
+```
+
+**미구현**: 전체 요청 timeout, 개별 tool 호출 timeout이 코드에 없다(`agent-cloud-chat/index.ts`에 `AbortController`/timeout 없음) -- Edge Function 플랫폼 자체의 실행 시간 제한에만 의존한다. 한도를 넘었을 때 "부분 결과 + 명확한 실패 이유"를 구조적으로 반환하는 경로도 아직 없다.
 
 ## 11. 대화 상태
 
-MVP 기본은 요청 단위 실행이다.
+요청 단위 실행이고, 서버는 대화 상태를 저장하지 않는다.
 
-- 서버에 장기 자유대화 메모리를 만들지 않는다.
-- 사용자가 수정 중인 `PlanDraft`만 24시간 유지한다.
-- 후속 메시지는 draft ID로 문맥을 연결한다.
-- 과거 대화 전체를 매번 모델에 보내지 않는다.
-- 사용자 선호는 명시적 preferences 테이블에서 읽는다.
+- `agent-cloud-chat`는 stateless -- 클라이언트(`AssistantView.swift`의 `cloudHistory()`)가 이미 종료된 메시지들을 매번 통째로 재전송한다(최대 40 turn, §10).
+- `PlanDraft`처럼 서버에 24시간 유지되는 초안 엔터티는 없다 -- staged proposal은 그 요청의 `done` payload 안에만 존재하고, 승인/거절 전까지 클라이언트 메모리(`AgentScheduleUpdateProposal` 등)에만 산다.
+- 사용자 선호는 `get_routine_preferences` 도구로 명시적 preferences 테이블에서 읽는다(원래 설계 그대로).
 
-대화형 사용이 핵심으로 검증되면 Responses continuation 또는 Agents SDK session 중 하나를 선택한다. 둘을 중복 적용하지 않는다.
-
-## 12. Guardrail
+## 12. Guardrail (실제 구현)
 
 ### 입력
 
-- 최대 길이
-- 지원하지 않는 민감 작업 차단
-- 동의 범위 확인
-- 날짜와 타임존 검증
+- `chatRequestSchema`(Zod)가 message 길이·history 개수/길이·model 값을 검증
+- `AIConsent.granted`가 꺼지면 tool dispatch 자체를 타지 않음(§7)
+- 날짜·타임존은 요청 검증이 아니라 `resolveDate`/`DEFAULT_TIMEZONE_OFFSET_MINUTES`로 도구 실행 시점에 계산
 
 ### 도구
 
-- 인증 사용자 ID는 모델 입력이 아니라 서버 context에서 주입
-- 최대 날짜 범위
-- 최대 결과 수
-- SQL, URL, 토큰을 도구 인자로 받지 않음
+- 인증 사용자 ID는 `context.userClaims`에서 서버가 주입 -- 모델 입력이 아님(원래 설계대로 유지)
+- `search_schedules`/`findFreeSlots` 결과는 200건으로 제한
+- SQL·URL·토큰을 도구 인자로 받는 도구 없음
+- 개별 도구 인자는 `_shared/agent-tool-contract.ts`의 `parseAgentToolCall`이 `dispatchToolCall`의 handler 실행 전에 Zod로 검증(§5-1) -- `cloudAgentTools`의 JSON Schema 자체는 여전히 느슨하지만(모델에게 보여주는 안내일 뿐, 강제력 없음), 실제 강제는 이 Zod 레이어가 한다
 
 ### 출력
 
-- JSON Schema 검증
-- 존재하지 않는 Todo ID 거부
-- 조회하지 않은 Todo에 대한 변경 제안 거부
-- 허용 범위 밖의 필드 제거
-- 최대 작업 수 5개
+- `propose_schedule_update`는 존재하지 않는(또는 삭제된) id를 `fetchScheduleById`가 `null`로 걸러 거부
+- `propose_schedule`/`propose_schedule_update` 모두 서버가 직접 재조회해 충돌을 검사(모델이 `search_schedules`를 먼저 안 불렀어도 강제) -- 실패 시 "충돌 없음"으로 조용히 넘기지 않고 `conflictCheckFailed`로 분리(fail-closed)
+- "허용 범위 밖의 필드 제거"는 Zod 스키마의 기본 strip 동작(정의 안 된 키는 조용히 제거)으로 이미 이루어진다 -- `propose_schedule_update`는 한 걸음 더 나가 `action`별 `.strict()` discriminated union이라 `complete`/`delete`에 `date`/`startTime`이 섞여 오면 필드를 조용히 버리지 않고 아예 `INVALID_AGENT_ARGUMENT`로 거부한다
+- 최대 작업 수 5개는 `MAX_TOOL_ITERATIONS`로 반영(§10)
 
-## 13. 감사와 추적
+## 13. 감사와 추적 (실제 상태)
 
-저장:
+실제로 저장하는 것은 `agent_chat_requests(user_id, created_at)` 하나뿐이고, 목적도 rate limit 카운팅이다:
+
+```text
+user_id
+created_at
+```
+
+원래 설계가 그리던 아래 스키마는 **아직 구현되지 않았다** -- model/toolNames/latencyMs/resultKind/providerRequestId 중 어느 것도 기록되지 않는다:
 
 ```text
 agentRunId
@@ -332,20 +306,18 @@ approvalStatus
 providerRequestId
 ```
 
-기본 미저장:
+사용자 메시지 원문·Todo 제목/메모·도구 전체 입출력·모델 응답 원문은 (의도적으로든 결과적으로든) 저장되지 않는다는 점은 원래 설계와 일치한다. 비용/지연/실패 원인을 나중에 분석하려면 이 절의 스키마를 실제로 만드는 작업이 필요하다 -- §14 Eval과 붙여서 진행하는 편이 자연스럽다(같은 이벤트에서 같이 뽑을 수 있는 데이터이므로).
 
-```text
-사용자 메시지 원문
-Todo 제목·메모
-도구 전체 입출력
-모델 응답 원문
-```
+## 14. 평가 (실제 상태)
 
-Agents SDK tracing을 도입할 경우 민감 데이터 포함을 비활성화하고, SDK tracing과 자체 `agent_runs`의 책임을 구분한다.
+**자동화된 Eval은 아직 없다.** 있는 것은 두 종류뿐이다:
 
-## 14. 평가
+1. `agent-cloud-contract.test.ts`(81개 중 다수) -- `resolveDate`/`expandScope`/`findConflict`/SSE 파싱 같은 **Agent 주변 deterministic 코드**의 단위 테스트. "도구 호출 로직이 맞는가"이지 "모델이 맞는 도구를 고르는가"가 아니다.
+2. [`docs/32-agent-manual-test-plan.md`](./32-agent-manual-test-plan.md) -- 실제 OpenRouter 키(과금)와 실기기 Apple Intelligence가 있어야 실행되는 **수동** 체크리스트.
 
-출시 전 최소 평가셋:
+"프롬프트별 도구 선택 정확도·날짜 해석·인자 유효성"을 반복 가능하게 측정하는 자동 Eval Dataset은 아직 없다. §5-1의 Boundary/Contract가 곧 이 Eval의 입력 스펙이 될 수 있으므로, 정의된 Intent/Contract가 안정된 뒤 Eval Dataset을 만드는 것을 다음 작업으로 권장한다 -- 이번 v1 개정 범위에는 포함하지 않았다.
+
+출시 전 최소 평가셋(목표, 아직 데이터셋 자체는 없음):
 
 - 직접 일정 검색 20개
 - 날짜가 모호한 검색 10개
@@ -370,19 +342,23 @@ Agents SDK tracing을 도입할 경우 민감 데이터 포함을 비활성화�
 
 ## 15. 확장 조건
 
-### Model adapter
+### Model registry
 
-두 adapter가 공유하는 것은 구조화 생성과 embedding 요청의 Memdo 입력·출력 계약뿐이다. OpenAI Responses API와 llama.cpp의 HTTP API가 완전히 같다고 가정하지 않는다.
+OpenAI Responses API·llama.cpp 이중 adapter 설계는 ADR-073으로 폐기됐다 -- 서버가 추론비를 부담하는 상시 adapter 계층 자체가 ADR-073이 피하려던 비용 구조다. 지금은 OpenRouter Chat Completions 단일 HTTP API 위에 `ALLOWED_OPENROUTER_MODELS`(고정 배열, `agent-cloud-contract.ts`) 하나로 모델을 제한한다 -- iOS `CloudAgentModelPreference`가 별도로 관리하지 않고 이 배열을 그대로 따른다(`agent-models-contract.ts`).
+
+모델 ID를 architecture 결정으로 다루면(지금처럼 배열에 문자열을 직접 추가/제거) 카탈로그가 바뀔 때마다 코드 변경이 필요하다. §14의 Eval Dataset이 갖춰지면 다음 형태의 **capability + eval 기반 registry**로 옮기는 것을 후보로 둔다:
 
 ```text
-generateStructured(request, schema)
-embed(texts, modelVersion)
+ModelProfile
+  id
+  supportsTools
+  latencyClass
+  costClass
+  evalScore   -- §14 Eval Dataset 통과 점수
+  enabled
 ```
 
-- provider error는 정규 오류로 변환한다.
-- model ID, prompt version, schema version을 AgentRun에 기록한다.
-- local laptop endpoint는 production Edge에서 접근할 수 없으므로 production provider로 자동 fallback하지 않는다.
-- Redis는 rate limit과 짧은 중복 실행 lock에만 사용하고 대화·Todo 원본을 저장하지 않는다.
+그러면 "어떤 모델이 더 똑똑한가"가 아니라 "Memdo Eval을 SLA 안에서 가장 싸게 통과하는 모델은 무엇인가"로 교체 기준이 바뀐다. Eval Dataset이 없는 지금은 이 registry를 만들 근거 데이터가 없으므로 착수하지 않는다.
 
 ### 의미 검색
 

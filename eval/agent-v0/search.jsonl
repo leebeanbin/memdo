@@ -1,0 +1,6 @@
+{"id": "search-001", "category": "search", "input": "내일 일정 뭐 있어?", "expectedBehavior": "SEARCH_SCHEDULES", "expected": {}, "notes": "basic single-day search"}
+{"id": "search-002", "category": "search", "input": "이번 주에 회의가 몇 개나 있어?", "expectedBehavior": "SEARCH_SCHEDULES", "expected": {}, "notes": "range search + count question, model should still search rather than guess"}
+{"id": "search-003", "category": "search", "input": "오늘 치과 예약 있었나?", "expectedBehavior": "SEARCH_SCHEDULES", "expected": {}, "notes": "existence check, not creation"}
+{"id": "search-004", "category": "search", "input": "다음 주 일정 좀 보여줘", "expectedBehavior": "SEARCH_SCHEDULES", "expected": {}, "notes": "week-range search"}
+{"id": "search-005", "category": "update", "input": "아까 만든 치과 일정 완료 처리해줘", "expectedBehavior": "PROPOSE_SCHEDULE_UPDATE", "expected": {"action": "complete"}, "notes": "system prompt requires search_schedules first to resolve the real id before propose_schedule_update -- checks that ordering, not just the final tool"}
+{"id": "search-006", "category": "update", "input": "내일 운동 일정 삭제해줘", "expectedBehavior": "PROPOSE_SCHEDULE_UPDATE", "expected": {"action": "delete"}, "notes": "delete-by-reference, also requires a prior search to resolve the id"}

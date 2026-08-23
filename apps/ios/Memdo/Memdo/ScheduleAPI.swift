@@ -119,15 +119,42 @@ struct CloudProposedScheduleDTO: Decodable {
     let conflictCheckFailed: Bool?
 }
 
+/// Mirrors propose_schedule_update's shape (agent-cloud-contract.ts) --
+/// completing, moving, or deleting an EXISTING item. `title`/`version` are
+/// echoed back by the server (the model only ever supplies an `id`), so the
+/// client has what it needs to call the real todos API without a second
+/// round trip.
+struct CloudProposedScheduleUpdateDTO: Decodable {
+    let id: String
+    let action: String  // "complete" | "reschedule" | "delete"
+    let date: String?
+    let startTime: String?
+    let endTime: String?
+    let title: String
+    let version: Int
+    let conflictTitle: String?
+    let conflictCheckFailed: Bool?
+}
+
 /// One line of the newline-delimited stream agent-cloud-chat responds with.
 /// Every line has exactly one of these populated: `delta` while text is
-/// still arriving, or `done`/`proposedSchedule` on the terminal line, or
-/// `error` if something failed mid-stream.
+/// still arriving, or `done`/`proposedSchedule`/`proposedScheduleUpdate` on
+/// the terminal line, or `error` if something failed mid-stream.
 struct AgentStreamLineDTO: Decodable {
     let delta: String?
     let done: Bool?
     let proposedSchedule: CloudProposedScheduleDTO?
+    let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
     let error: String?
+}
+
+/// agentCloudChat's terminal result -- at most one of these two is non-nil
+/// per turn (the model calls either propose_schedule or
+/// propose_schedule_update, never both in one tool_call), but both are
+/// carried through so the caller doesn't need a third enum just to unwrap.
+struct AgentCloudChatResult {
+    let proposedSchedule: CloudProposedScheduleDTO?
+    let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
 }
 
 struct TodoListResponseDTO: Decodable {
@@ -591,7 +618,7 @@ actor MemdoAPIClient {
         model: String?,
         accessToken: String,
         onDelta: @escaping @MainActor (String) -> Void
-    ) async throws -> CloudProposedScheduleDTO? {
+    ) async throws -> AgentCloudChatResult {
         let url = functionsURL.appending(path: "agent-cloud-chat")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -624,6 +651,7 @@ actor MemdoAPIClient {
         }
 
         var proposedSchedule: CloudProposedScheduleDTO?
+        var proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
         for try await line in bytes.lines {
             guard let lineData = line.data(using: .utf8),
                   let parsed = try? decoder.decode(AgentStreamLineDTO.self, from: lineData) else { continue }
@@ -631,9 +659,15 @@ actor MemdoAPIClient {
             if let message = parsed.error {
                 throw ScheduleAPIError.server(status: 502, code: "INTERNAL_ERROR", message: message, requestID: nil)
             }
-            if parsed.done == true { proposedSchedule = parsed.proposedSchedule }
+            if parsed.done == true {
+                proposedSchedule = parsed.proposedSchedule
+                proposedScheduleUpdate = parsed.proposedScheduleUpdate
+            }
         }
-        return proposedSchedule
+        return AgentCloudChatResult(
+            proposedSchedule: proposedSchedule,
+            proposedScheduleUpdate: proposedScheduleUpdate
+        )
     }
 
     func send<Response: Decodable>(
@@ -849,7 +883,7 @@ actor ScheduleRepository {
         history: [AgentChatTurnDTO],
         model: String?,
         onDelta: @escaping @MainActor (String) -> Void
-    ) async throws -> CloudProposedScheduleDTO? {
+    ) async throws -> AgentCloudChatResult {
         try await api.agentCloudChat(
             message: message,
             history: history,

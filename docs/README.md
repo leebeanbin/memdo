@@ -61,6 +61,7 @@
 | 29 | [UI 그리드·모달 감사](./29-ui-grid-and-modal-audit.md) | iPhone 15 실기 정렬·시트 높이·진입점 검사 결과 |
 | 30 | [백엔드 구현 실행 계획](./30-backend-implementation-plan.md) | 인증부터 일정 저장·동기화·Agent·외부 연결까지 실제 구현 순서 |
 | 31 | [UI ↔ 백엔드 계약 감사](./31-ui-backend-contract-audit.md) | 실제 SwiftUI·DTO·OpenAPI·스키마·구현 단계의 일치 여부 |
+| 32 | [Agent 실사용 테스트 체크리스트](./32-agent-manual-test-plan.md) | 실제 키·실기기로 컨텍스트별 프롬프트→도구 매핑을 확인하는 방법 |
 | UI | [최종 UI/UX 기준선](../apps/ios/Memdo/DESIGN.md) | 확정 색상·화면·내비게이션·위젯·모션 |
 
 ## MVP 성공 조건

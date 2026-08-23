@@ -142,7 +142,7 @@ private struct SearchResultsSection: View {
         ) {
             if let filterDescription {
                 Text(filterDescription)
-                    .font(.caption)
+                    .font(MemdoTypography.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
             if isSearching {
@@ -150,7 +150,7 @@ private struct SearchResultsSection: View {
                     ProgressView()
                         .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                     Text("검색 중")
-                        .font(.subheadline.weight(.semibold))
+                        .font(MemdoTypography.action)
                 }
                 .padding(.horizontal, MemdoMetrics.rowInset)
                 .memdoRowGroup()

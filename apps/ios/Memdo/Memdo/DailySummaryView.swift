@@ -39,7 +39,7 @@ struct DailySummaryView: View {
         MemdoPage(
             title: scope.title,
             subtitle: scope.subtitle(endingAt: date),
-            eyebrow: scope == .today ? "하루 마무리" : "기록 회고",
+            eyebrow: scope == .today ? "오늘 돌아보기" : "기록 회고",
             headerActionIcon: "xmark",
             headerActionLabel: "요약 닫기",
             headerAction: { dismiss() },
@@ -136,7 +136,7 @@ private enum SummaryScope: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .today: "오늘 요약"
+        case .today: "하루 정리"
         case .week: "지난 7일"
         case .month: "지난 30일"
         }
@@ -240,18 +240,18 @@ private struct SummaryAgentDigest: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("일정 분석", systemImage: "chart.bar.fill")
-                .font(.caption.weight(.semibold))
+                .font(MemdoTypography.captionEmphasis)
                 .foregroundStyle(MemdoTheme.brand)
             Text(headline)
-                .font(.headline)
+                .font(MemdoTypography.sectionTitle)
                 .foregroundStyle(MemdoTheme.ink)
             Text(evidence)
-                .font(.subheadline)
+                .font(MemdoTypography.subtitle)
                 .foregroundStyle(MemdoTheme.secondaryInk)
                 .fixedSize(horizontal: false, vertical: true)
             Button(action: onOpenAgent) {
                 Label("더 살펴보기", systemImage: "arrow.up.right")
-                    .font(.subheadline.weight(.semibold))
+                    .font(MemdoTypography.action)
             }
             .buttonStyle(.bordered)
             .tint(MemdoTheme.brand)
@@ -291,14 +291,14 @@ private struct SummaryProgressLine: View {
         VStack(spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text("\(completedCount)/\(totalCount)")
-                    .font(.subheadline.weight(.semibold))
+                    .font(MemdoTypography.action)
                     .monospacedDigit()
                 Text("완료")
-                    .font(.caption)
+                    .font(MemdoTypography.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
                 Spacer(minLength: 0)
                 Text("\(max(totalCount - completedCount, 0)) \(incompleteLabel)")
-                    .font(.caption)
+                    .font(MemdoTypography.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
             ProgressView(value: totalCount == 0 ? 0 : Double(completedCount) / Double(totalCount))
@@ -376,16 +376,16 @@ private struct SummaryHistoryRow: View {
     var body: some View {
         HStack(spacing: MemdoMetrics.rowSpacing) {
             Image(systemName: status.systemImage)
-                .font(.title3)
+                .font(MemdoTypography.title3)
                 .foregroundStyle(status == .completed ? MemdoTheme.secondaryInk : MemdoTheme.brand)
                 .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(schedule.title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(MemdoTypography.action)
                     .lineLimit(2)
                 Text("\(schedule.dateText) · \(schedule.displayTime)")
-                    .font(.caption)
+                    .font(MemdoTypography.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -486,7 +486,7 @@ private struct SummaryReviewRow: View {
     private var completeButton: some View {
         Button(action: onComplete) {
             Image(systemName: "circle")
-                .font(.title3)
+                .font(MemdoTypography.title3)
                 .foregroundStyle(MemdoTheme.brand)
                 .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
         }
@@ -497,10 +497,10 @@ private struct SummaryReviewRow: View {
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(schedule.title)
-                .font(.subheadline.weight(.semibold))
+                .font(MemdoTypography.action)
                 .lineLimit(2)
             Text(schedule.displayTime)
-                .font(.caption)
+                .font(MemdoTypography.caption)
                 .foregroundStyle(MemdoTheme.secondaryInk)
         }
     }
@@ -508,7 +508,7 @@ private struct SummaryReviewRow: View {
     private var tomorrowButton: some View {
         Button(action: onMoveToTomorrow) {
             Label("내일", systemImage: "calendar.badge.clock")
-                .font(.caption.weight(.semibold))
+                .font(MemdoTypography.captionEmphasis)
                 .foregroundStyle(MemdoTheme.secondaryInk)
                 .frame(minHeight: MemdoMetrics.touchTarget)
         }
