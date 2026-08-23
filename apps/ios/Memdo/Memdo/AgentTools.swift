@@ -204,17 +204,8 @@ struct ProposeScheduleTool: Tool {
         let note: String
     }
 
-    /// Minimal, Sendable view of an existing schedule -- just enough to
-    /// conflict-check and name the conflicting item, not the full model.
-    struct ExistingItem: Sendable {
-        let title: String
-        let scheduledDate: Date
-        let startAt: Date?
-        let endAt: Date?
-    }
-
     let proposal: AgentScheduleProposal
-    let existing: [ExistingItem]
+    let existing: [ConflictService.ExistingItem]
 
     func call(arguments: Arguments) async throws -> String {
         // Reject before staging anything -- an unparseable date must never
@@ -232,21 +223,18 @@ struct ProposeScheduleTool: Tool {
         )
         // Reflection step: check the proposal against the real schedule
         // before handing it back, instead of presenting it uncritically.
-        let conflict = conflictingItem(for: draft)
+        let conflict = draft.resolvedInterval().flatMap { interval in
+            ConflictService.conflict(
+                for: AgentTimeRange(start: interval.start, end: interval.end),
+                in: existing
+            )
+        }
         await proposal.propose(draft, conflictTitle: conflict?.title)
 
         guard let conflict else {
             return "'\(draft.title)' 일정을 제안했습니다."
         }
         return "'\(draft.title)' 일정을 제안했습니다. 주의: 같은 시간에 이미 '\(conflict.title)' 일정이 있어요."
-    }
-
-    private func conflictingItem(for draft: ProposedScheduleDraft) -> ExistingItem? {
-        guard let (start, end) = draft.resolvedInterval() else { return nil }
-        return existing.first { item in
-            guard let itemStart = item.startAt, let itemEnd = item.endAt else { return false }
-            return start < itemEnd && end > itemStart
-        }
     }
 }
 
@@ -320,33 +308,17 @@ struct FindFreeSlotTool: Tool {
     }
 
     private func freeSlots(on date: Date, busy: [ScheduleInterval],
-                           duration: TimeInterval, wStart: String, wEnd: String) -> [DateInterval] {
-        let cal    = Calendar.current
-        let start  = timeFrom(wStart, on: date) ?? cal.date(bySettingHour: 8,  minute: 0, second: 0, of: date)!
-        let end    = timeFrom(wEnd,   on: date) ?? cal.date(bySettingHour: 22, minute: 0, second: 0, of: date)!
+                           duration: TimeInterval, wStart: String, wEnd: String) -> [AgentTimeRange] {
+        let cal   = Calendar.current
+        let start = timeFrom(wStart, on: date) ?? cal.date(bySettingHour: 8,  minute: 0, second: 0, of: date)!
+        let end   = timeFrom(wEnd,   on: date) ?? cal.date(bySettingHour: 22, minute: 0, second: 0, of: date)!
 
-        let busyRanges: [DateInterval] = busy
-            .compactMap { s in
-                guard let s1 = s.startAt, let e1 = s.endAt, e1 > s1 else { return nil }
-                return DateInterval(start: s1, end: e1)
-            }
-            .sorted { $0.start < $1.start }
-
-        var slots:  [DateInterval] = []
-        var cursor: Date           = start
-
-        for range in busyRanges {
-            guard range.start > cursor else { cursor = max(cursor, range.end); continue }
-            if range.start.timeIntervalSince(cursor) >= duration {
-                slots.append(DateInterval(start: cursor, duration: duration))
-            }
-            cursor = max(cursor, range.end)
-        }
-        if end.timeIntervalSince(cursor) >= duration {
-            slots.append(DateInterval(start: cursor, duration: duration))
+        let busyRanges: [AgentTimeRange] = busy.compactMap { s in
+            guard let s1 = s.startAt, let e1 = s.endAt else { return nil }
+            return AgentTimeRange(start: s1, end: e1)
         }
 
-        return Array(slots.prefix(3))
+        return FreeSlotService.freeSlots(busy: busyRanges, windowStart: start, windowEnd: end, duration: duration)
     }
 
     private func timeFrom(_ hhmm: String, on date: Date) -> Date? {
@@ -356,10 +328,9 @@ struct FindFreeSlotTool: Tool {
         return Calendar.current.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: date)
     }
 
-    private func formatInterval(_ interval: DateInterval) -> String {
+    private func formatInterval(_ interval: AgentTimeRange) -> String {
         let f = DateFormatting.korean("H:mm")
-        let endTime  = interval.start.addingTimeInterval(interval.duration)
-        return "\(f.string(from: interval.start))–\(f.string(from: endTime))"
+        return "\(f.string(from: interval.start))–\(f.string(from: interval.end))"
     }
 
     private func dateLabel(_ date: Date) -> String {
@@ -382,14 +353,6 @@ struct FindFreeSlotTool: Tool {
 /// for an id it was never given.
 @available(iOS 26, *)
 struct UpdateScheduleTool: Tool {
-    struct ExistingItem: Sendable {
-        let id: String
-        let title: String
-        let scheduledDate: Date
-        let startAt: Date?
-        let endAt: Date?
-    }
-
     let name = "updateSchedule"
     let description = "Proposes completing, rescheduling, or deleting an EXISTING schedule or task for the user to confirm. Use this when the user wants to mark something done, move it, or remove it -- do not just describe it in text. Identify the item by the title as it appears in the current context."
 
@@ -408,7 +371,7 @@ struct UpdateScheduleTool: Tool {
     }
 
     let proposal: AgentScheduleUpdateProposal
-    let existing: [ExistingItem]
+    let existing: [ConflictService.ExistingItem]
 
     func call(arguments: Arguments) async throws -> String {
         guard let action = AgentUpdateAction(rawValue: arguments.action) else {
@@ -429,13 +392,17 @@ struct UpdateScheduleTool: Tool {
             rescheduleDay = expr.resolvedDate()
         }
 
-        var conflict: ExistingItem?
+        var conflict: ConflictService.ExistingItem?
         if let day = rescheduleDay, !arguments.startTime.isEmpty {
             if let start = parseAgentTime(arguments.startTime, on: day) {
                 let end = arguments.endTime.isEmpty
                     ? start.addingTimeInterval(3_600)
                     : (parseAgentTime(arguments.endTime, on: day) ?? start.addingTimeInterval(3_600))
-                conflict = conflictingItem(excluding: match.id, start: start, end: end)
+                conflict = ConflictService.conflict(
+                    for: AgentTimeRange(start: start, end: end),
+                    excludingId: match.id,
+                    in: existing
+                )
             }
         }
 
@@ -456,19 +423,12 @@ struct UpdateScheduleTool: Tool {
         return "'\(match.title)' 항목에 대한 변경을 제안했습니다. 주의: 같은 시간에 이미 '\(conflict.title)' 일정이 있어요."
     }
 
-    private func bestMatch(for title: String) -> ExistingItem? {
+    private func bestMatch(for title: String) -> ConflictService.ExistingItem? {
         let needle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return nil }
         if let exact = existing.first(where: { $0.title == needle }) { return exact }
         return existing.first {
             $0.title.localizedCaseInsensitiveContains(needle) || needle.localizedCaseInsensitiveContains($0.title)
-        }
-    }
-
-    private func conflictingItem(excluding id: String, start: Date, end: Date) -> ExistingItem? {
-        existing.first { item in
-            guard item.id != id, let itemStart = item.startAt, let itemEnd = item.endAt else { return false }
-            return start < itemEnd && end > itemStart
         }
     }
 }

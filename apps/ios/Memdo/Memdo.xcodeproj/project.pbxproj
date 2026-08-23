@@ -11,6 +11,7 @@
 		048C8F30632F364BD0918E91 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 54A9DCC8471814155094BAFF /* AppIcon.icon */; };
 		04DF8C7446EC772D7022AE9A /* AgentPrompts.yml in Resources */ = {isa = PBXBuildFile; fileRef = F8BB7B0BC6E2F7CAF1981DF2 /* AgentPrompts.yml */; };
 		05A16520EDB91AFE6AA6B061 /* ShareWorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9BC3B0CEFE2D4C6854CE6D /* ShareWorkoutView.swift */; };
+		06AC50E98AA4C0324E03F6E0 /* AgentDomainServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD872A2D13D0CBDA8353C15 /* AgentDomainServices.swift */; };
 		07C63312BBCA02E3A38CDA86 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 592EA12B6FF1AB799EF6869C /* ShareViewController.swift */; };
 		08DE99AB607725B2E3D52207 /* MemdoShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7E846EC17F4BCC9B7757596E /* MemdoShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		09F92AF7FB120FDD80087A27 /* DateFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81842BD1CFF4ED836A2E09A7 /* DateFormatting.swift */; };
@@ -21,6 +22,7 @@
 		1A1518E2534696A7B7A56C55 /* MemdoLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F83C89D78FD9D59E7C1EE3 /* MemdoLiveActivity.swift */; };
 		1ACFAEEBEB53F95656F314FC /* MemdoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4EA7A02C55094DEBD06AF37 /* MemdoWidget.swift */; };
 		1F8672E2C40ED8E8853E55EA /* Pretendard-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 97B6BAE4945DFFB47769CA5C /* Pretendard-LICENSE.txt */; };
+		216569CCC3FCC4402CA66A1C /* AgentDomainServicesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC09836B4409CD8802D9A9E1 /* AgentDomainServicesTests.swift */; };
 		27F704F7116840EA5D152218 /* WallpaperIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFB1F40579E7D5062404CC55 /* WallpaperIntent.swift */; };
 		28ACEBD7EE2EC6276D9F3CFE /* WorkoutAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67DDB3585BB47A7B725E0F95 /* WorkoutAPI.swift */; };
 		2A29175D38335F059C4AE766 /* MemdoComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42994A317F898780763B33D4 /* MemdoComponents.swift */; };
@@ -152,6 +154,7 @@
 		9CF4B965CFF4FE3ACB3B3D33 /* PendingWorkoutStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingWorkoutStore.swift; sourceTree = "<group>"; };
 		A5FCF0E385E87960B56A11F4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AB3E052299D1A953107E411D /* EventCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCapture.swift; sourceTree = "<group>"; };
+		ADD872A2D13D0CBDA8353C15 /* AgentDomainServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDomainServices.swift; sourceTree = "<group>"; };
 		AE1B6FFACC369DADAFC99ADB /* MemdoWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MemdoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B159571A9900C21AA6BE4349 /* SecureSessionStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureSessionStorage.swift; sourceTree = "<group>"; };
 		B4D119A0D929FA9AE7D47773 /* AppShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellView.swift; sourceTree = "<group>"; };
@@ -171,6 +174,7 @@
 		E3F01099D4577BD460F6C20F /* ScheduleModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleModelTests.swift; sourceTree = "<group>"; };
 		E81203EAFA09124BA54F8AE7 /* TodayComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayComponents.swift; sourceTree = "<group>"; };
 		EA8A453029530AB440AFEB03 /* ScheduleAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleAPI.swift; sourceTree = "<group>"; };
+		EC09836B4409CD8802D9A9E1 /* AgentDomainServicesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDomainServicesTests.swift; sourceTree = "<group>"; };
 		F29F2315ADA3175E0D4A894C /* MemdoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoTheme.swift; sourceTree = "<group>"; };
 		F2C12B14694C882524384138 /* WallpaperPreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperPreviewSheet.swift; sourceTree = "<group>"; };
 		F8BB7B0BC6E2F7CAF1981DF2 /* AgentPrompts.yml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = AgentPrompts.yml; sourceTree = "<group>"; };
@@ -224,6 +228,7 @@
 		2EF9D59B18ADAF5A2707CBB6 /* MemdoTests */ = {
 			isa = PBXGroup;
 			children = (
+				EC09836B4409CD8802D9A9E1 /* AgentDomainServicesTests.swift */,
 				E3F01099D4577BD460F6C20F /* ScheduleModelTests.swift */,
 			);
 			path = MemdoTests;
@@ -253,6 +258,7 @@
 			isa = PBXGroup;
 			children = (
 				B892B8303D8BC814A1CFDC23 /* AgentComponents.swift */,
+				ADD872A2D13D0CBDA8353C15 /* AgentDomainServices.swift */,
 				89D11582497A9B52756B755E /* AgentIntent.swift */,
 				4CCEC3682202DC527390D6C3 /* AgentPrompts.swift */,
 				DC83A92A9DA90179F3E5254E /* AgentTabBridge.swift */,
@@ -466,6 +472,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				216569CCC3FCC4402CA66A1C /* AgentDomainServicesTests.swift in Sources */,
 				CA69FB6F6D5B184690B56D4A /* ScheduleModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -485,6 +492,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F4F9034A72064E154F3CB506 /* AgentComponents.swift in Sources */,
+				06AC50E98AA4C0324E03F6E0 /* AgentDomainServices.swift in Sources */,
 				C87861497E1330A80544FE13 /* AgentIntent.swift in Sources */,
 				567B8523F98FA34B84994096 /* AgentPrompts.swift in Sources */,
 				190B58650DDB5E6EBE7AD2AC /* AgentTabBridge.swift in Sources */,

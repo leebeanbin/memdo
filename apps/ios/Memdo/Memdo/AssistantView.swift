@@ -151,7 +151,7 @@ struct AgentSheet: View {
                         tools: [
                             ProposeScheduleTool(proposal: proposal, existing: existingItemsSnapshot()),
                             FindFreeSlotTool(snapshot: scheduleSnapshot()),
-                            UpdateScheduleTool(proposal: updateProposal, existing: updatableItemsSnapshot())
+                            UpdateScheduleTool(proposal: updateProposal, existing: existingItemsSnapshot())
                         ],
                         instructions: agentInstructions()
                     )
@@ -495,17 +495,14 @@ struct AgentSheet: View {
         }
     }
 
+    /// Shared by ProposeScheduleTool (excludingId always nil -- new items
+    /// never conflict-exclude anything) and UpdateScheduleTool (excludes the
+    /// item being rescheduled by id) -- both now take the same
+    /// ConflictService.ExistingItem shape.
     @available(iOS 26, *)
-    private func existingItemsSnapshot() -> [ProposeScheduleTool.ExistingItem] {
+    private func existingItemsSnapshot() -> [ConflictService.ExistingItem] {
         scheduleStore.schedules.map {
-            .init(title: $0.title, scheduledDate: $0.scheduledDate, startAt: $0.startAt, endAt: $0.endAt)
-        }
-    }
-
-    @available(iOS 26, *)
-    private func updatableItemsSnapshot() -> [UpdateScheduleTool.ExistingItem] {
-        scheduleStore.schedules.map {
-            .init(id: $0.id.uuidString, title: $0.title, scheduledDate: $0.scheduledDate, startAt: $0.startAt, endAt: $0.endAt)
+            .init(id: $0.id.uuidString, title: $0.title, startAt: $0.startAt, endAt: $0.endAt)
         }
     }
 

@@ -373,15 +373,13 @@ final class ScheduleModelTests: XCTestCase {
         let cal = Calendar(identifier: .gregorian)
         let today = cal.startOfDay(for: .now)
         let existing = [
-            UpdateScheduleTool.ExistingItem(
+            ConflictService.ExistingItem(
                 id: "id-1", title: "팀 회의",
-                scheduledDate: today,
                 startAt: cal.date(byAdding: .hour, value: 9, to: today),
                 endAt: cal.date(byAdding: .hour, value: 10, to: today)
             ),
-            UpdateScheduleTool.ExistingItem(
+            ConflictService.ExistingItem(
                 id: "id-2", title: "점심 약속",
-                scheduledDate: today,
                 startAt: cal.date(byAdding: .hour, value: 12, to: today),
                 endAt: cal.date(byAdding: .hour, value: 13, to: today)
             )
@@ -438,10 +436,8 @@ final class ScheduleModelTests: XCTestCase {
         // date must never reach updateProposal -- checking the returned
         // string alone isn't enough, since a bug could return an error
         // while still having mutated state first (mutation-absence).
-        let cal = Calendar(identifier: .gregorian)
-        let today = cal.startOfDay(for: .now)
         let existing = [
-            UpdateScheduleTool.ExistingItem(id: "id-1", title: "팀 회의", scheduledDate: today, startAt: nil, endAt: nil),
+            ConflictService.ExistingItem(id: "id-1", title: "팀 회의", startAt: nil, endAt: nil),
         ]
         let proposal = AgentScheduleUpdateProposal()
         let tool = UpdateScheduleTool(proposal: proposal, existing: existing)
