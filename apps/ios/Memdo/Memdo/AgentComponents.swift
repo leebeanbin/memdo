@@ -395,7 +395,7 @@ struct ProposedScheduleUpdateCard: View {
 
                 // Reflection result, same convention as ProposedScheduleCard
                 // above -- surfaced before approval, not only after applying.
-                if let conflictTitle = proposal.conflictTitle {
+                if let conflictTitle = proposal.conflict?.title {
                     Label("같은 시간에 '\(conflictTitle)' 일정이 있어요", systemImage: "exclamationmark.triangle.fill")
                         .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(.orange)
@@ -524,7 +524,7 @@ private struct AgentOutputGallery: View {
                 startTimeString: "12:00", endTimeString: "13:00",
                 isTask: false, note: "동료와 함께"
             ),
-            conflictTitle: "팀 회의"
+            conflict: AgentConflictSnapshot(id: "preview-conflict-1", title: "팀 회의")
         )
         return p
     }
@@ -547,7 +547,7 @@ private struct AgentOutputGallery: View {
         p.propose(
             id: "1", action: "complete", title: "보고서 작성",
             dateString: nil, startTimeString: nil, endTimeString: nil,
-            conflictTitle: nil, conflictCheckFailed: false
+            conflict: nil, conflictCheckFailed: false
         )
         return p
     }
@@ -557,7 +557,7 @@ private struct AgentOutputGallery: View {
         p.propose(
             id: "2", action: "reschedule", title: "팀 회의",
             dateString: "tomorrow", startTimeString: "10:00", endTimeString: "11:00",
-            conflictTitle: "1:1 미팅", conflictCheckFailed: false
+            conflict: AgentConflictSnapshot(id: "preview-conflict-2", title: "1:1 미팅"), conflictCheckFailed: false
         )
         return p
     }
@@ -567,7 +567,7 @@ private struct AgentOutputGallery: View {
         p.propose(
             id: "3", action: "delete", title: "취소된 약속",
             dateString: nil, startTimeString: nil, endTimeString: nil,
-            conflictTitle: nil, conflictCheckFailed: false
+            conflict: nil, conflictCheckFailed: false
         )
         return p
     }
@@ -615,7 +615,7 @@ private struct AgentOutputGallery: View {
                 label("일정 제안 카드 — 충돌 있음")
                 ProposedScheduleCard(
                     draft: conflictingScheduleProposal.draft!,
-                    conflictTitle: conflictingScheduleProposal.conflictTitle, conflictCheckFailed: false,
+                    conflictTitle: conflictingScheduleProposal.conflict?.title, conflictCheckFailed: false,
                     onConfirm: {}, onDecline: {}
                 )
 

@@ -194,7 +194,7 @@ struct AgentSheet: View {
             if let draft = proposal.draft {
                 ProposedScheduleCard(
                     draft: draft,
-                    conflictTitle: proposal.conflictTitle,
+                    conflictTitle: proposal.conflict?.title,
                     conflictCheckFailed: proposal.conflictCheckFailed
                 ) {
                     confirmProposal(draft)
@@ -325,18 +325,36 @@ struct AgentSheet: View {
             // independently) rather than distrusting a healthy backend.
             // Never stage a proposal this client can't itself render/resolve
             // correctly (Issue A-04).
+            //
+            // Conflict identity (Issue C-04): the server's conflictTitle has
+            // no stable id to compare against at confirm time, so it's not
+            // used here -- instead this recomputes locally via
+            // ConflictService against the current scheduleStore.schedules,
+            // exactly like the on-device Tools already do at their own
+            // staging point. That keeps both staging paths symmetric: an
+            // AgentConflictSnapshot is always a local recomputation, never a
+            // value trusted from the network. conflictCheckFailed is a
+            // separate, server-only signal (a DB fetch failure a local
+            // recomputation can't reproduce) and is passed through as-is.
             if let proposed = result.proposedSchedule {
                 if AgentDateExpression(token: proposed.date) != nil {
+                    let draft = ProposedScheduleDraft(
+                        title: proposed.title,
+                        dateString: proposed.date,
+                        startTimeString: proposed.startTime?.isEmpty == false ? proposed.startTime : nil,
+                        endTimeString: proposed.endTime?.isEmpty == false ? proposed.endTime : nil,
+                        isTask: proposed.isTask,
+                        note: proposed.note?.isEmpty == false ? proposed.note : nil
+                    )
+                    let conflict = draft.resolvedInterval().flatMap { interval in
+                        ConflictService.conflict(
+                            for: AgentTimeRange(start: interval.start, end: interval.end),
+                            in: existingItemsSnapshot()
+                        )
+                    }
                     proposal.propose(
-                        ProposedScheduleDraft(
-                            title: proposed.title,
-                            dateString: proposed.date,
-                            startTimeString: proposed.startTime?.isEmpty == false ? proposed.startTime : nil,
-                            endTimeString: proposed.endTime?.isEmpty == false ? proposed.endTime : nil,
-                            isTask: proposed.isTask,
-                            note: proposed.note?.isEmpty == false ? proposed.note : nil
-                        ),
-                        conflictTitle: proposed.conflictTitle,
+                        draft,
+                        conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) },
                         conflictCheckFailed: proposed.conflictCheckFailed ?? false
                     )
                 } else {
@@ -346,6 +364,13 @@ struct AgentSheet: View {
             if let proposedUpdate = result.proposedScheduleUpdate {
                 let dateIsValid = proposedUpdate.date.map { AgentDateExpression(token: $0) != nil } ?? true
                 if dateIsValid {
+                    let conflict = rescheduleConflict(
+                        action: proposedUpdate.action,
+                        excludingId: proposedUpdate.id,
+                        dateString: proposedUpdate.date,
+                        startTimeString: proposedUpdate.startTime,
+                        endTimeString: proposedUpdate.endTime
+                    )
                     updateProposal.propose(
                         id: proposedUpdate.id,
                         action: proposedUpdate.action,
@@ -353,7 +378,7 @@ struct AgentSheet: View {
                         dateString: proposedUpdate.date,
                         startTimeString: proposedUpdate.startTime?.isEmpty == false ? proposedUpdate.startTime : nil,
                         endTimeString: proposedUpdate.endTime?.isEmpty == false ? proposedUpdate.endTime : nil,
-                        conflictTitle: proposedUpdate.conflictTitle,
+                        conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) },
                         conflictCheckFailed: proposedUpdate.conflictCheckFailed ?? false
                     )
                 } else {
@@ -380,6 +405,30 @@ struct AgentSheet: View {
         }
     }
 
+    /// Computes the conflict (if any) for a reschedule's target date/time,
+    /// or nil for non-reschedule actions or an unresolvable date/time --
+    /// shared by cloud-response staging and confirm-time revalidation
+    /// (Issue C-04) so both compute a reschedule's conflict identically.
+    private func rescheduleConflict(
+        action: String,
+        excludingId: String,
+        dateString: String?,
+        startTimeString: String?,
+        endTimeString: String?
+    ) -> ConflictService.ExistingItem? {
+        guard action == "reschedule",
+              let dateString, let expr = AgentDateExpression(token: dateString),
+              let startTimeString, !startTimeString.isEmpty,
+              let start = parseAgentTime(startTimeString, on: expr.resolvedDate())
+        else { return nil }
+        let end = endTimeString.flatMap { parseAgentTime($0, on: expr.resolvedDate()) } ?? start.addingTimeInterval(3_600)
+        return ConflictService.conflict(
+            for: AgentTimeRange(start: start, end: end),
+            excludingId: excludingId,
+            in: existingItemsSnapshot()
+        )
+    }
+
     /// Only shown when there's no useful assistant text already on screen --
     /// the backend typically already told the model INVALID_AGENT_ARGUMENT,
     /// which usually produces its own clarifying reply in the streamed text,
@@ -404,6 +453,30 @@ struct AgentSheet: View {
     }
 
     private func confirmProposal(_ draft: ProposedScheduleDraft) {
+        // Revalidate against the current local schedule before mutating
+        // (Issue C-04) -- `proposal.conflict` may have been captured a while
+        // ago at staging time (on-device: whenever the Tool/session was
+        // constructed, not necessarily now; cloud: when the response
+        // arrived), so this recomputes fresh and only proceeds if nothing
+        // riskier than what the user already saw on the card is true now.
+        let fresh = draft.resolvedInterval().flatMap { interval in
+            ConflictService.conflict(
+                for: AgentTimeRange(start: interval.start, end: interval.end),
+                in: existingItemsSnapshot()
+            )
+        }
+        let freshSnapshot = fresh.map { AgentConflictSnapshot(id: $0.id, title: $0.title) }
+        switch conflictRevalidationDecision(staged: proposal.conflict, fresh: freshSnapshot) {
+        case .refresh(let snapshot):
+            // Don't mutate on this tap -- update the card in place (still
+            // pending, @Observable re-renders it) and let the user approve
+            // again having seen the new conflict.
+            proposal.conflict = snapshot
+            return
+        case .proceed:
+            break
+        }
+
         let cal = scheduleStore.calendars.first(where: { $0.provider == .memdo })
                   ?? scheduleStore.calendars.first
         if let cal {
@@ -459,6 +532,26 @@ struct AgentSheet: View {
                 endAt = updateProposal.endTimeString.flatMap { parseAgentTime($0, on: day) }
                     ?? start.addingTimeInterval(3_600)
             }
+
+            // Revalidate before mutating (Issue C-04) -- same contract as
+            // confirmProposal(_:). excludingId: idString so the item being
+            // moved never conflicts with its own (pre-move) row.
+            let fresh = rescheduleConflict(
+                action: action.rawValue,
+                excludingId: idString,
+                dateString: updateProposal.dateString,
+                startTimeString: updateProposal.startTimeString,
+                endTimeString: updateProposal.endTimeString
+            )
+            let freshSnapshot = fresh.map { AgentConflictSnapshot(id: $0.id, title: $0.title) }
+            switch conflictRevalidationDecision(staged: updateProposal.conflict, fresh: freshSnapshot) {
+            case .refresh(let snapshot):
+                updateProposal.conflict = snapshot
+                return
+            case .proceed:
+                break
+            }
+
             scheduleStore.move(id: id, to: day, startAt: startAt, endAt: endAt)
             messages.append(AgentMessage(role: .assistant, text: "'\(title)' 일정을 옮겼어요 ✓"))
         case .delete:
@@ -498,8 +591,12 @@ struct AgentSheet: View {
     /// Shared by ProposeScheduleTool (excludingId always nil -- new items
     /// never conflict-exclude anything) and UpdateScheduleTool (excludes the
     /// item being rescheduled by id) -- both now take the same
-    /// ConflictService.ExistingItem shape.
-    @available(iOS 26, *)
+    /// ConflictService.ExistingItem shape. Not @available(iOS 26, *)-gated
+    /// like scheduleSnapshot()/the Tools themselves -- ConflictService has no
+    /// FoundationModels dependency, and this is also called from the cloud
+    /// path (sendWithCloudAgent) and confirm-time revalidation
+    /// (confirmProposal/confirmScheduleUpdateProposal), neither of which are
+    /// iOS26-only.
     private func existingItemsSnapshot() -> [ConflictService.ExistingItem] {
         scheduleStore.schedules.map {
             .init(id: $0.id.uuidString, title: $0.title, startAt: $0.startAt, endAt: $0.endAt)

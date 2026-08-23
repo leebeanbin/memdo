@@ -102,27 +102,32 @@ struct ProposedScheduleDraft: Sendable, Equatable {
 @Observable
 final class AgentScheduleProposal {
     var draft: ProposedScheduleDraft?
-    /// Title of a conflicting existing item, set by ProposeScheduleTool's own
-    /// reflection step (see call(arguments:)) so ProposedScheduleCard can warn
-    /// before the user approves, rather than only after saving.
-    var conflictTitle: String?
+    /// Conflict snapshot as of staging time (on-device Tool call, or cloud
+    /// response ingestion) -- ConflictService.conflict(...) recomputed
+    /// locally against scheduleStore.schedules in both cases (Issue C-04),
+    /// not trusted from the server's own conflictTitle. Confirm-time
+    /// revalidates this against a fresh recomputation before mutating; see
+    /// conflictRevalidationDecision(staged:fresh:).
+    var conflict: AgentConflictSnapshot?
     /// True when the conflict check itself couldn't be verified server-side
     /// (see CloudProposedScheduleDTO.conflictCheckFailed) -- shown as its own
-    /// warning rather than silently treated as "no conflict."
+    /// warning rather than silently treated as "no conflict." Server-only
+    /// signal (a local recomputation can't fail the way a DB fetch can), so
+    /// it stays independent of `conflict`.
     var conflictCheckFailed: Bool = false
-    func propose(_ d: ProposedScheduleDraft, conflictTitle: String? = nil, conflictCheckFailed: Bool = false) {
+    func propose(_ d: ProposedScheduleDraft, conflict: AgentConflictSnapshot? = nil, conflictCheckFailed: Bool = false) {
         draft = d
-        self.conflictTitle = conflictTitle
+        self.conflict = conflict
         self.conflictCheckFailed = conflictCheckFailed
     }
-    func clear() { draft = nil; conflictTitle = nil; conflictCheckFailed = false }
+    func clear() { draft = nil; conflict = nil; conflictCheckFailed = false }
 }
 
 /// Pending state for an Agent proposal to complete, move, or delete an
 /// EXISTING item (propose_schedule_update), mirroring AgentScheduleProposal's
-/// shape for creates. `id` is the real todos.id the server echoed back from
-/// search_schedules, not a client-generated value. Cloud-only for now --
-/// propose_schedule_update has no on-device tool equivalent yet.
+/// shape for creates. `id` is the real todos.id (on-device: resolved by
+/// UpdateScheduleTool.bestMatch(for:); cloud: echoed back from
+/// search_schedules), not a client-generated value.
 @MainActor
 @Observable
 final class AgentScheduleUpdateProposal {
@@ -132,7 +137,9 @@ final class AgentScheduleUpdateProposal {
     var dateString: String?       // reschedule only
     var startTimeString: String?  // reschedule only
     var endTimeString: String?    // reschedule only
-    var conflictTitle: String?
+    /// Same staging-time-local-recomputation contract as
+    /// AgentScheduleProposal.conflict -- see that doc comment.
+    var conflict: AgentConflictSnapshot?
     var conflictCheckFailed: Bool = false
 
     var isPending: Bool { id != nil }
@@ -158,7 +165,7 @@ final class AgentScheduleUpdateProposal {
         dateString: String?,
         startTimeString: String?,
         endTimeString: String?,
-        conflictTitle: String?,
+        conflict: AgentConflictSnapshot?,
         conflictCheckFailed: Bool
     ) {
         self.id = id
@@ -167,7 +174,7 @@ final class AgentScheduleUpdateProposal {
         self.dateString = dateString
         self.startTimeString = startTimeString
         self.endTimeString = endTimeString
-        self.conflictTitle = conflictTitle
+        self.conflict = conflict
         self.conflictCheckFailed = conflictCheckFailed
     }
 
@@ -178,7 +185,7 @@ final class AgentScheduleUpdateProposal {
         dateString = nil
         startTimeString = nil
         endTimeString = nil
-        conflictTitle = nil
+        conflict = nil
         conflictCheckFailed = false
     }
 }
@@ -229,7 +236,7 @@ struct ProposeScheduleTool: Tool {
                 in: existing
             )
         }
-        await proposal.propose(draft, conflictTitle: conflict?.title)
+        await proposal.propose(draft, conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) })
 
         guard let conflict else {
             return "'\(draft.title)' 일정을 제안했습니다."
@@ -413,7 +420,7 @@ struct UpdateScheduleTool: Tool {
             dateString: arguments.date.isEmpty ? nil : arguments.date,
             startTimeString: arguments.startTime.isEmpty ? nil : arguments.startTime,
             endTimeString: arguments.endTime.isEmpty ? nil : arguments.endTime,
-            conflictTitle: conflict?.title,
+            conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) },
             conflictCheckFailed: false
         )
 

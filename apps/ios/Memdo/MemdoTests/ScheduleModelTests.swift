@@ -253,19 +253,19 @@ final class ScheduleModelTests: XCTestCase {
             dateString: "tomorrow",
             startTimeString: "09:00",
             endTimeString: "10:00",
-            conflictTitle: "다른 일정",
+            conflict: AgentConflictSnapshot(id: "conflict-1", title: "다른 일정"),
             conflictCheckFailed: false
         )
 
         XCTAssertTrue(proposal.isPending)
         XCTAssertEqual(proposal.displayActionLabel, "일정 변경")
         XCTAssertEqual(proposal.displayDate, "내일")
-        XCTAssertEqual(proposal.conflictTitle, "다른 일정")
+        XCTAssertEqual(proposal.conflict?.title, "다른 일정")
 
         proposal.clear()
         XCTAssertFalse(proposal.isPending)
         XCTAssertNil(proposal.action)
-        XCTAssertNil(proposal.conflictTitle)
+        XCTAssertNil(proposal.conflict)
     }
 
     @MainActor
@@ -281,7 +281,7 @@ final class ScheduleModelTests: XCTestCase {
             proposal.propose(
                 id: "x", action: action, title: "t",
                 dateString: nil, startTimeString: nil, endTimeString: nil,
-                conflictTitle: nil, conflictCheckFailed: false
+                conflict: nil, conflictCheckFailed: false
             )
             XCTAssertEqual(proposal.displayActionLabel, label, action)
         }
@@ -392,7 +392,7 @@ final class ScheduleModelTests: XCTestCase {
         _ = try await tool.call(arguments: .init(title: "팀 회의", action: "complete", date: "", startTime: "", endTime: ""))
         XCTAssertEqual(proposal.id, "id-1")
         XCTAssertEqual(proposal.action, "complete")
-        XCTAssertNil(proposal.conflictTitle)
+        XCTAssertNil(proposal.conflict)
         proposal.clear()
 
         // Fuzzy (substring) title match still resolves to the right id.
@@ -403,13 +403,37 @@ final class ScheduleModelTests: XCTestCase {
         // Reschedule into an occupied slot surfaces the conflicting title.
         _ = try await tool.call(arguments: .init(title: "팀 회의", action: "reschedule", date: "today", startTime: "12:30", endTime: "13:00"))
         XCTAssertEqual(proposal.id, "id-1")
-        XCTAssertEqual(proposal.conflictTitle, "점심 약속")
+        XCTAssertEqual(proposal.conflict?.title, "점심 약속")
         proposal.clear()
 
         // No matching title -> nothing proposed.
         let result = try await tool.call(arguments: .init(title: "존재하지 않는 일정", action: "delete", date: "", startTime: "", endTime: ""))
         XCTAssertFalse(proposal.isPending)
         XCTAssertTrue(result.contains("찾지 못했어요"))
+    }
+
+    @available(iOS 26, *)
+    @MainActor
+    func test_reschedule_selfOnlyConflict() async throws {
+        // Issue C-04 Acceptance Criteria #8: reschedule must exclude the
+        // target's own (pre-move) row -- with only itself in `existing`,
+        // moving it to overlap its own current time must never read as a
+        // self-conflict.
+        let cal = Calendar(identifier: .gregorian)
+        let today = cal.startOfDay(for: .now)
+        let existing = [
+            ConflictService.ExistingItem(
+                id: "id-1", title: "팀 회의",
+                startAt: cal.date(byAdding: .hour, value: 9, to: today),
+                endAt: cal.date(byAdding: .hour, value: 10, to: today)
+            ),
+        ]
+        let proposal = AgentScheduleUpdateProposal()
+        let tool = UpdateScheduleTool(proposal: proposal, existing: existing)
+
+        _ = try await tool.call(arguments: .init(title: "팀 회의", action: "reschedule", date: "today", startTime: "09:00", endTime: "10:00"))
+        XCTAssertEqual(proposal.id, "id-1")
+        XCTAssertNil(proposal.conflict)
     }
 
     func testAgentDateExpressionRejectsInvalidTokens() {

@@ -82,3 +82,53 @@ enum ConflictService {
         }
     }
 }
+
+/// id+title bundled into one optional value instead of two independent
+/// optionals (`conflictId`/`conflictTitle`) -- "id is set but title isn't"
+/// is not a state either AgentScheduleProposal/AgentScheduleUpdateProposal
+/// can be in.
+struct AgentConflictSnapshot: Sendable, Equatable {
+    let id: String
+    let title: String
+}
+
+enum ConflictRevalidationDecision: Equatable {
+    case proceed
+    case refresh(AgentConflictSnapshot)
+}
+
+/// Shared by confirmProposal(_:)/confirmScheduleUpdateProposal() (Issue
+/// C-04) -- compares the conflict snapshot captured at staging time (which
+/// may itself already be stale: on-device Tools hold whatever snapshot
+/// existed when the LanguageModelSession's tools were constructed, not
+/// necessarily "now") against one freshly recomputed at confirm time
+/// against scheduleStore.schedules. The guarantee C-04 provides is this
+/// confirm-time recomputation, not that staging was fresh.
+///
+/// Comparison is by `id` (stable identity), not `title` -- a same-titled
+/// but different schedule replacing the staged conflict must not be
+/// mistaken for "unchanged". A conflict disappearing between staging and
+/// confirm is treated as benign (risk went down, not up) and proceeds
+/// without requiring re-approval; only a new or different conflict blocks
+/// this tap and asks the user to approve again having seen it.
+///
+/// Known limitation: ConflictService.conflict(...) returns the first match
+/// in `existing`'s input order, not sorted by time (see ConflictService's
+/// doc comment). If the set of actual conflicts is unchanged but
+/// scheduleStore.schedules' order shifts between staging and confirm, the
+/// "first match" id can change even though nothing riskier happened --
+/// this reads as `.refresh` (a conservative extra tap) rather than
+/// `.proceed`. This is a consequence of the "first match" contract, not a
+/// bug, and isn't worth a different conflict-selection policy just to
+/// avoid it.
+func conflictRevalidationDecision(
+    staged: AgentConflictSnapshot?,
+    fresh: AgentConflictSnapshot?
+) -> ConflictRevalidationDecision {
+    switch (staged, fresh) {
+    case (_, nil): return .proceed
+    case (nil, let fresh?): return .refresh(fresh)
+    case (let staged?, let fresh?) where staged.id == fresh.id: return .proceed
+    case (_, let fresh?): return .refresh(fresh)
+    }
+}

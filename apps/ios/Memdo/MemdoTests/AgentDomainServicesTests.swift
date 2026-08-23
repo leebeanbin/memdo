@@ -141,4 +141,66 @@ final class AgentDomainServicesTests: XCTestCase {
         let result = ConflictService.conflict(for: range("10:00", "11:00"), in: existing)
         XCTAssertNil(result)
     }
+
+    // MARK: - conflictRevalidationDecision (Issue C-04)
+    //
+    // confirmProposal(_:)/confirmScheduleUpdateProposal() are private View
+    // methods with no meaningful way to drive them in isolation from
+    // XCTest, so "does a second tap actually mutate" is verified here at
+    // the decision-function level instead: both call sites route every
+    // confirm through conflictRevalidationDecision, so two consecutive
+    // calls (first with the stale staged value, second with staged
+    // manually advanced to what the first call's .refresh produced) is
+    // exactly the "tap, see refreshed card, tap again" sequence, without
+    // needing to instantiate the View.
+
+    private let snapA = AgentConflictSnapshot(id: "a", title: "회의")
+    private let snapB = AgentConflictSnapshot(id: "b", title: "다른 일정")
+    // Same title as snapA, different id -- the scenario that motivated
+    // comparing by id instead of title (staged item deleted, a new one
+    // with the same title took its place before confirm).
+    private let snapAPrimeTitle = AgentConflictSnapshot(id: "b", title: "회의")
+
+    func test_conflictRevalidation_noneToNone_proceeds() {
+        XCTAssertEqual(conflictRevalidationDecision(staged: nil, fresh: nil), .proceed)
+    }
+
+    func test_conflictRevalidation_sameIdToSameId_proceeds() {
+        XCTAssertEqual(conflictRevalidationDecision(staged: snapA, fresh: snapA), .proceed)
+    }
+
+    func test_conflictRevalidation_conflictResolved_proceedsWithoutReapproval() {
+        // Benign: risk went down, not up -- no re-approval required.
+        XCTAssertEqual(conflictRevalidationDecision(staged: snapA, fresh: nil), .proceed)
+    }
+
+    func test_conflictRevalidation_noneToNewConflict_refreshesWithoutMutating() {
+        XCTAssertEqual(conflictRevalidationDecision(staged: nil, fresh: snapB), .refresh(snapB))
+    }
+
+    func test_conflictRevalidation_differentId_refreshesWithoutMutating() {
+        XCTAssertEqual(conflictRevalidationDecision(staged: snapA, fresh: snapB), .refresh(snapB))
+    }
+
+    func test_conflictRevalidation_sameTitleDifferentId_isTreatedAsChanged() {
+        // The scenario Issue C-04's identity-over-title fix targets directly:
+        // title comparison alone would have called this "unchanged".
+        XCTAssertEqual(conflictRevalidationDecision(staged: snapA, fresh: snapAPrimeTitle), .refresh(snapAPrimeTitle))
+    }
+
+    func test_conflictRevalidation_refreshThenSecondTap_proceeds() {
+        // First tap: staged (nil) doesn't match fresh (B) -> refresh, no mutation.
+        let firstTap = conflictRevalidationDecision(staged: nil, fresh: snapB)
+        guard case .refresh(let refreshed) = firstTap else {
+            return XCTFail("expected .refresh, got \(firstTap)")
+        }
+        XCTAssertEqual(refreshed, snapB)
+
+        // Card now shows `refreshed` as the staged conflict (proposal.conflict
+        // = refreshed, exactly as confirmProposal(_:)/confirmScheduleUpdateProposal()
+        // do on .refresh). Second tap, conflict state unchanged since the refresh
+        // -> proceeds, which is where the real save/move call happens.
+        let secondTap = conflictRevalidationDecision(staged: refreshed, fresh: snapB)
+        XCTAssertEqual(secondTap, .proceed)
+    }
 }
