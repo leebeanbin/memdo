@@ -141,6 +141,22 @@ propose_review_actions    회고 작성/수정 제안
 
 모든 `propose_*`는 제안만 staging하고, 승인 후 앱이 기존 일반 API(`todos`, `rules`, `preferences` 등)를 호출한다.
 
+### Capability matrix
+
+위 분류를 iOS `AgentRuntime.swift`의 `AgentCapability`/`AgentRuntimeKind.capabilities`가 타입으로 고정한다(Epic D-01). Runtime routing의 입력으로 쓰이진 않는다 — 지금은 on-device 가용 여부만으로 라우팅하고(§2), 자연어 intent로 어떤 capability가 필요한지 판단할 결정론적 방법이 아직 없기 때문이다.
+
+| Capability | On-device | Cloud |
+| --- | :---: | :---: |
+| `proposeSchedule` | ✅ | ✅ |
+| `proposeScheduleUpdate` | ✅ | ✅ |
+| `freeSlotSearch` | ✅ | ✅ |
+| `scheduleSearch` | — | ✅ |
+| `dayContext` | — | ✅ |
+| `routinePreferences` | — | ✅ |
+| `reviewHistory` | — | ✅ |
+| `proposeRoutineUpdate` | — | ✅ |
+| `proposeReviewActions` | — | ✅ |
+
 ## 5-1. LLM Responsibility Boundary v1
 
 LLM은 Agent 그 자체가 아니라 **자연어를 제한된 도구 호출로 바꾸는 확률적 컴포넌트**다. 아래 표가 Memdo에서 LLM과 코드의 책임 경계다. "LLM"으로 표시된 줄도 결과값은 반드시 코드가 재검증한다 — LLM의 판단이 곧 사실로 취급되는 지점은 없어야 한다.

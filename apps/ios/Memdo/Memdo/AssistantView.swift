@@ -77,16 +77,21 @@ struct AgentSheet: View {
 
     let context: AgentContext
 
-    @State private var _sessionBacking: AnyObject? = nil
+    /// nil until the sheet's .task runs -- AgentCoordinator owns runtime
+    /// selection, execution lifecycle, and cancellation (previously done
+    /// inline in this View via activeTask/_sessionBacking).
+    @State private var coordinator: AgentCoordinator?
     @State private var isLoading = false
     @State private var showSessionGapNotice = false
     @State private var showsResetConfirmation = false
     @State private var proposal = AgentScheduleProposal()
     @State private var updateProposal = AgentScheduleUpdateProposal()
-    /// Tracked so a new send can cancel whatever's still in flight instead of
-    /// leaving it to keep streaming into a `messages[last]` index that's
-    /// since shifted out from under it.
-    @State private var activeTask: Task<Void, Never>?
+    /// The placeholder assistant bubble for whichever turn is currently in
+    /// flight -- read by ingestCloudResult(_:), which CloudAgentRuntime
+    /// calls back into after this View has moved on to constructing the
+    /// next request, so it can't just close over a local messageID the way
+    /// per-send closures do.
+    @State private var currentAssistantMessageID: AgentMessage.ID?
     /// True once we've determined the cloud path is needed (no on-device
     /// model on this OS/device) but no OpenRouter key is connected yet --
     /// prompts the user to connect immediately instead of only after they
@@ -144,20 +149,12 @@ struct AgentSheet: View {
             Text("현재 대화 내용이 삭제됩니다.")
         }
         .task {
-            if #available(iOS 26, *), case .available = SystemLanguageModel.default.availability {
+            ensureCoordinator()
+            if isOnDeviceAvailable() {
                 let hadHistory = !messages.isEmpty
-                if typedSession == nil {
-                    _sessionBacking = LanguageModelSession(
-                        tools: [
-                            ProposeScheduleTool(proposal: proposal, existing: existingItemsSnapshot()),
-                            FindFreeSlotTool(snapshot: scheduleSnapshot()),
-                            UpdateScheduleTool(proposal: updateProposal, existing: existingItemsSnapshot())
-                        ],
-                        instructions: agentInstructions()
-                    )
-                    if hadHistory { showSessionGapNotice = true }
+                if coordinator?.prewarmOnDevice() == true, hadHistory {
+                    showSessionGapNotice = true
                 }
-                typedSession?.prewarm()
             } else {
                 // No on-device model on this OS/device -- every send() call
                 // will need the cloud path, so check the connection now
@@ -250,25 +247,32 @@ struct AgentSheet: View {
         )
     }
 
-    /// Set isLoading synchronously, before scheduling the Task -- sendWithCloudAgent/
-    /// sendWithFoundationModels used to set this at the top of their own
-    /// (async) bodies, which left a window where a second call in the same
-    /// run loop pass would still see isLoading == false and pass the guard
-    /// in send(). Two overlapping streams then both wrote into
-    /// `messages[last]`, which shifts as each one appends its own
-    /// messages -- the runaway/duplicated-output bug reported from tapping a
-    /// quick action. Shared by send()/retry() so both stay in sync.
+    /// Set isLoading synchronously, before scheduling the Task -- this used
+    /// to be set at the top of the (async) send functions themselves, which
+    /// left a window where a second call in the same run loop pass would
+    /// still see isLoading == false and pass the guard in send(). Two
+    /// overlapping streams then both wrote into `messages[last]`, which
+    /// shifts as each one appends its own messages -- the runaway/
+    /// duplicated-output bug reported from tapping a quick action. Shared
+    /// by send()/retry() so both stay in sync.
     private func dispatchToModel(_ prompt: String) {
         isLoading = true
-        activeTask?.cancel()
-        // On-device when this OS/device actually has it available; otherwise
-        // the cloud path (BYOK via OpenRouter, see agent-cloud-chat) covers
-        // both older devices and open-ended requests the fixed-shape
-        // on-device tools aren't suited for.
-        if #available(iOS 26, *), case .available = SystemLanguageModel.default.availability {
-            activeTask = Task { await sendWithFoundationModels(prompt) }
-        } else {
-            activeTask = Task { await sendWithCloudAgent(prompt) }
+        ensureCoordinator()
+        // Computed before appending the placeholder below -- agentConversationHistory's
+        // precondition is that `messages.last` is the current turn (the user
+        // message just appended by send()/retry()), not yet this turn's
+        // still-empty assistant placeholder.
+        let history = agentConversationHistory(from: messages)
+        let placeholder = AgentMessage(role: .assistant, text: "", isStreaming: true)
+        messages.append(placeholder)
+        let messageID = placeholder.id
+        currentAssistantMessageID = messageID
+        coordinator?.send(
+            prompt: prompt,
+            history: history,
+            onDeviceAvailable: isOnDeviceAvailable()
+        ) { event in
+            self.handleCoordinatorEvent(event, messageID: messageID)
         }
     }
 
@@ -284,123 +288,155 @@ struct AgentSheet: View {
         dispatchToModel(prompt)
     }
 
-    private func cloudHistory() -> [AgentChatTurnDTO] {
-        agentCloudHistory(from: messages)
+    private func isOnDeviceAvailable() -> Bool {
+        if #available(iOS 26, *), case .available = SystemLanguageModel.default.availability {
+            return true
+        }
+        return false
     }
 
-    private func sendWithCloudAgent(_ prompt: String) async {
-        let history = cloudHistory()
-        // isLoading is already true -- send()/retry() set it synchronously
-        // before scheduling this Task.
-        let placeholder = AgentMessage(role: .assistant, text: "", isStreaming: true)
-        messages.append(placeholder)
-        let messageID = placeholder.id
-        // Every mutation below targets messageID specifically rather than
-        // "whatever's currently last" -- if this call gets cancelled by a
-        // newer send(), messages.last has since moved on to that newer
-        // call's own placeholder, and indices-last writes here would land on
-        // the wrong message (this was the actual bug behind quick actions
-        // appearing to pour out endless/duplicated text).
-        defer {
+    /// Builds the Coordinator once per sheet lifetime -- mirrors the old
+    /// code's "only construct a session if one doesn't exist yet" but one
+    /// level up, since AgentCoordinator now owns the runtime(s) instead of
+    /// this View holding a LanguageModelSession directly.
+    private func ensureCoordinator() {
+        guard coordinator == nil else { return }
+        var onDeviceFactory: (() -> AgentRuntime)?
+        if #available(iOS 26, *), case .available = SystemLanguageModel.default.availability {
+            onDeviceFactory = { self.makeOnDeviceRuntime() }
+        }
+        coordinator = AgentCoordinator(
+            onDeviceRuntimeFactory: onDeviceFactory,
+            cloudRuntime: CloudAgentRuntime(scheduleStore: scheduleStore) { result in
+                self.ingestCloudResult(result)
+            }
+        )
+    }
+
+    @available(iOS 26, *)
+    private func makeOnDeviceRuntime() -> AgentRuntime {
+        OnDeviceAgentRuntime(
+            tools: [
+                ProposeScheduleTool(proposal: proposal, existing: existingItemsSnapshot()),
+                FindFreeSlotTool(snapshot: scheduleSnapshot()),
+                UpdateScheduleTool(proposal: updateProposal, existing: existingItemsSnapshot())
+            ],
+            instructions: agentInstructions()
+        )
+    }
+
+    /// Every mutation here targets messageID specifically rather than
+    /// "whatever's currently last" -- if this call gets cancelled by a newer
+    /// send(), messages.last has since moved on to that newer call's own
+    /// placeholder, and indices-last writes here would land on the wrong
+    /// message (this was the actual bug behind quick actions appearing to
+    /// pour out endless/duplicated text). AgentCoordinator never calls this
+    /// for a superseded/cancelled turn (see AgentExecutionFailure's doc
+    /// comment), so there's no cancellation case to handle here anymore.
+    private func handleCoordinatorEvent(_ event: AgentCoordinatorEvent, messageID: AgentMessage.ID) {
+        switch event {
+        case .started:
+            break
+        case .textSnapshot(let text):
+            if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                messages[index].text = text
+            }
+        case .finished:
             isLoading = false
             if let index = messages.firstIndex(where: { $0.id == messageID }) {
                 messages[index].isStreaming = false
             }
-        }
-
-        do {
-            let result = try await scheduleStore.agentCloudChat(
-                message: prompt,
-                history: history,
-                model: CloudAgentModelPreference.selected
-            ) { delta in
-                if let index = messages.firstIndex(where: { $0.id == messageID }) {
-                    messages[index].text += delta
-                }
-            }
-            // Trust-boundary re-validation: agent-tool-contract.ts already
-            // rejects an invalid date before staging server-side, so this
-            // should be unreachable in production -- it defends against a
-            // client/backend version skew (either side shipped
-            // independently) rather than distrusting a healthy backend.
-            // Never stage a proposal this client can't itself render/resolve
-            // correctly (Issue A-04).
-            //
-            // Conflict identity (Issue C-04): the server's conflictTitle has
-            // no stable id to compare against at confirm time, so it's not
-            // used here -- instead this recomputes locally via
-            // ConflictService against the current scheduleStore.schedules,
-            // exactly like the on-device Tools already do at their own
-            // staging point. That keeps both staging paths symmetric: an
-            // AgentConflictSnapshot is always a local recomputation, never a
-            // value trusted from the network. conflictCheckFailed is a
-            // separate, server-only signal (a DB fetch failure a local
-            // recomputation can't reproduce) and is passed through as-is.
-            if let proposed = result.proposedSchedule {
-                if AgentDateExpression(token: proposed.date) != nil {
-                    let draft = ProposedScheduleDraft(
-                        title: proposed.title,
-                        dateString: proposed.date,
-                        startTimeString: proposed.startTime?.isEmpty == false ? proposed.startTime : nil,
-                        endTimeString: proposed.endTime?.isEmpty == false ? proposed.endTime : nil,
-                        isTask: proposed.isTask,
-                        note: proposed.note?.isEmpty == false ? proposed.note : nil
-                    )
-                    let conflict = draft.resolvedInterval().flatMap { interval in
-                        ConflictService.conflict(
-                            for: AgentTimeRange(start: interval.start, end: interval.end),
-                            in: existingItemsSnapshot()
-                        )
-                    }
-                    proposal.propose(
-                        draft,
-                        conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) },
-                        conflictCheckFailed: proposed.conflictCheckFailed ?? false
-                    )
-                } else {
-                    appendRecoverableErrorIfNoAssistantText(messageID: messageID)
-                }
-            }
-            if let proposedUpdate = result.proposedScheduleUpdate {
-                let dateIsValid = proposedUpdate.date.map { AgentDateExpression(token: $0) != nil } ?? true
-                if dateIsValid {
-                    let conflict = rescheduleConflict(
-                        action: proposedUpdate.action,
-                        excludingId: proposedUpdate.id,
-                        dateString: proposedUpdate.date,
-                        startTimeString: proposedUpdate.startTime,
-                        endTimeString: proposedUpdate.endTime
-                    )
-                    updateProposal.propose(
-                        id: proposedUpdate.id,
-                        action: proposedUpdate.action,
-                        title: proposedUpdate.title,
-                        dateString: proposedUpdate.date,
-                        startTimeString: proposedUpdate.startTime?.isEmpty == false ? proposedUpdate.startTime : nil,
-                        endTimeString: proposedUpdate.endTime?.isEmpty == false ? proposedUpdate.endTime : nil,
-                        conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) },
-                        conflictCheckFailed: proposedUpdate.conflictCheckFailed ?? false
-                    )
-                } else {
-                    appendRecoverableErrorIfNoAssistantText(messageID: messageID)
-                }
-            }
-        } catch ScheduleAPIError.server(_, let code, _, _) where code == "RESOURCE_NOT_FOUND" {
-            if let index = messages.firstIndex(where: { $0.id == messageID }) {
+        case .failed(let failure):
+            isLoading = false
+            guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
+            messages[index].isStreaming = false
+            switch failure {
+            case .cloudConnectionRequired:
                 messages[index].text = "이 기기에서 Agent를 쓰려면 클라우드 연결이 필요해요."
                 messages[index].isError = true
-            }
-            // Open the connect sheet right here instead of leaving the user
-            // to find Settings > 클라우드 Agent on their own.
-            needsCloudConnection = true
-        } catch is CancellationError {
-            // A newer send()/resetConversation() cancelled this one -- its
-            // own placeholder gets cleaned up by its own defer/error path,
-            // not this one. Silently stop.
-        } catch {
-            if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                // Open the connect sheet right here instead of leaving the
+                // user to find Settings > 클라우드 Agent on their own.
+                needsCloudConnection = true
+            case .runtimeFailure:
                 messages[index].text = "오류가 발생했어요. 다시 시도해주세요."
                 messages[index].isError = true
+            }
+        }
+    }
+
+    /// CloudAgentRuntime's onResult callback -- called once a cloud turn's
+    /// result DTO is in, with currentAssistantMessageID pointing at that
+    /// turn's placeholder (set synchronously by dispatchToModel right before
+    /// the coordinator.send() call this is a side effect of, so it's still
+    /// correct here: AgentCoordinator only ever has one turn in flight at a
+    /// time).
+    private func ingestCloudResult(_ result: AgentCloudChatResult) {
+        guard let messageID = currentAssistantMessageID else { return }
+        // Trust-boundary re-validation: agent-tool-contract.ts already
+        // rejects an invalid date before staging server-side, so this
+        // should be unreachable in production -- it defends against a
+        // client/backend version skew (either side shipped
+        // independently) rather than distrusting a healthy backend.
+        // Never stage a proposal this client can't itself render/resolve
+        // correctly (Issue A-04).
+        //
+        // Conflict identity (Issue C-04): the server's conflictTitle has
+        // no stable id to compare against at confirm time, so it's not
+        // used here -- instead this recomputes locally via
+        // ConflictService against the current scheduleStore.schedules,
+        // exactly like the on-device Tools already do at their own
+        // staging point. That keeps both staging paths symmetric: an
+        // AgentConflictSnapshot is always a local recomputation, never a
+        // value trusted from the network. conflictCheckFailed is a
+        // separate, server-only signal (a DB fetch failure a local
+        // recomputation can't reproduce) and is passed through as-is.
+        if let proposed = result.proposedSchedule {
+            if AgentDateExpression(token: proposed.date) != nil {
+                let draft = ProposedScheduleDraft(
+                    title: proposed.title,
+                    dateString: proposed.date,
+                    startTimeString: proposed.startTime?.isEmpty == false ? proposed.startTime : nil,
+                    endTimeString: proposed.endTime?.isEmpty == false ? proposed.endTime : nil,
+                    isTask: proposed.isTask,
+                    note: proposed.note?.isEmpty == false ? proposed.note : nil
+                )
+                let conflict = draft.resolvedInterval().flatMap { interval in
+                    ConflictService.conflict(
+                        for: AgentTimeRange(start: interval.start, end: interval.end),
+                        in: existingItemsSnapshot()
+                    )
+                }
+                proposal.propose(
+                    draft,
+                    conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) },
+                    conflictCheckFailed: proposed.conflictCheckFailed ?? false
+                )
+            } else {
+                appendRecoverableErrorIfNoAssistantText(messageID: messageID)
+            }
+        }
+        if let proposedUpdate = result.proposedScheduleUpdate {
+            let dateIsValid = proposedUpdate.date.map { AgentDateExpression(token: $0) != nil } ?? true
+            if dateIsValid {
+                let conflict = rescheduleConflict(
+                    action: proposedUpdate.action,
+                    excludingId: proposedUpdate.id,
+                    dateString: proposedUpdate.date,
+                    startTimeString: proposedUpdate.startTime,
+                    endTimeString: proposedUpdate.endTime
+                )
+                updateProposal.propose(
+                    id: proposedUpdate.id,
+                    action: proposedUpdate.action,
+                    title: proposedUpdate.title,
+                    dateString: proposedUpdate.date,
+                    startTimeString: proposedUpdate.startTime?.isEmpty == false ? proposedUpdate.startTime : nil,
+                    endTimeString: proposedUpdate.endTime?.isEmpty == false ? proposedUpdate.endTime : nil,
+                    conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) },
+                    conflictCheckFailed: proposedUpdate.conflictCheckFailed ?? false
+                )
+            } else {
+                appendRecoverableErrorIfNoAssistantText(messageID: messageID)
             }
         }
     }
@@ -441,11 +477,15 @@ struct AgentSheet: View {
     }
 
     private func resetConversation() {
-        activeTask?.cancel()
-        activeTask = nil
+        // Cancel first, then discard the on-device runtime/session -- so
+        // "새 대화" actually starts a fresh LanguageModelSession (and thus a
+        // fresh conversation context) on the next send instead of
+        // continuing the old one's.
+        coordinator?.cancel()
+        coordinator?.resetRuntime()
         composer = ""
         messages = []
-        _sessionBacking = nil
+        currentAssistantMessageID = nil
         isLoading = false
         showSessionGapNotice = false
         proposal.clear()
@@ -606,76 +646,6 @@ struct AgentSheet: View {
     // MARK: - FoundationModels
 
     @available(iOS 26, *)
-    private var typedSession: LanguageModelSession? {
-        _sessionBacking as? LanguageModelSession
-    }
-
-    @available(iOS 26, *)
-    private func sendWithFoundationModels(_ prompt: String) async {
-        // isLoading is already true -- send()/retry() set it synchronously
-        // before scheduling this Task. Reset unconditionally on every exit
-        // path, including the early-return guards below (previously this was
-        // set *after* those guards, which was fine when it lived here -- now
-        // that the caller sets it before dispatch, this function must be the
-        // one to always clear it again).
-        defer { isLoading = false }
-
-        let model = SystemLanguageModel.default
-        guard case .available = model.availability else {
-            messages.append(AgentMessage(
-                role: .assistant,
-                text: unavailabilityMessage(model.availability),
-                isError: true
-            ))
-            return
-        }
-        if typedSession == nil {
-            _sessionBacking = LanguageModelSession(
-                tools: [
-                    ProposeScheduleTool(proposal: proposal, existing: existingItemsSnapshot()),
-                    FindFreeSlotTool(snapshot: scheduleSnapshot())
-                ],
-                instructions: agentInstructions()
-            )
-        }
-        guard let session = typedSession else { return }
-
-        let placeholder = AgentMessage(role: .assistant, text: "", isStreaming: true)
-        messages.append(placeholder)
-        let messageID = placeholder.id
-        // Targets messageID specifically, not "whatever's currently last" --
-        // see the matching comment in sendWithCloudAgent for why.
-        defer {
-            if let index = messages.firstIndex(where: { $0.id == messageID }) {
-                messages[index].isStreaming = false
-            }
-        }
-
-        do {
-            let stream = session.streamResponse(to: prompt)
-            for try await snapshot in stream {
-                // FoundationModels' own tool-calling loop has no iteration
-                // cap we control (unlike the cloud path's MAX_TOOL_ITERATIONS)
-                // -- this is the only place a stuck/looping generation can be
-                // stopped, via a new send() or resetConversation() cancelling
-                // this Task.
-                if Task.isCancelled { break }
-                if let index = messages.firstIndex(where: { $0.id == messageID }) {
-                    messages[index].text = snapshot.content
-                }
-            }
-        } catch is CancellationError {
-            // Cancelled by a newer send()/resetConversation() -- nothing to
-            // report, this placeholder is being torn down or superseded.
-        } catch {
-            if let index = messages.firstIndex(where: { $0.id == messageID }) {
-                messages[index].text = "오류가 발생했어요. 다시 시도해주세요."
-                messages[index].isError = true
-            }
-        }
-    }
-
-    @available(iOS 26, *)
     private func agentInstructions() -> String {
         return """
             \(AgentPrompts.onDeviceInstructions)
@@ -745,21 +715,6 @@ struct AgentSheet: View {
 
         case .settings:
             return ""
-        }
-    }
-
-    @available(iOS 26, *)
-    private func unavailabilityMessage(_ availability: SystemLanguageModel.Availability) -> String {
-        switch availability {
-        case .available: return ""
-        case .unavailable(.deviceNotEligible):
-            return "이 기기는 Apple Intelligence를 지원하지 않아요."
-        case .unavailable(.appleIntelligenceNotEnabled):
-            return "설정 > Apple Intelligence에서 Apple Intelligence를 활성화해주세요."
-        case .unavailable(.modelNotReady):
-            return "모델을 준비 중이에요. 잠시 후 다시 시도해주세요."
-        default:
-            return "지금은 Agent를 사용할 수 없어요."
         }
     }
 }
