@@ -34,6 +34,58 @@ struct AgentRuntimeCapabilities: Equatable, Sendable {
     }
 }
 
+/// Minimal execution boundary -- deliberately not a "do everything" adapter
+/// protocol. Proposal staging (propose_schedule/update) is NOT represented
+/// here: on-device Tools mutate a proposal reference directly as a side
+/// effect while the model is still streaming, and cloud staging happens via
+/// CloudAgentRuntime's separately-injected onResult completion handler
+/// (see CloudAgentRuntime) -- unifying those into one shared event would
+/// require redesigning the on-device Tool architecture, out of scope for
+/// this slice.
+protocol AgentRuntime: AnyObject, Sendable {
+    var kind: AgentRuntimeKind { get }
+    var capabilities: AgentRuntimeCapabilities { get }
+
+    /// Runs one turn to completion. Only returns once every onEvent call for
+    /// this turn has happened AND (for a runtime with one, i.e. cloud) its
+    /// own result-completion handling has finished -- callers can rely on
+    /// "send() returned" meaning "everything about this turn already
+    /// happened," not just "streaming stopped."
+    func send(
+        _ request: AgentRuntimeRequest,
+        onEvent: @escaping @Sendable (AgentRuntimeEvent) -> Void
+    ) async throws
+}
+
+struct AgentRuntimeRequest: Sendable {
+    let prompt: String
+    /// Ignored by OnDeviceAgentRuntime -- LanguageModelSession keeps its own
+    /// multi-turn history internally, which is the whole point of reusing
+    /// one session across a conversation. Only CloudAgentRuntime consumes
+    /// this, since agent-cloud-chat is stateless per call and needs the
+    /// full turn history sent explicitly every time.
+    let history: [AgentConversationTurn]
+}
+
+struct AgentConversationTurn: Equatable, Sendable {
+    enum Role: Equatable, Sendable {
+        case user
+        case assistant
+    }
+
+    let role: Role
+    let content: String
+}
+
+/// The full assistant text so far, not an incremental delta. On-device
+/// (LanguageModelSession.streamResponse) already yields cumulative
+/// snapshots; CloudAgentRuntime accumulates its own incremental chunks into
+/// the same shape internally, so callers always just do
+/// `messages[i].text = text` regardless of which runtime produced it.
+enum AgentRuntimeEvent: Sendable {
+    case textSnapshot(String)
+}
+
 extension AgentRuntimeKind {
     /// Mirrors docs/20-ai-agent-architecture.md §5's tool grouping -- the
     /// on-device set is 3 FoundationModels Tools (AgentTools.swift), the
