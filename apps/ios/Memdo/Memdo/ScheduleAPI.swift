@@ -68,6 +68,15 @@ struct AgentModelDTO: Decodable, Identifiable, Equatable {
     let promptPricePerM: Double
     let completionPricePerM: Double
     let contextLength: Int
+    /// Snapshot from the last human-reviewed `eval:compare` promotion, not
+    /// live telemetry -- nil until that model has been promoted at least
+    /// once. See memdo-backend's model-registry-contract.ts.
+    let latencyClass: String?
+    let costClass: String?
+    /// Pass rate over automatically-graded cases only (manualReview
+    /// fixtures excluded from the denominator) -- NOT "% of the full eval
+    /// corpus." Never present this as a fraction of all fixtures.
+    let evalScore: Double?
 }
 
 struct AgentModelsResponseDTO: Decodable {
