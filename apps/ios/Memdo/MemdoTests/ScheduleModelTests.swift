@@ -386,7 +386,7 @@ final class ScheduleModelTests: XCTestCase {
         ]
 
         let proposal = AgentScheduleUpdateProposal()
-        let tool = UpdateScheduleTool(proposal: proposal, existing: existing)
+        let tool = UpdateScheduleTool(proposal: proposal, existingProvider: { existing })
 
         // Exact title match, no reschedule -> no conflict.
         _ = try await tool.call(arguments: .init(title: "팀 회의", action: "complete", date: "", startTime: "", endTime: ""))
@@ -429,7 +429,7 @@ final class ScheduleModelTests: XCTestCase {
             ),
         ]
         let proposal = AgentScheduleUpdateProposal()
-        let tool = UpdateScheduleTool(proposal: proposal, existing: existing)
+        let tool = UpdateScheduleTool(proposal: proposal, existingProvider: { existing })
 
         _ = try await tool.call(arguments: .init(title: "팀 회의", action: "reschedule", date: "today", startTime: "09:00", endTime: "10:00"))
         XCTAssertEqual(proposal.id, "id-1")
@@ -464,7 +464,7 @@ final class ScheduleModelTests: XCTestCase {
             ConflictService.ExistingItem(id: "id-1", title: "팀 회의", startAt: nil, endAt: nil),
         ]
         let proposal = AgentScheduleUpdateProposal()
-        let tool = UpdateScheduleTool(proposal: proposal, existing: existing)
+        let tool = UpdateScheduleTool(proposal: proposal, existingProvider: { existing })
 
         _ = try await tool.call(arguments: .init(title: "팀 회의", action: "cancel", date: "", startTime: "", endTime: ""))
         XCTAssertFalse(proposal.isPending)
@@ -480,7 +480,7 @@ final class ScheduleModelTests: XCTestCase {
     @MainActor
     func testProposeScheduleToolRejectsInvalidDate() async throws {
         let proposal = AgentScheduleProposal()
-        let tool = ProposeScheduleTool(proposal: proposal, existing: [])
+        let tool = ProposeScheduleTool(proposal: proposal, existingProvider: { [] })
 
         let result = try await tool.call(arguments: .init(
             title: "치과", date: "banana", startTime: "15:00", endTime: "", isTask: false, note: ""
@@ -494,7 +494,7 @@ final class ScheduleModelTests: XCTestCase {
         // Same 15...480 minute bound the backend's findFreeSlotsArgsSchema
         // enforces (Issue A-04/B-04) -- neither end should be silently
         // clamped into range, both must be rejected outright.
-        let tool = FindFreeSlotTool(snapshot: [])
+        let tool = FindFreeSlotTool(snapshotProvider: { [] })
 
         let badScope = try await tool.call(arguments: .init(scope: "someday", durationMinutes: 30, windowStart: "", windowEnd: ""))
         XCTAssertTrue(badScope.contains("이해하지 못했어요"))
@@ -504,5 +504,35 @@ final class ScheduleModelTests: XCTestCase {
 
         let tooLong = try await tool.call(arguments: .init(scope: "today", durationMinutes: 999, windowStart: "", windowEnd: ""))
         XCTAssertTrue(tooLong.contains("짧거나 길어요"))
+    }
+
+    // MARK: - Live schedule-state providers (Epic D-2)
+
+    @available(iOS 26, *)
+    @MainActor
+    func testUpdateScheduleToolReadsLiveExistingItemsNotAConstructionTimeSnapshot() async throws {
+        // Regression coverage for the staleness this Tool used to have: the
+        // old `existing: [ConflictService.ExistingItem]` was captured once
+        // when the Tool (and its LanguageModelSession) was constructed, and
+        // never changed for the rest of that session. existingProvider is a
+        // closure the Tool calls fresh on every call(arguments:) -- this
+        // mutates what it returns between two calls on the *same* Tool
+        // instance and checks the second call actually sees the change.
+        var currentExisting: [ConflictService.ExistingItem] = [
+            ConflictService.ExistingItem(id: "id-1", title: "팀 회의", startAt: nil, endAt: nil),
+        ]
+        let proposal = AgentScheduleUpdateProposal()
+        let tool = UpdateScheduleTool(proposal: proposal, existingProvider: { currentExisting })
+
+        _ = try await tool.call(arguments: .init(title: "새 일정", action: "complete", date: "", startTime: "", endTime: ""))
+        XCTAssertFalse(proposal.isPending, "'새 일정' shouldn't match anything in the original snapshot")
+
+        // A schedule named "새 일정" gets added after the Tool/session already
+        // exists -- exactly what happens when the user creates something
+        // mid-conversation on-device.
+        currentExisting.append(.init(id: "id-2", title: "새 일정", startAt: nil, endAt: nil))
+
+        _ = try await tool.call(arguments: .init(title: "새 일정", action: "complete", date: "", startTime: "", endTime: ""))
+        XCTAssertEqual(proposal.id, "id-2", "the same Tool instance's second call should see the newly-added item")
     }
 }

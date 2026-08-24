@@ -203,4 +203,147 @@ final class AgentDomainServicesTests: XCTestCase {
         let secondTap = conflictRevalidationDecision(staged: refreshed, fresh: snapB)
         XCTAssertEqual(secondTap, .proceed)
     }
+
+    // MARK: - stage-schedule/* (Epic D-2)
+    //
+    // Unlike free-slot/conflict above, these go through stageScheduleProposal/
+    // stageScheduleUpdate's own date resolution (AgentDateExpression), which
+    // for "today" resolves against the real wall-clock date, not the fixed
+    // 2026-08-16 reference day `at()`/`candidate()` use -- so conflict
+    // fixtures here are built relative to `Date.now` via todayCandidate(),
+    // not the fixed-day candidate() helper.
+
+    private func todayCandidate(_ id: String, _ title: String, _ startHHmm: String, _ endHHmm: String) -> ConflictService.ExistingItem {
+        let today = Calendar.current.startOfDay(for: .now)
+        return .init(
+            id: id, title: title,
+            startAt: parseAgentTime(startHHmm, on: today),
+            endAt: parseAgentTime(endHHmm, on: today)
+        )
+    }
+
+    func test_stageSchedule_validCreate_noConflict() {
+        let result = stageScheduleProposal(
+            title: "치과", date: "today", startTime: "15:00", endTime: "", isTask: false, note: "",
+            existing: []
+        )
+        guard case .staged(let draft, let conflict, let conflictCheckFailed) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertEqual(draft.title, "치과")
+        XCTAssertNil(conflict)
+        XCTAssertFalse(conflictCheckFailed)
+    }
+
+    func test_stageSchedule_validCreate_withConflict() {
+        let existing = [todayCandidate("e1", "팀 회의", "15:00", "16:00")]
+        let result = stageScheduleProposal(
+            title: "치과", date: "today", startTime: "15:00", endTime: "16:00", isTask: false, note: "",
+            existing: existing
+        )
+        guard case .staged(_, let conflict, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertEqual(conflict?.id, "e1")
+    }
+
+    func test_stageSchedule_invalidDate() {
+        let result = stageScheduleProposal(
+            title: "치과", date: "banana", startTime: "15:00", endTime: "", isTask: false, note: "",
+            existing: []
+        )
+        XCTAssertEqual(result, .invalidDate)
+    }
+
+    func test_stageSchedule_task_hasNoConflict() {
+        // A task has no resolvedInterval() -- nothing to conflict-check,
+        // regardless of what's in `existing`.
+        let existing = [todayCandidate("e1", "팀 회의", "15:00", "16:00")]
+        let result = stageScheduleProposal(
+            title: "장보기", date: "today", startTime: "", endTime: "", isTask: true, note: "",
+            existing: existing
+        )
+        guard case .staged(let draft, let conflict, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertTrue(draft.isTask)
+        XCTAssertNil(conflict)
+    }
+
+    // MARK: - stage-update/* (Epic D-2)
+
+    func test_stageUpdate_complete_noDateNeeded() {
+        let result = stageScheduleUpdate(
+            id: "id-1", title: "팀 회의", action: .complete,
+            dateString: nil, startTimeString: nil, endTimeString: nil,
+            existing: []
+        )
+        guard case .staged(let id, let action, _, _, _, _, let conflict, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertEqual(id, "id-1")
+        XCTAssertEqual(action, .complete)
+        XCTAssertNil(conflict)
+    }
+
+    func test_stageUpdate_reschedule_withConflict() {
+        let existing = [todayCandidate("e2", "점심 약속", "12:00", "13:00")]
+        let result = stageScheduleUpdate(
+            id: "id-1", title: "팀 회의", action: .reschedule,
+            dateString: "today", startTimeString: "12:30", endTimeString: "13:00",
+            existing: existing
+        )
+        guard case .staged(_, _, _, _, _, _, let conflict, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertEqual(conflict?.id, "e2")
+    }
+
+    func test_stageUpdate_reschedule_excludesSelf() {
+        // Issue C-04 Acceptance Criteria #8 -- the target's own row must
+        // never read as a self-conflict when moved onto its own time.
+        let existing = [todayCandidate("id-1", "팀 회의", "09:00", "10:00")]
+        let result = stageScheduleUpdate(
+            id: "id-1", title: "팀 회의", action: .reschedule,
+            dateString: "today", startTimeString: "09:00", endTimeString: "10:00",
+            existing: existing
+        )
+        guard case .staged(_, _, _, _, _, _, let conflict, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertNil(conflict)
+    }
+
+    func test_stageUpdate_reschedule_missingDate_isInvalid() {
+        // The bug D-2 closes: previously only on-device enforced this --
+        // cloud ingestion's older validation would have let a dateless
+        // reschedule through since `nil` short-circuited to "valid".
+        let result = stageScheduleUpdate(
+            id: "id-1", title: "팀 회의", action: .reschedule,
+            dateString: nil, startTimeString: nil, endTimeString: nil,
+            existing: []
+        )
+        XCTAssertEqual(result, .invalidDate)
+    }
+
+    func test_stageUpdate_reschedule_unparseableDate_isInvalid() {
+        let result = stageScheduleUpdate(
+            id: "id-1", title: "팀 회의", action: .reschedule,
+            dateString: "banana", startTimeString: "09:00", endTimeString: "10:00",
+            existing: []
+        )
+        XCTAssertEqual(result, .invalidDate)
+    }
+
+    func test_stageUpdate_delete_noDateNeeded() {
+        let result = stageScheduleUpdate(
+            id: "id-1", title: "팀 회의", action: .delete,
+            dateString: nil, startTimeString: nil, endTimeString: nil,
+            existing: []
+        )
+        guard case .staged(_, let action, _, _, _, _, _, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertEqual(action, .delete)
+    }
 }

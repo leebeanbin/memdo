@@ -25,6 +25,28 @@ func agentCloudHistory(from messages: [AgentMessage]) -> [AgentChatTurnDTO] {
     agentChatTurnDTOs(from: agentConversationHistory(from: messages))
 }
 
+// MARK: - Live schedule-state providers (Epic D-2)
+//
+// Free functions rather than AssistantView-private methods so the closures
+// passed into on-device Tools (below) can capture just `scheduleStore` --
+// a stable, @MainActor-isolated reference type -- instead of the whole
+// AgentSheet View struct.
+
+@MainActor
+func existingItemsSnapshot(_ scheduleStore: ScheduleStore) -> [ConflictService.ExistingItem] {
+    scheduleStore.schedules.map {
+        .init(id: $0.id.uuidString, title: $0.title, startAt: $0.startAt, endAt: $0.endAt)
+    }
+}
+
+@available(iOS 26, *)
+@MainActor
+func scheduleIntervalSnapshot(_ scheduleStore: ScheduleStore) -> [FindFreeSlotTool.ScheduleInterval] {
+    scheduleStore.schedules.map {
+        .init(scheduledDate: $0.scheduledDate, startAt: $0.startAt, endAt: $0.endAt)
+    }
+}
+
 // MARK: - Schedule Proposal (Tool result)
 
 /// Parses an agent-supplied "HH:mm" time onto the given day.
@@ -219,36 +241,33 @@ struct ProposeScheduleTool: Tool {
     }
 
     let proposal: AgentScheduleProposal
-    let existing: [ConflictService.ExistingItem]
+    /// Read at call time, not captured once at Tool construction -- so a
+    /// session reused across several turns always stages against the
+    /// current schedule instead of whatever existed when the session was
+    /// first created (Epic D-2; Epic C's confirm-time revalidation remains
+    /// the actual safety net regardless).
+    let existingProvider: @MainActor @Sendable () -> [ConflictService.ExistingItem]
 
     func call(arguments: Arguments) async throws -> String {
-        // Reject before staging anything -- an unparseable date must never
-        // silently become "today" (Issue A-04).
-        guard AgentDateExpression(token: arguments.date) != nil else {
-            return "날짜를 이해하지 못했어요. 다시 말씀해 주세요."
-        }
-        let draft = ProposedScheduleDraft(
-            title:           arguments.title,
-            dateString:      arguments.date,
-            startTimeString: arguments.startTime.isEmpty ? nil : arguments.startTime,
-            endTimeString:   arguments.endTime.isEmpty   ? nil : arguments.endTime,
-            isTask:          arguments.isTask,
-            note:            arguments.note.isEmpty       ? nil : arguments.note
+        let result = stageScheduleProposal(
+            title: arguments.title,
+            date: arguments.date,
+            startTime: arguments.startTime,
+            endTime: arguments.endTime,
+            isTask: arguments.isTask,
+            note: arguments.note,
+            existing: await existingProvider()
         )
-        // Reflection step: check the proposal against the real schedule
-        // before handing it back, instead of presenting it uncritically.
-        let conflict = draft.resolvedInterval().flatMap { interval in
-            ConflictService.conflict(
-                for: AgentTimeRange(start: interval.start, end: interval.end),
-                in: existing
-            )
+        switch result {
+        case .invalidDate:
+            return "날짜를 이해하지 못했어요. 다시 말씀해 주세요."
+        case .staged(let draft, let conflict, let conflictCheckFailed):
+            await proposal.propose(draft, conflict: conflict, conflictCheckFailed: conflictCheckFailed)
+            guard let conflict else {
+                return "'\(draft.title)' 일정을 제안했습니다."
+            }
+            return "'\(draft.title)' 일정을 제안했습니다. 주의: 같은 시간에 이미 '\(conflict.title)' 일정이 있어요."
         }
-        await proposal.propose(draft, conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) })
-
-        guard let conflict else {
-            return "'\(draft.title)' 일정을 제안했습니다."
-        }
-        return "'\(draft.title)' 일정을 제안했습니다. 주의: 같은 시간에 이미 '\(conflict.title)' 일정이 있어요."
     }
 }
 
@@ -277,7 +296,9 @@ struct FindFreeSlotTool: Tool {
         let windowEnd: String
     }
 
-    let snapshot: [ScheduleInterval]
+    /// Read at call time, not captured once at Tool construction -- see
+    /// ProposeScheduleTool.existingProvider's doc comment.
+    let snapshotProvider: @MainActor @Sendable () -> [ScheduleInterval]
 
     /// Same 15...480 minute bound the backend's findFreeSlotsArgsSchema
     /// enforces (Issue A-04/B-04) -- clamping a model-supplied value that's
@@ -293,6 +314,7 @@ struct FindFreeSlotTool: Tool {
             return "요청한 시간이 너무 짧거나 길어요. 15분에서 8시간(480분) 사이로 다시 말씀해 주세요."
         }
         let duration = TimeInterval(arguments.durationMinutes * 60)
+        let snapshot = await snapshotProvider()
 
         var lines: [String] = []
         for date in dates {
@@ -385,59 +407,45 @@ struct UpdateScheduleTool: Tool {
     }
 
     let proposal: AgentScheduleUpdateProposal
-    let existing: [ConflictService.ExistingItem]
+    /// Read at call time, not captured once at Tool construction -- see
+    /// ProposeScheduleTool.existingProvider's doc comment.
+    let existingProvider: @MainActor @Sendable () -> [ConflictService.ExistingItem]
 
     func call(arguments: Arguments) async throws -> String {
         guard let action = AgentUpdateAction(rawValue: arguments.action) else {
             return "요청하신 작업을 이해하지 못했어요."
         }
-        guard let match = bestMatch(for: arguments.title) else {
+        let existing = await existingProvider()
+        guard let match = bestMatch(for: arguments.title, in: existing) else {
             return "'\(arguments.title)'과(와) 일치하는 일정을 찾지 못했어요."
         }
 
-        // Reschedule requires a real target date -- an empty or unparseable
-        // one must be rejected outright, not silently treated as today
-        // (Issue A-04). complete/delete never carry a date at all.
-        var rescheduleDay: Date?
-        if action == .reschedule {
-            guard !arguments.date.isEmpty, let expr = AgentDateExpression(token: arguments.date) else {
-                return "옮길 날짜를 이해하지 못했어요. 다시 말씀해 주세요."
-            }
-            rescheduleDay = expr.resolvedDate()
-        }
-
-        var conflict: ConflictService.ExistingItem?
-        if let day = rescheduleDay, !arguments.startTime.isEmpty {
-            if let start = parseAgentTime(arguments.startTime, on: day) {
-                let end = arguments.endTime.isEmpty
-                    ? start.addingTimeInterval(3_600)
-                    : (parseAgentTime(arguments.endTime, on: day) ?? start.addingTimeInterval(3_600))
-                conflict = ConflictService.conflict(
-                    for: AgentTimeRange(start: start, end: end),
-                    excludingId: match.id,
-                    in: existing
-                )
-            }
-        }
-
-        await proposal.propose(
+        let result = stageScheduleUpdate(
             id: match.id,
-            action: action.rawValue,
             title: match.title,
+            action: action,
             dateString: arguments.date.isEmpty ? nil : arguments.date,
             startTimeString: arguments.startTime.isEmpty ? nil : arguments.startTime,
             endTimeString: arguments.endTime.isEmpty ? nil : arguments.endTime,
-            conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) },
-            conflictCheckFailed: false
+            existing: existing
         )
-
-        guard let conflict else {
-            return "'\(match.title)' 항목에 대한 변경을 제안했습니다."
+        switch result {
+        case .invalidDate:
+            return "옮길 날짜를 이해하지 못했어요. 다시 말씀해 주세요."
+        case .staged(let id, let action, let title, let dateString, let startTimeString, let endTimeString, let conflict, let conflictCheckFailed):
+            await proposal.propose(
+                id: id, action: action.rawValue, title: title,
+                dateString: dateString, startTimeString: startTimeString, endTimeString: endTimeString,
+                conflict: conflict, conflictCheckFailed: conflictCheckFailed
+            )
+            guard let conflict else {
+                return "'\(title)' 항목에 대한 변경을 제안했습니다."
+            }
+            return "'\(title)' 항목에 대한 변경을 제안했습니다. 주의: 같은 시간에 이미 '\(conflict.title)' 일정이 있어요."
         }
-        return "'\(match.title)' 항목에 대한 변경을 제안했습니다. 주의: 같은 시간에 이미 '\(conflict.title)' 일정이 있어요."
     }
 
-    private func bestMatch(for title: String) -> ConflictService.ExistingItem? {
+    private func bestMatch(for title: String, in existing: [ConflictService.ExistingItem]) -> ConflictService.ExistingItem? {
         let needle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return nil }
         if let exact = existing.first(where: { $0.title == needle }) { return exact }
