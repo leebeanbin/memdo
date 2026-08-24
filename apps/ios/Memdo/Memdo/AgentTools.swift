@@ -3,19 +3,26 @@ import FoundationModels
 
 // MARK: - Cloud conversation history
 
-/// Turns already-settled messages into the flat history the stateless cloud
-/// endpoint expects, excluding the current turn.
+/// Turns already-settled messages into the flat, provider-neutral turn
+/// history AgentCoordinator/AgentRuntime deal in, excluding the current
+/// turn.
 ///
 /// Precondition: `messages.last` is the current turn, already about to be
-/// sent separately as the request's `message` field -- `send()`/`retry()`
-/// both guarantee this by appending (or leaving) the current user turn as
-/// the last element before dispatching. Including it here as well would
-/// send the same turn twice: once as the trailing item of `history`, once
-/// again as `message`.
-func agentCloudHistory(from messages: [AgentMessage]) -> [AgentChatTurnDTO] {
+/// sent separately as the request's `prompt` -- `dispatchToModel(_:)`
+/// guarantees this by computing history before appending the turn's own
+/// placeholder. Including it here as well would send the same turn twice:
+/// once as the trailing item of `history`, once again as the prompt.
+func agentConversationHistory(from messages: [AgentMessage]) -> [AgentConversationTurn] {
     messages.dropLast()
         .filter { !$0.isStreaming && !$0.isError }
-        .map { AgentChatTurnDTO(role: $0.role == .user ? "user" : "assistant", content: $0.text) }
+        .map { AgentConversationTurn(role: $0.role == .user ? .user : .assistant, content: $0.text) }
+}
+
+/// Cloud-specific DTO shape, derived from the same provider-neutral history
+/// above -- kept as its own entry point since existing tests exercise it
+/// directly.
+func agentCloudHistory(from messages: [AgentMessage]) -> [AgentChatTurnDTO] {
+    agentChatTurnDTOs(from: agentConversationHistory(from: messages))
 }
 
 // MARK: - Schedule Proposal (Tool result)
