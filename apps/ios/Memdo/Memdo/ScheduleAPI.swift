@@ -145,25 +145,50 @@ struct CloudProposedScheduleUpdateDTO: Decodable {
     let conflictCheckFailed: Bool?
 }
 
+/// Mirrors propose_routine_update's shape (agent-cloud-contract.ts) -- every
+/// field optional, since the model only includes the settings it's actually
+/// proposing to change.
+struct CloudProposedRoutineUpdateDTO: Decodable, Equatable {
+    let dailyReviewEnabled: Bool?
+    let dailyReviewTime: String?
+    let newsBriefingEnabled: Bool?
+    let newsBriefingTime: String?
+    let planningPromptTime: String?
+    let notificationsEnabled: Bool?
+}
+
+/// Mirrors propose_review_actions's shape (agent-cloud-contract.ts) -- a
+/// proposed reflection *text* for one day. `date` is the model's raw token
+/// ("today"/"tomorrow"/"yesterday"/yyyy-MM-dd), NOT resolved server-side --
+/// resolving it is this client's job (see AgentDateExpression).
+struct CloudProposedReviewActionDTO: Decodable, Equatable {
+    let date: String
+    let reflection: String
+}
+
 /// One line of the newline-delimited stream agent-cloud-chat responds with.
 /// Every line has exactly one of these populated: `delta` while text is
-/// still arriving, or `done`/`proposedSchedule`/`proposedScheduleUpdate` on
-/// the terminal line, or `error` if something failed mid-stream.
+/// still arriving, or `done`/`proposedSchedule`/`proposedScheduleUpdate`/
+/// `proposedRoutineUpdate`/`proposedReviewAction` on the terminal line, or
+/// `error` if something failed mid-stream.
 struct AgentStreamLineDTO: Decodable {
     let delta: String?
     let done: Bool?
     let proposedSchedule: CloudProposedScheduleDTO?
     let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
+    let proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?
+    let proposedReviewAction: CloudProposedReviewActionDTO?
     let error: String?
 }
 
-/// agentCloudChat's terminal result -- at most one of these two is non-nil
-/// per turn (the model calls either propose_schedule or
-/// propose_schedule_update, never both in one tool_call), but both are
-/// carried through so the caller doesn't need a third enum just to unwrap.
+/// agentCloudChat's terminal result -- the model calls at most one propose_*
+/// tool per turn, but all four are carried through so the caller doesn't
+/// need a fifth enum just to unwrap.
 struct AgentCloudChatResult {
     let proposedSchedule: CloudProposedScheduleDTO?
     let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
+    let proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?
+    let proposedReviewAction: CloudProposedReviewActionDTO?
 }
 
 struct TodoListResponseDTO: Decodable {
@@ -661,6 +686,8 @@ actor MemdoAPIClient {
 
         var proposedSchedule: CloudProposedScheduleDTO?
         var proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
+        var proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?
+        var proposedReviewAction: CloudProposedReviewActionDTO?
         for try await line in bytes.lines {
             guard let lineData = line.data(using: .utf8),
                   let parsed = try? decoder.decode(AgentStreamLineDTO.self, from: lineData) else { continue }
@@ -671,11 +698,15 @@ actor MemdoAPIClient {
             if parsed.done == true {
                 proposedSchedule = parsed.proposedSchedule
                 proposedScheduleUpdate = parsed.proposedScheduleUpdate
+                proposedRoutineUpdate = parsed.proposedRoutineUpdate
+                proposedReviewAction = parsed.proposedReviewAction
             }
         }
         return AgentCloudChatResult(
             proposedSchedule: proposedSchedule,
-            proposedScheduleUpdate: proposedScheduleUpdate
+            proposedScheduleUpdate: proposedScheduleUpdate,
+            proposedRoutineUpdate: proposedRoutineUpdate,
+            proposedReviewAction: proposedReviewAction
         )
     }
 
