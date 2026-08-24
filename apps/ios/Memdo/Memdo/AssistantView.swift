@@ -72,6 +72,10 @@ enum AgentContext {
 struct AgentSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScheduleStore.self) private var scheduleStore
+    /// Reached for `session.preferencesStore` -- PreferencesStore isn't
+    /// injected into the environment directly (see SettingsView/
+    /// MemdoGuideSheet, which already read/update it this same way).
+    @Environment(MemdoSession.self) private var session
     @Binding var composer: String
     @Binding var messages: [AgentMessage]
 
@@ -86,6 +90,7 @@ struct AgentSheet: View {
     @State private var showsResetConfirmation = false
     @State private var proposal = AgentScheduleProposal()
     @State private var updateProposal = AgentScheduleUpdateProposal()
+    @State private var routineProposal = AgentRoutineUpdateProposal()
     /// The placeholder assistant bubble for whichever turn is currently in
     /// flight -- read by ingestCloudResult(_:), which CloudAgentRuntime
     /// calls back into after this View has moved on to constructing the
@@ -177,7 +182,7 @@ struct AgentSheet: View {
 
     @ViewBuilder
     private var messageList: some View {
-        if messages.isEmpty && proposal.draft == nil {
+        if messages.isEmpty && proposal.draft == nil && routineProposal.draft == nil {
             AgentQuickActions(context: context, hasSchedulesToday: hasSchedulesToday, onSelect: selectQuickAction)
         } else {
             if showSessionGapNotice { sessionGapBanner }
@@ -204,6 +209,13 @@ struct AgentSheet: View {
                     confirmScheduleUpdateProposal()
                 } onDecline: {
                     declineScheduleUpdateProposal()
+                }
+            }
+            if let routineDraft = routineProposal.draft {
+                ProposedRoutineUpdateCard(draft: routineDraft) {
+                    confirmRoutineUpdateProposal()
+                } onDecline: {
+                    withAnimation(.easeOut(duration: 0.2)) { routineProposal.clear() }
                 }
             }
         }
@@ -445,6 +457,9 @@ struct AgentSheet: View {
                 appendRecoverableErrorIfNoAssistantText(messageID: messageID)
             }
         }
+        if let proposedRoutineUpdate = result.proposedRoutineUpdate {
+            routineProposal.propose(proposedRoutineUpdate)
+        }
     }
 
     /// Only shown when there's no useful assistant text already on screen --
@@ -472,6 +487,7 @@ struct AgentSheet: View {
         showSessionGapNotice = false
         proposal.clear()
         updateProposal.clear()
+        routineProposal.clear()
     }
 
     private func confirmProposal(_ draft: ProposedScheduleDraft) {
@@ -586,6 +602,30 @@ struct AgentSheet: View {
 
     private func declineScheduleUpdateProposal() {
         withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
+    }
+
+    /// Approves a propose_routine_update proposal via the same
+    /// PreferencesStore entry point SettingsView's routine toggles already
+    /// use -- a partial merge (applyRoutineUpdate) onto the current cached
+    /// preferences, then a full-object PUT. Only clears the proposal when
+    /// the save actually succeeded (PreferencesStore.update(_:)'s Bool
+    /// result) -- on a load/save failure the proposal stays in place with
+    /// an inline error, so the user can see something went wrong and retry,
+    /// instead of the proposal silently vanishing without the change having
+    /// actually applied.
+    private func confirmRoutineUpdateProposal() {
+        guard let draft = routineProposal.draft else { return }
+        Task {
+            let succeeded = await session.preferencesStore?.update { prefs in
+                prefs = applyRoutineUpdate(draft, to: prefs)
+            } ?? false
+            if succeeded {
+                messages.append(AgentMessage(role: .assistant, text: "루틴 설정을 적용했어요 ✓"))
+                withAnimation(.easeOut(duration: 0.2)) { routineProposal.clear() }
+            } else {
+                messages.append(AgentMessage(role: .assistant, text: "루틴 설정을 적용하지 못했어요. 다시 시도해주세요.", isError: true))
+            }
+        }
     }
 
     private func retry() {

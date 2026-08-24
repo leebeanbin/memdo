@@ -346,4 +346,64 @@ final class AgentDomainServicesTests: XCTestCase {
         }
         XCTAssertEqual(action, .delete)
     }
+
+    // MARK: - applyRoutineUpdate (Epic I)
+
+    private func basePreferences() -> UserPreferences {
+        UserPreferences(
+            timezone: "Asia/Seoul",
+            widgetStyle: "default",
+            defaultMood: nil,
+            hideWidgetContent: false,
+            notificationsEnabled: true,
+            planningPromptTime: "07:30",
+            quietHoursStart: nil,
+            quietHoursEnd: nil,
+            calendarFilter: [],
+            dailyReviewEnabled: false,
+            dailyReviewTime: "21:00",
+            dailyReviewDays: ["MO", "TU", "WE", "TH", "FR"],
+            dailyReviewIncludeReflection: true,
+            newsBriefingEnabled: false,
+            newsBriefingTime: "08:00",
+            newsBriefingDays: UserPreferences.allWeekdays
+        )
+    }
+
+    func test_applyRoutineUpdate_onlyChangesPresentFields() {
+        let base = basePreferences()
+        let proposal = CloudProposedRoutineUpdateDTO(
+            dailyReviewEnabled: true,
+            dailyReviewTime: "22:00",
+            newsBriefingEnabled: nil,
+            newsBriefingTime: nil,
+            planningPromptTime: nil,
+            notificationsEnabled: nil
+        )
+        let updated = applyRoutineUpdate(proposal, to: base)
+
+        XCTAssertEqual(updated.dailyReviewEnabled, true)
+        XCTAssertEqual(updated.dailyReviewTime, "22:00")
+        // Untouched fields, including ones the tool can never propose --
+        // dailyReviewDays/dailyReviewIncludeReflection aren't in
+        // CloudProposedRoutineUpdateDTO at all.
+        XCTAssertEqual(updated.newsBriefingEnabled, base.newsBriefingEnabled)
+        XCTAssertEqual(updated.newsBriefingTime, base.newsBriefingTime)
+        XCTAssertEqual(updated.planningPromptTime, base.planningPromptTime)
+        XCTAssertEqual(updated.notificationsEnabled, base.notificationsEnabled)
+        XCTAssertEqual(updated.dailyReviewDays, base.dailyReviewDays)
+        XCTAssertEqual(updated.dailyReviewIncludeReflection, base.dailyReviewIncludeReflection)
+        XCTAssertEqual(updated.newsBriefingDays, base.newsBriefingDays)
+        XCTAssertEqual(updated.timezone, base.timezone)
+    }
+
+    func test_applyRoutineUpdate_allFieldsAbsent_isANoOp() {
+        let base = basePreferences()
+        let proposal = CloudProposedRoutineUpdateDTO(
+            dailyReviewEnabled: nil, dailyReviewTime: nil,
+            newsBriefingEnabled: nil, newsBriefingTime: nil,
+            planningPromptTime: nil, notificationsEnabled: nil
+        )
+        XCTAssertEqual(applyRoutineUpdate(proposal, to: base), base)
+    }
 }

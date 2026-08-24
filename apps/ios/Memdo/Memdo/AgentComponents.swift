@@ -448,6 +448,88 @@ struct ProposedScheduleUpdateCard: View {
     }
 }
 
+/// Confirmation card for propose_routine_update -- shows only the fields the
+/// model actually proposed changing (every field on the DTO is optional).
+struct ProposedRoutineUpdateCard: View {
+    let draft: CloudProposedRoutineUpdateDTO
+    let onConfirm: () -> Void
+    let onDecline: () -> Void
+
+    private var rows: [String] {
+        var lines: [String] = []
+        if let v = draft.dailyReviewEnabled {
+            lines.append("하루 정리: " + (v ? "켜짐" : "꺼짐") + (draft.dailyReviewTime.map { " · \($0)" } ?? ""))
+        } else if let time = draft.dailyReviewTime {
+            lines.append("하루 정리 시간: \(time)")
+        }
+        if let v = draft.newsBriefingEnabled {
+            lines.append("뉴스 브리핑: " + (v ? "켜짐" : "꺼짐") + (draft.newsBriefingTime.map { " · \($0)" } ?? ""))
+        } else if let time = draft.newsBriefingTime {
+            lines.append("뉴스 브리핑 시간: \(time)")
+        }
+        if let time = draft.planningPromptTime {
+            lines.append("하루 시작 시간: \(time)")
+        }
+        if let v = draft.notificationsEnabled {
+            lines.append("전체 알림: " + (v ? "켜짐" : "꺼짐"))
+        }
+        return lines
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Agent 루틴 설정 변경 제안", systemImage: "gearshape.badge.checkmark")
+                .font(MemdoTypography.captionEmphasis)
+                .foregroundStyle(MemdoTheme.brand)
+
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(rows, id: \.self) { row in
+                    Text(row)
+                        .font(MemdoTypography.action)
+                        .foregroundStyle(MemdoTheme.ink)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button(action: onConfirm) {
+                    Label("적용하기", systemImage: "checkmark")
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(MemdoTheme.onAccent)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(MemdoTheme.accent,
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onDecline) {
+                    Text("취소")
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(MemdoTheme.surface,
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(MemdoTheme.outline, lineWidth: 0.5)
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .background(MemdoTheme.brandSoft,
+                    in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                .stroke(MemdoTheme.brand.opacity(0.2), lineWidth: 0.5)
+        }
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .move(edge: .bottom)),
+            removal: .opacity
+        ))
+    }
+}
+
 // MARK: - Composer
 
 struct AgentComposer: View {

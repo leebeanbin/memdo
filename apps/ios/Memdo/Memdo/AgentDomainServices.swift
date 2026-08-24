@@ -271,3 +271,21 @@ func rescheduleConflict(
         in: existing
     )
 }
+
+// MARK: - Routine-update proposal staging (Epic I)
+
+/// Applies a propose_routine_update proposal as a PARTIAL merge -- only the
+/// fields present in `proposal` are changed; every other field on
+/// `preferences` (including ones this tool can never propose, like
+/// dailyReviewDays/dailyReviewIncludeReflection) passes through untouched.
+/// Pure so the merge logic is verifiable without a real PreferencesStore.
+func applyRoutineUpdate(_ proposal: CloudProposedRoutineUpdateDTO, to preferences: UserPreferences) -> UserPreferences {
+    var updated = preferences
+    if let dailyReviewEnabled = proposal.dailyReviewEnabled { updated.dailyReviewEnabled = dailyReviewEnabled }
+    if let dailyReviewTime = proposal.dailyReviewTime { updated.dailyReviewTime = dailyReviewTime }
+    if let newsBriefingEnabled = proposal.newsBriefingEnabled { updated.newsBriefingEnabled = newsBriefingEnabled }
+    if let newsBriefingTime = proposal.newsBriefingTime { updated.newsBriefingTime = newsBriefingTime }
+    if let planningPromptTime = proposal.planningPromptTime { updated.planningPromptTime = planningPromptTime }
+    if let notificationsEnabled = proposal.notificationsEnabled { updated.notificationsEnabled = notificationsEnabled }
+    return updated
+}
