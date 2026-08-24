@@ -304,30 +304,37 @@ search_schedules/findFreeSlots 결과: limit(200) -- 페이지네이션 없음
 - "허용 범위 밖의 필드 제거"는 Zod 스키마의 기본 strip 동작(정의 안 된 키는 조용히 제거)으로 이미 이루어진다 -- `propose_schedule_update`는 한 걸음 더 나가 `action`별 `.strict()` discriminated union이라 `complete`/`delete`에 `date`/`startTime`이 섞여 오면 필드를 조용히 버리지 않고 아예 `INVALID_AGENT_ARGUMENT`로 거부한다
 - 최대 작업 수 5개는 `MAX_TOOL_ITERATIONS`로 반영(§10)
 
-## 13. 감사와 추적 (실제 상태)
+## 13. 감사와 추적 (Epic H, 구현됨)
 
-실제로 저장하는 것은 `agent_chat_requests(user_id, created_at)` 하나뿐이고, 목적도 rate limit 카운팅이다:
+`agent_chat_requests(user_id, created_at)`는 여전히 존재하고, 목적도 그대로 rate limit 카운팅이다. 그 옆에 별도의 `agent_audit_log` 테이블이 새로 생겼다:
 
 ```text
+id
+agent_run_id       -- unique, server-generated (crypto.randomUUID())
 user_id
+workflow_name      -- 지금은 항상 'agent_cloud_chat' 하나뿐
+model
+tool_names
+tool_call_count
+latency_ms
+result_kind        -- 'answered' | 'exhausted_iterations' | 'error'
+provider_completion_id
 created_at
 ```
 
-원래 설계가 그리던 아래 스키마는 **아직 구현되지 않았다** -- model/toolNames/latencyMs/resultKind/providerRequestId 중 어느 것도 기록되지 않는다:
+원래 설계의 필드 목록(`agentRunId`/`workflowName`/`model`/`toolNames`/`toolCallCount`/`latencyMs`/`resultKind`/`approvalStatus`/`providerRequestId`)과 세 가지가 다르다:
 
-```text
-agentRunId
-workflowName
-model
-toolNames
-toolCallCount
-latencyMs
-resultKind
-approvalStatus
-providerRequestId
-```
+- **`agentRunId`는 `currentRequestId`를 재사용하지 않는다.** `currentRequestId`(`_shared/http.ts`)는 `request.headers.get('X-Request-ID') ?? crypto.randomUUID()`로, **클라이언트가 값을 지정할 수 있다** -- audit 테이블의 유일성 키로 쓰기엔 부적합해서 `agent-cloud-chat/index.ts`가 preflight를 모두 통과한 뒤 별도로 `crypto.randomUUID()`를 생성하고, DB에도 `unique` 제약을 건다.
+- **`approvalStatus`는 이번에 만들지 않았다.** Agent는 `todos`에 절대 직접 쓰지 않는다(§2) -- 제안 승인은 앱의 완전히 별도인 Command API 호출로 일어나고, 지금은 그 흐름에 `agentRunId`로 되짚어갈 방법이 전혀 없다. 이 컬럼을 실제로 채우려면 propose → approve 전체 왕복에 `agentRunId`를 새로 꿰어야 하는(클라이언트 DTO 변경, `ScheduleAPI.swift` 변경, `todos` 쪽 상관 컬럼 추가 등) 훨씬 큰 별도 작업이 필요해서, 채울 방법이 없는 채로 항상 `NULL`인 컬럼을 지금 넣지 않았다.
+- **`providerRequestId`는 `providerCompletionId`(DB: `provider_completion_id`)로 이름과 의미를 좁혔다.** OpenRouter의 스트리밍 청크가 갖는 top-level `id`(`chatcmpl-...`)는 HTTP request-correlation id가 아니라 completion id다. 한 턴에 tool loop가 OpenRouter를 최대 `MAX_TOOL_ITERATIONS`(5)번 호출할 수 있어 컬럼 하나로는 "마지막으로 성공적으로 관측한 completion id"만 담을 수 있다 -- 특정 iteration이 stream data를 하나도 못 받고 실패하면 그 실패의 id가 아니라 그 앞에 성공했던 completion의 id가 남는다.
 
-사용자 메시지 원문·Todo 제목/메모·도구 전체 입출력·모델 응답 원문은 (의도적으로든 결과적으로든) 저장되지 않는다는 점은 원래 설계와 일치한다. 비용/지연/실패 원인을 나중에 분석하려면 이 절의 스키마를 실제로 만드는 작업이 필요하다 -- §14 Eval과 붙여서 진행하는 편이 자연스럽다(같은 이벤트에서 같이 뽑을 수 있는 데이터이므로).
+**범위 경계**: `agent_audit_log`는 "accepted agent execution"(요청이 tool loop/stream 단계에 진입한 경우) 하나당 best-effort insert를 **한 번 시도**한다 -- 405/400/429/404/500 같은 preflight 단계 거절(메서드 검증, rate limit, key 조회/vault 읽기 실패 등)은 tool loop에 도달하지 않으므로 이 테이블에 기록되지 않는다. "모든 요청"을 감사하는 것이 아니라, 실제로 실행된 Agent 턴만 감사한다. 성공한 insert는 실행당 정확히 1개 row가 되지만(agent_run_id의 unique 제약이 중복도 막는다), audit insert 자체가 실패하면 그 실행은 row 없이 남을 수 있다 -- 이 실패는 로그만 남기고 사용자 응답에는 영향을 주지 않는다(`agent_usage_log`와 동일한 fail-open 패턴). 다만 insert는 `controller.close()` 전에 `await`되므로 "non-blocking"은 아니다 -- 실패해도 결과를 바꾸지는 않지만, 느리면 stream 종료가 지연될 수 있다.
+
+`agent_usage_log`(비용이 실제로 발생한 호출만 기록, `completedCalls > 0` 게이트)와는 별개 테이블이다 -- 첫 번째 OpenRouter 호출 자체가 실패해 `completedCalls === 0`인 경우도 `agent_audit_log`에는 남는다(`agent_usage_log`에는 원래도 절대 남지 않던 케이스). 이 둘을 합치지 않은 이유는 F-2의 `eval:compare`가 `agent_usage_log`에 대해 `requestCount === completedCount` invariant를 갖고 있어서, 실패 row를 같은 테이블에 섞으면 그 의미가 깨지기 때문이다.
+
+지금은 **쓰기 전용 인프라**다 -- 이 데이터를 읽는 새 엔드포인트나 iOS UI는 아직 없다. `CloudAgentSettings.swift`의 기존 사용량 히스토리 화면(`agent-usage` 함수, `AgentUsageItemDTO`)이 나중에 latency/tool 이름/result kind를 보여줄 자연스러운 확장 지점이지만, 이번 슬라이스에는 포함되지 않았다.
+
+사용자 메시지 원문·Todo 제목/메모·도구 전체 입출력·모델 응답 원문은 여전히 (의도적으로든 결과적으로든) 저장되지 않는다.
 
 ## 14. 평가 (실제 상태)
 
