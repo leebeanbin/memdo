@@ -72,19 +72,55 @@ routes these to `skipped`; they're graded like every other case.
 that might exist in that account — running it does not make the account
 "clean," only those 2 specific rows deterministic. That's enough for
 search-005/006 (nothing else in the corpus depends on the account's
-broader state), but it is **not** enough on its own for reliably comparing
-multiple models against each other (Epic F-2) — a model's tool choice could
-still be influenced by unrelated data sitting in that account from a
-previous run. F-2 needs to either keep the dedicated eval account
-exclusively for eval (never used for anything else) or add a real
-full-reset/isolation step before each comparison run; F-1 deliberately
-doesn't solve that.
+broader state).
 
 Required env vars for both `eval:seed` and `eval`: `SUPABASE_URL`,
 `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_ACCESS_TOKEN` (the dedicated eval
 account's token). The backend additionally needs `MEMDO_EVAL_SEED_ENABLED=true`
 and `MEMDO_EVAL_ACCOUNT_USER_ID` (that account's user id) set on the
 deployment — see `memdo-backend/supabase/functions/eval-bootstrap/index.ts`.
+
+### Comparing multiple models: `eval:compare` (Epic F-2)
+
+`memdo-backend`'s `eval/compare.ts` (`npm run eval:compare` from that repo)
+runs the full corpus once per model — by default every model in
+`ALLOWED_OPENROUTER_MODELS` — and reports pass/fail/manual-review plus
+cost/tokens/wall-clock time side by side, so different models can actually
+be compared on the same corpus.
+
+F-1 left an open question here: would multi-model comparison need the eval
+account kept fully isolated, or a real wipe/reset step? It doesn't. The
+Agent never writes to `todos` directly (`docs/20-ai-agent-architecture.md`
+§2) — `propose_schedule`/`propose_schedule_update` only stage a proposal
+for the user to approve, and `eval run`/`eval:compare` never approve
+anything — so a comparison run has no way to leave state behind beyond
+what `eval:seed` already seeds. Cost/token attribution reads
+`agent_usage_log` directly, scoped per model by an id watermark taken
+right before that model's run, not by account "cleanliness."
+
+**Rate limiting**: `agent-cloud-chat` caps every account at 30 requests/hour
+by default, which a single model run against this 38-case corpus already
+exceeds — comparing multiple models needs the dedicated eval account's
+limit raised. On the backend, set `MEMDO_EVAL_RATE_LIMIT_ENABLED=true` and
+`MEMDO_EVAL_RATE_LIMIT_PER_HOUR` to a value **strictly greater than 30**
+(e.g. `250`) — this only ever raises the limit for the one account matching
+`MEMDO_EVAL_ACCOUNT_USER_ID`; every other account's 30/hour limit is
+unaffected regardless of these settings. Hitting the limit mid-comparison
+is expected, not a bug: `eval:compare` does not auto-retry or sleep past a
+429 — it stops the whole comparison at that point and saves the partial
+results collected so far (including the model that got rate-limited);
+rerun the remaining models later with `--models`.
+
+**Do not run anything else against the eval account while `eval:compare`
+(or `eval`) is running** — no manual app usage, no parallel `eval`/`eval:compare`
+run. Cost/token attribution is scoped per model by an id watermark, which
+eliminates any dependency on client/DB clock agreement, but it still can't
+tell apart two concurrent calls to the *same* model — those would mix
+their usage into the same model's totals and produce an incorrect
+cost/token comparison.
+
+See `memdo-backend/eval/compare.ts`'s header comment for the exact
+invocation and flags (`--models`, `--fixtures`, `--json`).
 
 ## On-device path: still manual
 
