@@ -254,6 +254,12 @@ struct CloudAgentConnectionSheet: View {
                         .font(MemdoTypography.caption2.monospacedDigit())
                         .foregroundStyle(MemdoTheme.secondaryInk)
                         .lineLimit(1)
+                    if let signals = modelSignals(model) {
+                        Text(signals)
+                            .font(MemdoTypography.caption2)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                            .lineLimit(1)
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -261,7 +267,11 @@ struct CloudAgentConnectionSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(model.name), \(modelPrice(model))")
+        .accessibilityLabel(
+            [model.name, modelPrice(model), modelSignals(model)]
+                .compactMap { $0 }
+                .joined(separator: ", ")
+        )
         .accessibilityAddTraits(selectedModel == model.id ? .isSelected : [])
     }
 
@@ -355,6 +365,19 @@ struct CloudAgentConnectionSheet: View {
 
     private func modelPrice(_ model: AgentModelDTO) -> String {
         "in \(usd(model.promptPricePerM, digits: 2)) · out \(usd(model.completionPricePerM, digits: 2)) /1M"
+    }
+
+    /// nil until this model has been promoted at least once via
+    /// eval:promote-registry -- shows nothing extra in that case, matching
+    /// today's picker exactly. `"92% eval"`, not `"92% eval score"` or
+    /// wording implying "% of the corpus" -- evalScore is a pass rate over
+    /// automatically-graded cases only (manualReview fixtures excluded).
+    private func modelSignals(_ model: AgentModelDTO) -> String? {
+        var parts: [String] = []
+        if let latencyClass = model.latencyClass { parts.append(latencyClass) }
+        if let costClass = model.costClass { parts.append("\(costClass) cost") }
+        if let evalScore = model.evalScore { parts.append("\(Int((evalScore * 100).rounded()))% eval") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private func usageCost(_ cost: Double) -> String {
