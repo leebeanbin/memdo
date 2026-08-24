@@ -219,6 +219,32 @@ final class AgentScheduleUpdateProposal {
     }
 }
 
+/// Pending state for an Agent proposal to change routine settings
+/// (propose_routine_update) -- cloud-only (see AgentRuntimeKind.capabilities),
+/// so this is only ever staged from AssistantView.ingestCloudResult, not an
+/// on-device Tool. No conflict concept, unlike the schedule proposals --
+/// routine settings don't collide with each other the way time ranges do.
+@MainActor
+@Observable
+final class AgentRoutineUpdateProposal {
+    var draft: CloudProposedRoutineUpdateDTO?
+    var isPending: Bool { draft != nil }
+    func propose(_ d: CloudProposedRoutineUpdateDTO) { draft = d }
+    func clear() { draft = nil }
+}
+
+/// Pending state for an Agent proposal to write/update a day's reflection
+/// (propose_review_actions) -- cloud-only, same reasoning as
+/// AgentRoutineUpdateProposal above.
+@MainActor
+@Observable
+final class AgentReviewActionProposal {
+    var draft: CloudProposedReviewActionDTO?
+    var isPending: Bool { draft != nil }
+    func propose(_ d: CloudProposedReviewActionDTO) { draft = d }
+    func clear() { draft = nil }
+}
+
 @available(iOS 26, *)
 struct ProposeScheduleTool: Tool {
     let name = "proposeSchedule"

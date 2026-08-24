@@ -25,6 +25,7 @@
 		1ACFAEEBEB53F95656F314FC /* MemdoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4EA7A02C55094DEBD06AF37 /* MemdoWidget.swift */; };
 		1F8672E2C40ED8E8853E55EA /* Pretendard-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 97B6BAE4945DFFB47769CA5C /* Pretendard-LICENSE.txt */; };
 		216569CCC3FCC4402CA66A1C /* AgentDomainServicesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC09836B4409CD8802D9A9E1 /* AgentDomainServicesTests.swift */; };
+		0A3623641E064C5EAD742439 /* AgentIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9143095B9E7A47B682FDCE14 /* AgentIntentTests.swift */; };
 		27F704F7116840EA5D152218 /* WallpaperIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFB1F40579E7D5062404CC55 /* WallpaperIntent.swift */; };
 		28ACEBD7EE2EC6276D9F3CFE /* WorkoutAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67DDB3585BB47A7B725E0F95 /* WorkoutAPI.swift */; };
 		2A29175D38335F059C4AE766 /* MemdoComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42994A317F898780763B33D4 /* MemdoComponents.swift */; };
@@ -193,6 +194,7 @@
 		E81203EAFA09124BA54F8AE7 /* TodayComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayComponents.swift; sourceTree = "<group>"; };
 		EA8A453029530AB440AFEB03 /* ScheduleAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleAPI.swift; sourceTree = "<group>"; };
 		EC09836B4409CD8802D9A9E1 /* AgentDomainServicesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDomainServicesTests.swift; sourceTree = "<group>"; };
+		9143095B9E7A47B682FDCE14 /* AgentIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIntentTests.swift; sourceTree = "<group>"; };
 		F29F2315ADA3175E0D4A894C /* MemdoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoTheme.swift; sourceTree = "<group>"; };
 		F2C12B14694C882524384138 /* WallpaperPreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperPreviewSheet.swift; sourceTree = "<group>"; };
 		F8BB7B0BC6E2F7CAF1981DF2 /* AgentPrompts.yml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = AgentPrompts.yml; sourceTree = "<group>"; };
@@ -248,6 +250,7 @@
 			children = (
 				E5F8C1DE6F959CF3423D1DD8 /* AgentCoordinatorTests.swift */,
 				EC09836B4409CD8802D9A9E1 /* AgentDomainServicesTests.swift */,
+				9143095B9E7A47B682FDCE14 /* AgentIntentTests.swift */,
 				8DFEC754269D8947FB18E952 /* AgentRuntimeTests.swift */,
 				17E8C08961FC90CC6CA2A3B6 /* CloudAgentRuntimeTests.swift */,
 				AA8E9E99B2955B5F2A3FABD6 /* FakeAgentRuntime.swift */,
@@ -501,6 +504,7 @@
 			files = (
 				AA47BAB65B42078F49070D0E /* AgentCoordinatorTests.swift in Sources */,
 				216569CCC3FCC4402CA66A1C /* AgentDomainServicesTests.swift in Sources */,
+				0A3623641E064C5EAD742439 /* AgentIntentTests.swift in Sources */,
 				D0E0E2E1A7122A5734E8C07A /* AgentRuntimeTests.swift in Sources */,
 				C69C49A6035C81CD2F48A9F3 /* CloudAgentRuntimeTests.swift in Sources */,
 				C058A05E23195B992D283DC5 /* FakeAgentRuntime.swift in Sources */,

@@ -223,20 +223,33 @@ final class PreferencesStore {
     /// Mutates the cached full object and persists it. Loads first if nothing is
     /// cached yet (rather than silently dropping the change), since untouched
     /// server fields must round-trip through the full-object upsert.
-    func update(_ transform: (inout UserPreferences) -> Void) async {
+    ///
+    /// Returns whether the save actually succeeded -- `false` on a load
+    /// failure (nothing to update) or a save failure (previous value is
+    /// restored, same as before). `@discardableResult` so existing fire-and-
+    /// forget call sites (SettingsView, MemdoGuideSheet) keep compiling and
+    /// behaving identically; `lastError`'s existing set/clear behavior is
+    /// unchanged either way. Callers that need to know whether their change
+    /// actually persisted (e.g. an Agent proposal approval, which shouldn't
+    /// tell the user something was applied when it wasn't) inspect the
+    /// return value.
+    @discardableResult
+    func update(_ transform: (inout UserPreferences) -> Void) async -> Bool {
         if preferences == nil {
             await load()
         }
-        guard var updated = preferences else { return }
+        guard var updated = preferences else { return false }
         let previous = preferences
         transform(&updated)
         preferences = updated
         do {
             preferences = try await repository.save(updated)
             lastError = nil
+            return true
         } catch {
             preferences = previous
             lastError = error.localizedDescription
+            return false
         }
     }
 }

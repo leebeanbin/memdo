@@ -448,6 +448,221 @@ struct ProposedScheduleUpdateCard: View {
     }
 }
 
+/// Confirmation card for propose_routine_update -- shows only the fields the
+/// model actually proposed changing (every field on the DTO is optional).
+struct ProposedRoutineUpdateCard: View {
+    let draft: CloudProposedRoutineUpdateDTO
+    let onConfirm: () -> Void
+    let onDecline: () -> Void
+
+    private var rows: [String] {
+        var lines: [String] = []
+        if let v = draft.dailyReviewEnabled {
+            lines.append("하루 정리: " + (v ? "켜짐" : "꺼짐") + (draft.dailyReviewTime.map { " · \($0)" } ?? ""))
+        } else if let time = draft.dailyReviewTime {
+            lines.append("하루 정리 시간: \(time)")
+        }
+        if let v = draft.newsBriefingEnabled {
+            lines.append("뉴스 브리핑: " + (v ? "켜짐" : "꺼짐") + (draft.newsBriefingTime.map { " · \($0)" } ?? ""))
+        } else if let time = draft.newsBriefingTime {
+            lines.append("뉴스 브리핑 시간: \(time)")
+        }
+        if let time = draft.planningPromptTime {
+            lines.append("하루 시작 시간: \(time)")
+        }
+        if let v = draft.notificationsEnabled {
+            lines.append("전체 알림: " + (v ? "켜짐" : "꺼짐"))
+        }
+        return lines
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Agent 루틴 설정 변경 제안", systemImage: "gearshape.badge.checkmark")
+                .font(MemdoTypography.captionEmphasis)
+                .foregroundStyle(MemdoTheme.brand)
+
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(rows, id: \.self) { row in
+                    Text(row)
+                        .font(MemdoTypography.action)
+                        .foregroundStyle(MemdoTheme.ink)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button(action: onConfirm) {
+                    Label("적용하기", systemImage: "checkmark")
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(MemdoTheme.onAccent)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(MemdoTheme.accent,
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onDecline) {
+                    Text("취소")
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(MemdoTheme.surface,
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(MemdoTheme.outline, lineWidth: 0.5)
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .background(MemdoTheme.brandSoft,
+                    in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                .stroke(MemdoTheme.brand.opacity(0.2), lineWidth: 0.5)
+        }
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .move(edge: .bottom)),
+            removal: .opacity
+        ))
+    }
+}
+
+/// Confirmation card for propose_review_actions -- a proposed reflection
+/// *text* for one day. Resolves the model's raw date token once (via the
+/// shared AgentDateExpression) and, if it resolves, checks for an existing
+/// reflection on that date before letting the user approve, so an approval
+/// can never silently overwrite something already written without the user
+/// having seen it.
+struct ProposedReviewActionCard: View {
+    let scheduleStore: ScheduleStore
+    let draft: CloudProposedReviewActionDTO
+    let onConfirm: () -> Void
+    let onDecline: () -> Void
+
+    @State private var isCheckingExistingReview = true
+    @State private var existingReview: ReviewDTO?
+
+    private var resolvedDate: Date? {
+        AgentDateExpression(token: draft.date)?.resolvedDate()
+    }
+
+    private var displayDate: String? {
+        resolvedDate.map { DateFormatting.korean("M월 d일").string(from: $0) }
+    }
+
+    private var apiDateString: String? {
+        resolvedDate.map { DateFormatting.posix("yyyy-MM-dd").string(from: $0) }
+    }
+
+    /// A row existing with a nil/blank reflection is treated as "nothing to
+    /// overwrite" -- same as no row at all.
+    private var existingReflectionText: String? {
+        guard let text = existingReview?.reflection else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Agent 회고 제안", systemImage: "text.book.closed")
+                .font(MemdoTypography.captionEmphasis)
+                .foregroundStyle(MemdoTheme.brand)
+
+            VStack(alignment: .leading, spacing: 6) {
+                if let displayDate {
+                    Label(displayDate, systemImage: "calendar")
+                        .font(MemdoTypography.caption)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                } else {
+                    Label("날짜를 확인할 수 없어요", systemImage: "exclamationmark.triangle.fill")
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(.orange)
+                }
+
+                Text(draft.reflection)
+                    .font(MemdoTypography.action)
+                    .foregroundStyle(MemdoTheme.ink)
+
+                if let existingReflectionText {
+                    Label("이 날짜에 이미 회고가 있어요: \"\(existingReflectionText)\" 덮어쓸까요?",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(.orange)
+                        .lineLimit(3)
+                }
+            }
+
+            HStack(spacing: 8) {
+                if resolvedDate != nil {
+                    Button(action: onConfirm) {
+                        Label("저장하기", systemImage: "checkmark")
+                            .font(MemdoTypography.captionEmphasis)
+                            .foregroundStyle(MemdoTheme.onAccent)
+                            .frame(maxWidth: .infinity, minHeight: 34)
+                            .background(MemdoTheme.accent,
+                                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    // Disabled for the entire duration of the existence
+                    // check, not just while a conflict is confirmed -- so
+                    // the user can't approve before the warning (if any)
+                    // has had a chance to render.
+                    .disabled(isCheckingExistingReview)
+                }
+
+                Button(action: onDecline) {
+                    Text("취소")
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(MemdoTheme.surface,
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(MemdoTheme.outline, lineWidth: 0.5)
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .background(MemdoTheme.brandSoft,
+                    in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                .stroke(MemdoTheme.brand.opacity(0.2), lineWidth: 0.5)
+        }
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .move(edge: .bottom)),
+            removal: .opacity
+        ))
+        .task(id: draft.date) {
+            // Reset together at the start of every new date's check -- a
+            // warning from a previous proposal's date must never remain
+            // visible while this one is still in flight.
+            isCheckingExistingReview = true
+            existingReview = nil
+            guard let apiDateString else {
+                isCheckingExistingReview = false
+                return
+            }
+            do {
+                existingReview = try await scheduleStore.review(on: apiDateString)
+            } catch {
+                // Fails open on the *result* only (no warning shown, still
+                // approvable) -- never on whether the check ran; the button
+                // stays disabled until this reaches here regardless of
+                // outcome.
+                existingReview = nil
+            }
+            isCheckingExistingReview = false
+        }
+    }
+}
+
 // MARK: - Composer
 
 struct AgentComposer: View {
