@@ -571,6 +571,14 @@ final class ScheduleStore {
         try await repository.agentCloudChat(message: message, history: history, model: model, onDelta: onDelta)
     }
 
+    func review(on date: String) async throws -> ReviewDTO? {
+        try await repository.review(date: date)
+    }
+
+    func putReview(on date: String, reflection: String) async throws -> ReviewDTO {
+        try await repository.putReview(date: date, reflection: reflection)
+    }
+
     func search(_ query: String) async throws -> [ScheduleDetail] {
         let calendarsByID = Dictionary(uniqueKeysWithValues: calendars.map { ($0.id, $0) })
         let dtos = try await repository.search(query: query)

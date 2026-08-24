@@ -233,6 +233,18 @@ final class AgentRoutineUpdateProposal {
     func clear() { draft = nil }
 }
 
+/// Pending state for an Agent proposal to write/update a day's reflection
+/// (propose_review_actions) -- cloud-only, same reasoning as
+/// AgentRoutineUpdateProposal above.
+@MainActor
+@Observable
+final class AgentReviewActionProposal {
+    var draft: CloudProposedReviewActionDTO?
+    var isPending: Bool { draft != nil }
+    func propose(_ d: CloudProposedReviewActionDTO) { draft = d }
+    func clear() { draft = nil }
+}
+
 @available(iOS 26, *)
 struct ProposeScheduleTool: Tool {
     let name = "proposeSchedule"

@@ -97,6 +97,20 @@ struct AgentUsageResponseDTO: Decodable {
     let recent: [AgentUsageItemDTO]
 }
 
+/// Mirrors reviews/index.ts's reviewDto -- `reflection` can be nil (a row
+/// exists with no reflection text set), distinct from no row existing at
+/// all (review(date:accessToken:) returns nil for that case).
+struct ReviewDTO: Decodable, Equatable {
+    let reviewDate: String
+    let reflection: String?
+    let createdAt: String
+    let updatedAt: String
+}
+
+struct ReviewInputDTO: Encodable {
+    let reflection: String
+}
+
 struct AgentChatTurnDTO: Codable {
     let role: String
     let content: String
@@ -641,6 +655,29 @@ actor MemdoAPIClient {
         )
     }
 
+    /// nil ONLY for a 404 RESOURCE_NOT_FOUND (no reflection written for this
+    /// date yet) -- every other error (a different server error, offline)
+    /// propagates unchanged. Silently mapping any failure to "no reflection
+    /// exists" would be worse than not checking at all for the overwrite-
+    /// warning card that calls this: it could hide a real existing
+    /// reflection from the user precisely when something went wrong reading it.
+    func review(date: String, accessToken: String) async throws -> ReviewDTO? {
+        do {
+            return try await send(path: "reviews/\(date)", accessToken: accessToken)
+        } catch ScheduleAPIError.server(404, "RESOURCE_NOT_FOUND", _, _) {
+            return nil
+        }
+    }
+
+    func putReview(date: String, reflection: String, accessToken: String) async throws -> ReviewDTO {
+        try await send(
+            path: "reviews/\(date)",
+            method: "PUT",
+            body: encoder.encode(ReviewInputDTO(reflection: reflection)),
+            accessToken: accessToken
+        )
+    }
+
     /// agent-cloud-chat responds with newline-delimited JSON, not a single
     /// decodable body -- `onDelta` fires as text chunks arrive so the UI can
     /// update live the same way the on-device path's streamResponse already
@@ -931,6 +968,14 @@ actor ScheduleRepository {
             accessToken: accessToken(),
             onDelta: onDelta
         )
+    }
+
+    func review(date: String) async throws -> ReviewDTO? {
+        try await api.review(date: date, accessToken: accessToken())
+    }
+
+    func putReview(date: String, reflection: String) async throws -> ReviewDTO {
+        try await api.putReview(date: date, reflection: reflection, accessToken: accessToken())
     }
 
     private func accessToken() async throws -> String {
