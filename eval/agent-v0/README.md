@@ -54,24 +54,37 @@ like "no tool, some text" from the outside — so those come back as
 automatic pass/fail. That's an inherent limit of grading from the outside,
 not something a bigger corpus or a smarter grader fixes.
 
-### Epic F prerequisite: state-dependent fixtures need a seeded account
+### State-dependent fixtures: seeded via Epic F-1
 
-`PROPOSE_SCHEDULE_UPDATE` fixtures (`search-005`, `search-006`, and any
-future ones in this category) need a real pre-existing schedule in whatever
-account the runner's token belongs to — `search_schedules` has nothing to
-find otherwise, and `propose_schedule_update` never gets called regardless
-of how good the model is. This Epic doesn't build a deterministic seed/eval
-account, so `run.ts` routes these straight to `skipped` before grading them
-at all, rather than risk reading "no seed data" as "model failure."
+`PROPOSE_SCHEDULE_UPDATE` fixtures (`search-005`, `search-006`) need a real
+pre-existing schedule in whatever account the runner's token belongs to —
+`search_schedules` has nothing to find otherwise, and
+`propose_schedule_update` never gets called regardless of how good the
+model is. Epic F-1 closed this: run `npm run eval:seed`
+(`memdo-backend/eval/seed.ts`) once against the dedicated eval account
+**before** `npm run eval` — it upserts exactly the 2 rows these fixtures
+need (deterministic ids, so re-running it always restores them to the same
+title/date even if something else touched them since). `run.ts` no longer
+routes these to `skipped`; they're graded like every other case.
 
-**Before Epic F (model comparison/benchmarking) can produce a meaningful
-number for this category, it needs a dedicated eval account with
-deterministic fixture state — seeded/reset immediately before each run, not
-just "an account that happens to have some schedules in it."** Once that
-exists, `memdo-backend/eval/run.ts`'s `STATE_DEPENDENT_BEHAVIORS` filter can
-be removed without touching `grade.ts` at all — the grading logic already
-handles these fixtures correctly, it's only the "is there anything to find"
-precondition that's currently unmet.
+**What this does and doesn't guarantee**: `eval:seed` only restores its own
+2 rows. It does **not** wipe or otherwise touch any other, unrelated todo
+that might exist in that account — running it does not make the account
+"clean," only those 2 specific rows deterministic. That's enough for
+search-005/006 (nothing else in the corpus depends on the account's
+broader state), but it is **not** enough on its own for reliably comparing
+multiple models against each other (Epic F-2) — a model's tool choice could
+still be influenced by unrelated data sitting in that account from a
+previous run. F-2 needs to either keep the dedicated eval account
+exclusively for eval (never used for anything else) or add a real
+full-reset/isolation step before each comparison run; F-1 deliberately
+doesn't solve that.
+
+Required env vars for both `eval:seed` and `eval`: `SUPABASE_URL`,
+`SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_ACCESS_TOKEN` (the dedicated eval
+account's token). The backend additionally needs `MEMDO_EVAL_SEED_ENABLED=true`
+and `MEMDO_EVAL_ACCOUNT_USER_ID` (that account's user id) set on the
+deployment — see `memdo-backend/supabase/functions/eval-bootstrap/index.ts`.
 
 ## On-device path: still manual
 
