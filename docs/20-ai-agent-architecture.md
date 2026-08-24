@@ -12,6 +12,11 @@
 > `memdo-backend/supabase/functions/agent-cloud-chat`·`_shared/agent-cloud-contract.ts`를 정답으로
 > 삼아 갱신했다. 3·4절과 15절의 나머지 하위 절(의미 검색·Agents SDK·다중 Agent·MCP)은 원래 설계와
 > 실제 구현이 여전히 같은 방향이라 유지했다.
+>
+> **개정(2026-08-24)**: 14절과 15절의 "Model registry"를 Epic E(자동 eval 러너)·F-1(결정론적
+> seeding)·F-2(다중 모델 비교)·G(registry 구현) 이후 실제 상태로 다시 갱신했다. 14절의 100-case
+> 목표 세트는 여전히 존재하지 않는다는 점, 15절의 registry는 라이브 텔레메트리가 아니라 사람이
+> 검토·승격하는 스냅샷이라는 점을 명시적으로 남겼다.
 
 ## 0. 실제 제공 경로와 비용 경계
 
@@ -187,7 +192,7 @@ LLM은 Agent 그 자체가 아니라 **자연어를 제한된 도구 호출로 �
 | iOS `resolveAgentDateToken`이 파싱 실패한 날짜 토큰을 처리하는 방식 | **해결됨** — 함수 자체를 제거하고 실패 가능한 `AgentDateExpression(token:)`(`AgentIntent.swift`)로 대체. `ProposeScheduleTool`/`UpdateScheduleTool`/`FindFreeSlotTool.call(arguments:)`와 `AssistantView`의 클라우드 응답 스테이징 지점 모두 파싱 실패 시 스테이징하지 않고 설명 문자열만 반환한다. `UpdateScheduleTool.Arguments.action`도 제약 없는 `String`에서 `AgentUpdateAction` enum 검증으로 바뀌었고, `AssistantView`의 `switch action`도 `default: break`가 아니라 명시적 에러 메시지를 남긴다 |
 | `propose_routine_update`/`propose_review_actions`의 확인 카드 | **미구현, Sprint 1 범위 밖** — 서버는 정상적으로 제안을 staging해서 `done` payload에 싣지만(§8), iOS `ScheduleAPI.swift`의 Decodable DTO에 해당 필드가 없어 조용히 무시된다. 지금 이 두 도구를 모델이 호출하면 화면에 아무 반응도 없다 |
 
-**v1에서 하지 않은 것**: `propose_routine_update`/`propose_review_actions` 확인 카드, Eval Dataset 구축(§14), 모델 capability 기반 registry(§15), 완전한 `AgentIntent`/`CLARIFICATION_REQUIRED` union(Epic B의 B-03/B-05, `eval/agent-v0/README.md`도 이 라벨들을 "runtime enum 아님"으로 명시). 위 표의 나머지 항목은 Sprint 1(A-01~A-04, B-01/B-02/B-04)에서 실제로 고쳤다 — `memdo-backend`의 `_shared/agent-tool-contract.ts`, `apps/ios/Memdo/Memdo/AgentIntent.swift`가 그 결과물이다.
+**v1에서 하지 않은 것**: `propose_routine_update`/`propose_review_actions` 확인 카드, Eval Dataset 구축(§14, **이후 Epic E/F-1/F-2로 부분적으로 해소** -- `agent-v0` 38-case 코퍼스 + 자동 러너는 생겼지만 §14의 100-case 목표 세트 자체는 여전히 없음), 모델 capability 기반 registry(§15, **이후 Epic G로 구현됨**), 완전한 `AgentIntent`/`CLARIFICATION_REQUIRED` union(Epic B의 B-03/B-05, `eval/agent-v0/README.md`도 이 라벨들을 "runtime enum 아님"으로 명시). 위 표의 나머지 항목은 Sprint 1(A-01~A-04, B-01/B-02/B-04)에서 실제로 고쳤다 — `memdo-backend`의 `_shared/agent-tool-contract.ts`, `apps/ios/Memdo/Memdo/AgentIntent.swift`가 그 결과물이다.
 
 ## 6. 도구 네이밍
 
@@ -326,14 +331,13 @@ providerRequestId
 
 ## 14. 평가 (실제 상태)
 
-**자동화된 Eval은 아직 없다.** 있는 것은 두 종류뿐이다:
+**자동화된 Eval이 생겼다** (Epic E/F-1/F-2, 이 섹션이 "아직 없다"고 적혀 있던 시점 이후). 있는 것:
 
 1. `agent-cloud-contract.test.ts`(81개 중 다수) -- `resolveDate`/`expandScope`/`findConflict`/SSE 파싱 같은 **Agent 주변 deterministic 코드**의 단위 테스트. "도구 호출 로직이 맞는가"이지 "모델이 맞는 도구를 고르는가"가 아니다.
-2. [`docs/32-agent-manual-test-plan.md`](./32-agent-manual-test-plan.md) -- 실제 OpenRouter 키(과금)와 실기기 Apple Intelligence가 있어야 실행되는 **수동** 체크리스트.
+2. [`docs/32-agent-manual-test-plan.md`](./32-agent-manual-test-plan.md) -- 실제 OpenRouter 키(과금)와 실기기 Apple Intelligence가 있어야 실행되는 **수동** 체크리스트. (On-device 경로는 여전히 이 방식뿐 -- 아래 3과 구분됨.)
+3. **`eval/agent-v0` corpus + `memdo-backend`의 자동 러너** -- Sprint 1이 남긴 38-case 코퍼스(`memdo/eval/agent-v0/*.jsonl`, `SEARCH_SCHEDULES`/`FIND_FREE_SLOTS`/`PROPOSE_SCHEDULE`/`PROPOSE_SCHEDULE_UPDATE`/`ANSWER`/`UNSUPPORTED` 라벨)에 대해, Epic E가 `eval/run.ts`(클라우드 경로에 프롬프트를 실제로 POST하고 `dispatchedTools`를 채점)를, F-1이 `eval/seed.ts`(상태 의존 케이스의 prerequisite를 결정론적으로 심는 것)를, F-2가 `eval/compare.ts`(여러 모델을 같은 코퍼스로 비교)를 추가했다. `ANSWER`/`UNSUPPORTED`(10/38)는 외부에서 관찰만으로는 구분 불가능해 `manual-review`로 남는다 -- 자동 판정 커버리지는 100%가 아니다.
 
-"프롬프트별 도구 선택 정확도·날짜 해석·인자 유효성"을 반복 가능하게 측정하는 자동 Eval Dataset은 아직 없다. §5-1의 Boundary/Contract가 곧 이 Eval의 입력 스펙이 될 수 있으므로, 정의된 Intent/Contract가 안정된 뒤 Eval Dataset을 만드는 것을 다음 작업으로 권장한다 -- 이번 v1 개정 범위에는 포함하지 않았다.
-
-출시 전 최소 평가셋(목표, 아직 데이터셋 자체는 없음):
+아래 "출시 전 최소 평가셋"(카테고리별 20/10/20/10/10/10/20, 총 100개)은 **여전히 목표일 뿐 존재하지 않는다** -- 실제로 있는 건 그보다 작은 38-case `agent-v0` 코퍼스뿐이다. 이 목표 세트와 `agent-v0`를 혼동하지 말 것.
 
 - 직접 일정 검색 20개
 - 날짜가 모호한 검색 10개
@@ -358,23 +362,25 @@ providerRequestId
 
 ## 15. 확장 조건
 
-### Model registry
+### Model registry (Epic G, 구현됨)
 
-OpenAI Responses API·llama.cpp 이중 adapter 설계는 ADR-073으로 폐기됐다 -- 서버가 추론비를 부담하는 상시 adapter 계층 자체가 ADR-073이 피하려던 비용 구조다. 지금은 OpenRouter Chat Completions 단일 HTTP API 위에 `ALLOWED_OPENROUTER_MODELS`(고정 배열, `agent-cloud-contract.ts`) 하나로 모델을 제한한다 -- iOS `CloudAgentModelPreference`가 별도로 관리하지 않고 이 배열을 그대로 따른다(`agent-models-contract.ts`).
-
-모델 ID를 architecture 결정으로 다루면(지금처럼 배열에 문자열을 직접 추가/제거) 카탈로그가 바뀔 때마다 코드 변경이 필요하다. §14의 Eval Dataset이 갖춰지면 다음 형태의 **capability + eval 기반 registry**로 옮기는 것을 후보로 둔다:
+OpenAI Responses API·llama.cpp 이중 adapter 설계는 ADR-073으로 폐기됐다 -- 서버가 추론비를 부담하는 상시 adapter 계층 자체가 ADR-073이 피하려던 비용 구조다. OpenRouter Chat Completions 단일 HTTP API 위에서 어떤 모델을 허용할지는 이제 `model-registry-contract.ts`의 `MODEL_REGISTRY: ModelProfile[]`가 결정한다:
 
 ```text
 ModelProfile
   id
   supportsTools
-  latencyClass
-  costClass
-  evalScore   -- §14 Eval Dataset 통과 점수
+  latencyClass  -- null until promoted
+  costClass     -- null until promoted
+  evalScore     -- null until promoted
   enabled
 ```
 
-그러면 "어떤 모델이 더 똑똑한가"가 아니라 "Memdo Eval을 SLA 안에서 가장 싸게 통과하는 모델은 무엇인가"로 교체 기준이 바뀐다. Eval Dataset이 없는 지금은 이 registry를 만들 근거 데이터가 없으므로 착수하지 않는다.
+`agent-cloud-contract.ts`의 `ALLOWED_OPENROUTER_MODELS`(iOS `CloudAgentModelPreference`가 그대로 따르는 배열)는 이제 이 registry에서 `selectableModelIds()`(`enabled && supportsTools`)로 파생된다 -- 더 이상 별도로 유지되는 배열이 아니다. `selectableModelIds()`는 **registry-side eligibility(우리가 이 모델을 허용하는가)의 단일 기준**이다. 이것이 카탈로그 전체를 결정하는 유일한 메커니즘은 아니다: `agent-models-contract.ts`의 `agentModelsFromOpenRouter()`는 OpenRouter의 실시간 `/models` 응답에 대한 검증(text/tools modality, 유효한 pricing 등)을 **별도의, 여전히 필수인 게이트**로 추가 적용한다 -- registry에서 selectable이어도 OpenRouter가 지금 그 모델을 delist했거나 pricing이 없으면 카탈로그에서 빠진다.
+
+`latencyClass`/`costClass`/`evalScore`는 **라이브 텔레메트리가 아니라 스냅샷**이다 -- production에 요청 단위 latency 기록 자체가 없고(§13 참고), 오직 사람이 `eval:compare`를 수동 실행하고 그 결과를 `eval/promote-registry.ts`로 검토한 뒤 코드로 반영(reviewed PR)했을 때만 값이 채워진다. 자동/주기적 갱신은 없다. `evalScore`의 정의는 `pass / (pass + fail)`이며, 자동 채점 불가능한 `manualReview` fixture는 분모에서 제외된다 -- 즉 "코퍼스 전체 대비 %"가 아니다.
+
+이 슬라이스가 만든 것: `model-registry-contract.ts`(registry 자체), `agent-cloud-contract.ts`/`agent-models-contract.ts`의 registry 연동, `eval/promote-registry.ts`(사람이 검토하는 승격 헬퍼), iOS 모델 picker의 latency/cost/eval 캡션. 만들지 않은 것: 실제 `eval:compare` 실행과 `MODEL_REGISTRY`로의 real value promotion 자체(별도의 수동 후속 작업), production latency 기록, DB 기반 registry나 admin UI, evalScore 기반 default 모델 자동 선택.
 
 ### 의미 검색
 
