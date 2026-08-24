@@ -31,26 +31,56 @@ Sprint, or the model swaps in Epic F) are actual improvements.
   down for that case. An empty `{}` is fine.
 - `notes` explains why the case is interesting, not what it does.
 
-## Why this is data-only in Sprint 1
+## Cloud path: automated via Epic E's runner
 
-This corpus intentionally has no automated runner yet — building one is Epic
-E's job, not this Sprint's. Running it today is a manual procedure, but the
-two paths have very different constraints:
+Epic E added an automated runner for the cloud path — `memdo-backend`'s
+`eval/run.ts` (`npm run eval` from that repo). It POSTs each fixture's
+`input` to the deployed `agent-cloud-chat` function fresh (no history),
+reads back which tool(s) actually got dispatched
+(`ToolDispatchState.dispatchedTools`, added in the same Epic), and grades
+the result against `expectedBehavior`/`expected` via `eval/grade.ts`'s pure
+`gradeCase()`.
 
-- **Cloud path (OpenRouter)**: no physical device needed. Running the full
-  corpus against a model costs real API credits (BYOK), but there is nothing
-  technically stopping it from being scripted and automated later — Epic E's
-  eval runner is expected to do exactly that against this same corpus,
-  unchanged.
-- **On-device path (Apple FoundationModels)**: requires a physical
-  Apple-Intelligence-capable device (the simulator does not have the model).
-  This constraint doesn't go away when Epic E's runner exists — on-device
-  eval will always need a device in the loop, or a device farm.
+Needs a real logged-in user's Supabase access token (with an OpenRouter key
+already connected via the app's normal connect flow) in
+`SUPABASE_ACCESS_TOKEN` — every run spends real OpenRouter credits, so this
+never runs in CI, only manually. See `memdo-backend/eval/run.ts`'s header
+comment for the exact invocation.
 
-## Manual execution (until Epic E)
+Coverage isn't 100%: `ANSWER`/`UNSUPPORTED` (10 of 38 cases) can't be told
+apart from each other purely from whether a tool was called — both look
+like "no tool, some text" from the outside — so those come back as
+`manual-review` with the model's actual response text attached, not an
+automatic pass/fail. That's an inherent limit of grading from the outside,
+not something a bigger corpus or a smarter grader fixes.
 
-1. Open the Agent sheet in the relevant `AgentContext` for cloud-path
-   testing, or on a real device for on-device testing (see
+### Epic F prerequisite: state-dependent fixtures need a seeded account
+
+`PROPOSE_SCHEDULE_UPDATE` fixtures (`search-005`, `search-006`, and any
+future ones in this category) need a real pre-existing schedule in whatever
+account the runner's token belongs to — `search_schedules` has nothing to
+find otherwise, and `propose_schedule_update` never gets called regardless
+of how good the model is. This Epic doesn't build a deterministic seed/eval
+account, so `run.ts` routes these straight to `skipped` before grading them
+at all, rather than risk reading "no seed data" as "model failure."
+
+**Before Epic F (model comparison/benchmarking) can produce a meaningful
+number for this category, it needs a dedicated eval account with
+deterministic fixture state — seeded/reset immediately before each run, not
+just "an account that happens to have some schedules in it."** Once that
+exists, `memdo-backend/eval/run.ts`'s `STATE_DEPENDENT_BEHAVIORS` filter can
+be removed without touching `grade.ts` at all — the grading logic already
+handles these fixtures correctly, it's only the "is there anything to find"
+precondition that's currently unmet.
+
+## On-device path: still manual
+
+Requires a physical Apple-Intelligence-capable device (the simulator does
+not have the model) — this constraint doesn't go away with Epic E's runner,
+since on-device eval will always need a device in the loop, or a device
+farm, not an HTTP endpoint. Still a manual procedure:
+
+1. Open the Agent sheet in the relevant `AgentContext` on a real device (see
    `docs/32-agent-manual-test-plan.md` for the general manual-testing
    pattern this follows).
 2. Paste each `input` value in, one at a time, in a fresh conversation
