@@ -132,3 +132,142 @@ func conflictRevalidationDecision(
     case (_, let fresh?): return .refresh(fresh)
     }
 }
+
+// MARK: - Provider-neutral proposal staging (Epic D-2)
+//
+// ProposeScheduleTool.call(arguments:) (on-device) and
+// AssistantView.ingestCloudResult (cloud) used to each run their own copy of
+// "validate -> build draft -> compute conflict -> stage" -- nearly identical
+// code, duplicated because each provider produces its raw input differently
+// (FoundationModels @Generable Arguments vs a decoded cloud DTO) even though
+// what happens to that input once it's provider-neutral strings/values is
+// the same. The functions below are that shared middle step. They are pure
+// -- they never touch AgentScheduleProposal/AgentScheduleUpdateProposal
+// themselves; callers take the result and call propose(...) on their own
+// proposal reference, the same way ConflictService/FreeSlotService above
+// stay pure and let their callers own all state.
+
+enum ScheduleProposalStagingResult: Equatable {
+    case staged(ProposedScheduleDraft, conflict: AgentConflictSnapshot?, conflictCheckFailed: Bool)
+    case invalidDate
+}
+
+func stageScheduleProposal(
+    title: String,
+    date: String,
+    startTime: String,
+    endTime: String,
+    isTask: Bool,
+    note: String,
+    existing: [ConflictService.ExistingItem],
+    conflictCheckFailed: Bool = false
+) -> ScheduleProposalStagingResult {
+    // Reject before staging anything -- an unparseable date must never
+    // silently become "today" (Issue A-04).
+    guard AgentDateExpression(token: date) != nil else { return .invalidDate }
+    let draft = ProposedScheduleDraft(
+        title: title,
+        dateString: date,
+        startTimeString: startTime.isEmpty ? nil : startTime,
+        endTimeString: endTime.isEmpty ? nil : endTime,
+        isTask: isTask,
+        note: note.isEmpty ? nil : note
+    )
+    // Reflection step: check the proposal against the real schedule before
+    // handing it back, instead of presenting it uncritically.
+    let conflict = draft.resolvedInterval().flatMap { interval in
+        ConflictService.conflict(for: AgentTimeRange(start: interval.start, end: interval.end), in: existing)
+    }
+    return .staged(
+        draft,
+        conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) },
+        conflictCheckFailed: conflictCheckFailed
+    )
+}
+
+enum ScheduleUpdateStagingResult: Equatable {
+    case staged(
+        id: String, action: AgentUpdateAction, title: String,
+        dateString: String?, startTimeString: String?, endTimeString: String?,
+        conflict: AgentConflictSnapshot?, conflictCheckFailed: Bool
+    )
+    case invalidDate
+}
+
+/// `id`/`title` are already resolved by the caller (on-device:
+/// UpdateScheduleTool.bestMatch(for:); cloud: echoed back from
+/// search_schedules) -- that resolution step is provider-specific and stays
+/// out of this shared boundary. `action` is the already-validated
+/// AgentUpdateAction, not a raw model/DTO string -- see rescheduleConflict's
+/// doc comment for why a String here would be a step backwards.
+func stageScheduleUpdate(
+    id: String,
+    title: String,
+    action: AgentUpdateAction,
+    dateString: String?,
+    startTimeString: String?,
+    endTimeString: String?,
+    existing: [ConflictService.ExistingItem],
+    conflictCheckFailed: Bool = false
+) -> ScheduleUpdateStagingResult {
+    // Reschedule requires a real target date -- a missing or unparseable one
+    // must be rejected outright, not silently treated as today (Issue
+    // A-04). complete/delete never carry a date. Unlike the pre-D-2 cloud
+    // ingestion code (which only checked "if a date is present, is it
+    // valid" and relied entirely on the backend's Zod schema to guarantee
+    // reschedule always sends one), this also enforces the "reschedule
+    // requires a date" half explicitly -- matching what the on-device path
+    // already enforced on its own. A client/backend version skew could
+    // otherwise let a dateless reschedule through on the cloud path; this
+    // closes that gap for both providers, not just preserves on-device's.
+    let dateIsValid: Bool
+    if let dateString {
+        dateIsValid = AgentDateExpression(token: dateString) != nil
+    } else {
+        dateIsValid = action != .reschedule
+    }
+    guard dateIsValid else { return .invalidDate }
+
+    let conflict = rescheduleConflict(
+        action: action,
+        excludingId: id,
+        dateString: dateString,
+        startTimeString: startTimeString,
+        endTimeString: endTimeString,
+        existing: existing
+    )
+    return .staged(
+        id: id, action: action, title: title,
+        dateString: dateString, startTimeString: startTimeString, endTimeString: endTimeString,
+        conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) },
+        conflictCheckFailed: conflictCheckFailed
+    )
+}
+
+/// Shared by staging (stageScheduleUpdate, called from both the on-device
+/// Tool and cloud ingestion) and confirm-time revalidation (Issue C-04) so a
+/// reschedule's conflict is computed identically everywhere -- previously
+/// UpdateScheduleTool.call(arguments:) had its own separate inline copy of
+/// this while cloud ingestion and confirm-time already shared one (as an
+/// AssistantView-private method); this is that method, moved here so
+/// on-device can use it too.
+func rescheduleConflict(
+    action: AgentUpdateAction,
+    excludingId: String,
+    dateString: String?,
+    startTimeString: String?,
+    endTimeString: String?,
+    existing: [ConflictService.ExistingItem]
+) -> ConflictService.ExistingItem? {
+    guard action == .reschedule,
+          let dateString, let expr = AgentDateExpression(token: dateString),
+          let startTimeString, !startTimeString.isEmpty,
+          let start = parseAgentTime(startTimeString, on: expr.resolvedDate())
+    else { return nil }
+    let end = endTimeString.flatMap { parseAgentTime($0, on: expr.resolvedDate()) } ?? start.addingTimeInterval(3_600)
+    return ConflictService.conflict(
+        for: AgentTimeRange(start: start, end: end),
+        excludingId: excludingId,
+        in: existing
+    )
+}

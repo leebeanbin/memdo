@@ -315,11 +315,15 @@ struct AgentSheet: View {
 
     @available(iOS 26, *)
     private func makeOnDeviceRuntime() -> AgentRuntime {
+        // Closures capture scheduleStore, not self -- a long-lived Tool
+        // shouldn't hold the whole (transient) View struct, and every call
+        // reads scheduleStore.schedules live rather than whatever existed
+        // when this runtime/session was constructed (Epic D-2).
         OnDeviceAgentRuntime(
             tools: [
-                ProposeScheduleTool(proposal: proposal, existing: existingItemsSnapshot()),
-                FindFreeSlotTool(snapshot: scheduleSnapshot()),
-                UpdateScheduleTool(proposal: updateProposal, existing: existingItemsSnapshot())
+                ProposeScheduleTool(proposal: proposal, existingProvider: { [scheduleStore] in existingItemsSnapshot(scheduleStore) }),
+                FindFreeSlotTool(snapshotProvider: { [scheduleStore] in scheduleIntervalSnapshot(scheduleStore) }),
+                UpdateScheduleTool(proposal: updateProposal, existingProvider: { [scheduleStore] in existingItemsSnapshot(scheduleStore) })
             ],
             instructions: agentInstructions()
         )
@@ -391,78 +395,56 @@ struct AgentSheet: View {
         // separate, server-only signal (a DB fetch failure a local
         // recomputation can't reproduce) and is passed through as-is.
         if let proposed = result.proposedSchedule {
-            if AgentDateExpression(token: proposed.date) != nil {
-                let draft = ProposedScheduleDraft(
-                    title: proposed.title,
-                    dateString: proposed.date,
-                    startTimeString: proposed.startTime?.isEmpty == false ? proposed.startTime : nil,
-                    endTimeString: proposed.endTime?.isEmpty == false ? proposed.endTime : nil,
-                    isTask: proposed.isTask,
-                    note: proposed.note?.isEmpty == false ? proposed.note : nil
-                )
-                let conflict = draft.resolvedInterval().flatMap { interval in
-                    ConflictService.conflict(
-                        for: AgentTimeRange(start: interval.start, end: interval.end),
-                        in: existingItemsSnapshot()
-                    )
-                }
-                proposal.propose(
-                    draft,
-                    conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) },
-                    conflictCheckFailed: proposed.conflictCheckFailed ?? false
-                )
-            } else {
+            let stagingResult = stageScheduleProposal(
+                title: proposed.title,
+                date: proposed.date,
+                startTime: proposed.startTime ?? "",
+                endTime: proposed.endTime ?? "",
+                isTask: proposed.isTask,
+                note: proposed.note ?? "",
+                existing: existingItemsSnapshot(scheduleStore),
+                conflictCheckFailed: proposed.conflictCheckFailed ?? false
+            )
+            switch stagingResult {
+            case .staged(let draft, let conflict, let conflictCheckFailed):
+                proposal.propose(draft, conflict: conflict, conflictCheckFailed: conflictCheckFailed)
+            case .invalidDate:
                 appendRecoverableErrorIfNoAssistantText(messageID: messageID)
             }
         }
         if let proposedUpdate = result.proposedScheduleUpdate {
-            let dateIsValid = proposedUpdate.date.map { AgentDateExpression(token: $0) != nil } ?? true
-            if dateIsValid {
-                let conflict = rescheduleConflict(
-                    action: proposedUpdate.action,
-                    excludingId: proposedUpdate.id,
-                    dateString: proposedUpdate.date,
-                    startTimeString: proposedUpdate.startTime,
-                    endTimeString: proposedUpdate.endTime
-                )
+            // Same trust-boundary re-validation as the date check above --
+            // agent-tool-contract.ts's discriminated union already
+            // guarantees a valid action, this defends against version skew
+            // rather than a healthy backend (previously this DTO string was
+            // passed straight through with no validation at all).
+            guard let action = AgentUpdateAction(rawValue: proposedUpdate.action) else {
+                appendRecoverableErrorIfNoAssistantText(messageID: messageID)
+                return
+            }
+            let stagingResult = stageScheduleUpdate(
+                id: proposedUpdate.id,
+                title: proposedUpdate.title,
+                action: action,
+                dateString: proposedUpdate.date,
+                startTimeString: proposedUpdate.startTime,
+                endTimeString: proposedUpdate.endTime,
+                existing: existingItemsSnapshot(scheduleStore),
+                conflictCheckFailed: proposedUpdate.conflictCheckFailed ?? false
+            )
+            switch stagingResult {
+            case .staged(let id, let action, let title, let dateString, let startTimeString, let endTimeString, let conflict, let conflictCheckFailed):
                 updateProposal.propose(
-                    id: proposedUpdate.id,
-                    action: proposedUpdate.action,
-                    title: proposedUpdate.title,
-                    dateString: proposedUpdate.date,
-                    startTimeString: proposedUpdate.startTime?.isEmpty == false ? proposedUpdate.startTime : nil,
-                    endTimeString: proposedUpdate.endTime?.isEmpty == false ? proposedUpdate.endTime : nil,
-                    conflict: conflict.map { AgentConflictSnapshot(id: $0.id, title: $0.title) },
-                    conflictCheckFailed: proposedUpdate.conflictCheckFailed ?? false
+                    id: id, action: action.rawValue, title: title,
+                    dateString: dateString,
+                    startTimeString: startTimeString?.isEmpty == false ? startTimeString : nil,
+                    endTimeString: endTimeString?.isEmpty == false ? endTimeString : nil,
+                    conflict: conflict, conflictCheckFailed: conflictCheckFailed
                 )
-            } else {
+            case .invalidDate:
                 appendRecoverableErrorIfNoAssistantText(messageID: messageID)
             }
         }
-    }
-
-    /// Computes the conflict (if any) for a reschedule's target date/time,
-    /// or nil for non-reschedule actions or an unresolvable date/time --
-    /// shared by cloud-response staging and confirm-time revalidation
-    /// (Issue C-04) so both compute a reschedule's conflict identically.
-    private func rescheduleConflict(
-        action: String,
-        excludingId: String,
-        dateString: String?,
-        startTimeString: String?,
-        endTimeString: String?
-    ) -> ConflictService.ExistingItem? {
-        guard action == "reschedule",
-              let dateString, let expr = AgentDateExpression(token: dateString),
-              let startTimeString, !startTimeString.isEmpty,
-              let start = parseAgentTime(startTimeString, on: expr.resolvedDate())
-        else { return nil }
-        let end = endTimeString.flatMap { parseAgentTime($0, on: expr.resolvedDate()) } ?? start.addingTimeInterval(3_600)
-        return ConflictService.conflict(
-            for: AgentTimeRange(start: start, end: end),
-            excludingId: excludingId,
-            in: existingItemsSnapshot()
-        )
     }
 
     /// Only shown when there's no useful assistant text already on screen --
@@ -502,7 +484,7 @@ struct AgentSheet: View {
         let fresh = draft.resolvedInterval().flatMap { interval in
             ConflictService.conflict(
                 for: AgentTimeRange(start: interval.start, end: interval.end),
-                in: existingItemsSnapshot()
+                in: existingItemsSnapshot(scheduleStore)
             )
         }
         let freshSnapshot = fresh.map { AgentConflictSnapshot(id: $0.id, title: $0.title) }
@@ -577,11 +559,12 @@ struct AgentSheet: View {
             // confirmProposal(_:). excludingId: idString so the item being
             // moved never conflicts with its own (pre-move) row.
             let fresh = rescheduleConflict(
-                action: action.rawValue,
+                action: action,
                 excludingId: idString,
                 dateString: updateProposal.dateString,
                 startTimeString: updateProposal.startTimeString,
-                endTimeString: updateProposal.endTimeString
+                endTimeString: updateProposal.endTimeString,
+                existing: existingItemsSnapshot(scheduleStore)
             )
             let freshSnapshot = fresh.map { AgentConflictSnapshot(id: $0.id, title: $0.title) }
             switch conflictRevalidationDecision(staged: updateProposal.conflict, fresh: freshSnapshot) {
@@ -619,28 +602,6 @@ struct AgentSheet: View {
     private var hasSchedulesToday: Bool {
         let cal = Calendar.current
         return scheduleStore.schedules.contains { cal.isDateInToday($0.scheduledDate) }
-    }
-
-    @available(iOS 26, *)
-    private func scheduleSnapshot() -> [FindFreeSlotTool.ScheduleInterval] {
-        scheduleStore.schedules.map {
-            .init(scheduledDate: $0.scheduledDate, startAt: $0.startAt, endAt: $0.endAt)
-        }
-    }
-
-    /// Shared by ProposeScheduleTool (excludingId always nil -- new items
-    /// never conflict-exclude anything) and UpdateScheduleTool (excludes the
-    /// item being rescheduled by id) -- both now take the same
-    /// ConflictService.ExistingItem shape. Not @available(iOS 26, *)-gated
-    /// like scheduleSnapshot()/the Tools themselves -- ConflictService has no
-    /// FoundationModels dependency, and this is also called from the cloud
-    /// path (sendWithCloudAgent) and confirm-time revalidation
-    /// (confirmProposal/confirmScheduleUpdateProposal), neither of which are
-    /// iOS26-only.
-    private func existingItemsSnapshot() -> [ConflictService.ExistingItem] {
-        scheduleStore.schedules.map {
-            .init(id: $0.id.uuidString, title: $0.title, startAt: $0.startAt, endAt: $0.endAt)
-        }
     }
 
     // MARK: - FoundationModels
