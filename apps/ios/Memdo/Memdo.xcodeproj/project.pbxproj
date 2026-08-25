@@ -46,6 +46,7 @@
 		6D1456762B22F0F5585F1589 /* MemdoWidgetSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7840EFE57EB95989FBC7696 /* MemdoWidgetSchedule.swift */; };
 		6D52CEFC8B695B018FB30EAD /* MemdoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B25474359568B8C6264B6E8 /* MemdoApp.swift */; };
 		6D563326AB9CE5FDE9058501 /* WorkoutModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A32B5F7D73399A9F62D92CA /* WorkoutModel.swift */; };
+		7457DB90063BE2771605A5AA /* NotificationSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96F566C420B634E1C8FE4B5C /* NotificationSchedulerTests.swift */; };
 		76D234B343C9376873066059 /* EventCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB3E052299D1A953107E411D /* EventCapture.swift */; };
 		78F5DD11294A40F25A5A9524 /* DailySummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6561C352731005322618C740 /* DailySummaryView.swift */; };
 		78FEB722CFF3DC8EE7034FBD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A5FCF0E385E87960B56A11F4 /* Assets.xcassets */; };
@@ -170,6 +171,7 @@
 		89D11582497A9B52756B755E /* AgentIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIntent.swift; sourceTree = "<group>"; };
 		8DFEC754269D8947FB18E952 /* AgentRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRuntimeTests.swift; sourceTree = "<group>"; };
 		8FD6B2D482673663626353C2 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
+		96F566C420B634E1C8FE4B5C /* NotificationSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSchedulerTests.swift; sourceTree = "<group>"; };
 		97B6BAE4945DFFB47769CA5C /* Pretendard-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Pretendard-LICENSE.txt"; sourceTree = "<group>"; };
 		98D1929733AE37B7C5892133 /* CloudAgentRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudAgentRuntime.swift; sourceTree = "<group>"; };
 		99214A59192502A52C8A73AD /* MemdoGuideSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoGuideSheet.swift; sourceTree = "<group>"; };
@@ -263,6 +265,7 @@
 				8DFEC754269D8947FB18E952 /* AgentRuntimeTests.swift */,
 				17E8C08961FC90CC6CA2A3B6 /* CloudAgentRuntimeTests.swift */,
 				AA8E9E99B2955B5F2A3FABD6 /* FakeAgentRuntime.swift */,
+				96F566C420B634E1C8FE4B5C /* NotificationSchedulerTests.swift */,
 				E3F01099D4577BD460F6C20F /* ScheduleModelTests.swift */,
 			);
 			path = MemdoTests;
@@ -539,6 +542,7 @@
 				D0E0E2E1A7122A5734E8C07A /* AgentRuntimeTests.swift in Sources */,
 				C69C49A6035C81CD2F48A9F3 /* CloudAgentRuntimeTests.swift in Sources */,
 				C058A05E23195B992D283DC5 /* FakeAgentRuntime.swift in Sources */,
+				7457DB90063BE2771605A5AA /* NotificationSchedulerTests.swift in Sources */,
 				CA69FB6F6D5B184690B56D4A /* ScheduleModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

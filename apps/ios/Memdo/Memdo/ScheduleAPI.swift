@@ -62,6 +62,28 @@ struct AgentKeySaveRequestDTO: Encodable {
     let apiKey: String
 }
 
+/// Sent to apple-auth-token-exchange right after a successful Sign in with
+/// Apple -- the authorizationCode is single-use/short-lived (~5 minutes),
+/// so this must happen at sign-in time, not lazily later.
+struct AppleAuthTokenExchangeRequestDTO: Encodable {
+    let authorizationCode: String
+}
+
+struct AppleAuthTokenExchangeResponseDTO: Decodable {
+    let linked: Bool
+}
+
+/// Matches DELETE /account's request body (docs/05-api-spec.yaml,
+/// memdo-backend) -- a typed confirmation string, not just the DELETE verb
+/// itself, as an extra guard against an accidental/automated call.
+struct AccountDeletionRequestDTO: Encodable {
+    let confirmation: String
+}
+
+struct AccountDeletionResponseDTO: Decodable {
+    let deleted: Bool
+}
+
 struct AgentModelDTO: Decodable, Identifiable, Equatable {
     let id: String
     let name: String
@@ -657,6 +679,27 @@ actor MemdoAPIClient {
         try await send(path: "agent-key", method: "DELETE", accessToken: accessToken)
     }
 
+    func exchangeAppleAuthCode(
+        _ authorizationCode: String,
+        accessToken: String
+    ) async throws -> AppleAuthTokenExchangeResponseDTO {
+        try await send(
+            path: "apple-auth-token-exchange",
+            method: "POST",
+            body: encoder.encode(AppleAuthTokenExchangeRequestDTO(authorizationCode: authorizationCode)),
+            accessToken: accessToken
+        )
+    }
+
+    func deleteAccount(accessToken: String) async throws -> AccountDeletionResponseDTO {
+        try await send(
+            path: "account",
+            method: "DELETE",
+            body: encoder.encode(AccountDeletionRequestDTO(confirmation: "DELETE")),
+            accessToken: accessToken
+        )
+    }
+
     func agentModels(accessToken: String) async throws -> [AgentModelDTO] {
         let response: AgentModelsResponseDTO = try await send(
             path: "agent-models",
@@ -969,6 +1012,19 @@ actor ScheduleRepository {
 
     func deleteAgentKey() async throws {
         _ = try await api.deleteAgentKey(accessToken: accessToken())
+    }
+
+    /// Best-effort -- called right after a successful Apple sign-in
+    /// (signInWithIdToken already completed by the time this runs), so a
+    /// failure here must never surface as a sign-in failure. Errors are
+    /// left for the caller to swallow/log; this repository layer doesn't
+    /// decide UI behavior.
+    func exchangeAppleAuthCode(_ authorizationCode: String) async throws {
+        _ = try await api.exchangeAppleAuthCode(authorizationCode, accessToken: accessToken())
+    }
+
+    func deleteAccount() async throws {
+        _ = try await api.deleteAccount(accessToken: accessToken())
     }
 
     func agentModels() async throws -> [AgentModelDTO] {
