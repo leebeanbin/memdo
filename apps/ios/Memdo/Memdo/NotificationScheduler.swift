@@ -216,6 +216,112 @@ enum NotificationScheduler {
             .removePendingNotificationRequests(withIdentifiers: [endNotificationID(for: scheduleID)])
     }
 
+    // MARK: - Rolling-window reconciliation (docs/07-notification-and-daily-review.md §10)
+
+    struct ScheduleNotificationCandidate: Equatable {
+        enum Kind: Equatable { case reminder, end }
+        let scheduleID: UUID
+        let kind: Kind
+        let fireAt: Date
+    }
+
+    /// Pure candidate builder for §10's rolling window: 7-day-including-today
+    /// window, ascending fireAt sort with the schedule's id as the tiebreak
+    /// ("Todo ID" in the spec -- UUID string comparison, since UUIDs have no
+    /// natural numeric order), capped at maxCount by keeping only the
+    /// nearest (soonest) candidates on overflow. Scoped to per-schedule
+    /// reminder/end notifications only -- the routine planning-prompt/
+    /// daily-review notifications have no Todo ID to tie-break against and
+    /// are governed separately by schedule(for:), not counted against this
+    /// cap. `now`/`calendar` are injectable so this stays a pure,
+    /// deterministically-testable function.
+    static func reconciledNotificationCandidates(
+        schedules: [ScheduleDetail],
+        now: Date = .now,
+        windowDays: Int = 7,
+        maxCount: Int = 48,
+        calendar: Calendar = .current
+    ) -> [ScheduleNotificationCandidate] {
+        let windowStart = calendar.startOfDay(for: now)
+        guard let windowEnd = calendar.date(byAdding: .day, value: windowDays, to: windowStart) else {
+            return []
+        }
+
+        var candidates: [ScheduleNotificationCandidate] = []
+        for schedule in schedules {
+            guard schedule.isActive, !schedule.isDone else { continue }
+
+            if let offsetMinutes = schedule.reminderOffsetMinutes, let startAt = schedule.startAt {
+                let fireAt = startAt.addingTimeInterval(-Double(offsetMinutes) * 60)
+                if fireAt > now, fireAt < windowEnd {
+                    candidates.append(.init(scheduleID: schedule.id, kind: .reminder, fireAt: fireAt))
+                }
+            }
+            if let endAt = schedule.endAt, endAt > now, endAt < windowEnd {
+                candidates.append(.init(scheduleID: schedule.id, kind: .end, fireAt: endAt))
+            }
+        }
+
+        candidates.sort { lhs, rhs in
+            if lhs.fireAt != rhs.fireAt { return lhs.fireAt < rhs.fireAt }
+            return lhs.scheduleID.uuidString < rhs.scheduleID.uuidString
+        }
+        return Array(candidates.prefix(maxCount))
+    }
+
+    private static func identifier(for candidate: ScheduleNotificationCandidate) -> String {
+        switch candidate.kind {
+        case .reminder: reminderID(for: candidate.scheduleID)
+        case .end: endNotificationID(for: candidate.scheduleID)
+        }
+    }
+
+    /// Rebuilds every per-schedule reminder/end notification from
+    /// `schedules`, enforcing reconciledNotificationCandidates' window/cap --
+    /// cancels anything currently pending that's no longer in the desired
+    /// set (pushed outside the window by the cap, or the schedule changed/
+    /// completed/was deleted since the last reconciliation) and schedules
+    /// anything newly desired that isn't already pending. Only ever touches
+    /// memdo.reminder-*/memdo.end-* identifiers -- never the routine
+    /// planning-prompt/daily-review requests or any non-Memdo notification.
+    /// Call at app activation and after a full schedule load (see
+    /// ScheduleStore.load()/reconcileScheduleNotifications()) -- per §10's
+    /// own trigger list (앱 활성화, Todo·반복 규칙 변경, 타임존 변경, 알림
+    /// 권한 변경), a full load already happens after every mutation that
+    /// changes the schedule set, so reconciling there (rather than at every
+    /// individual save/delete call site) already keeps the enforced cap
+    /// correct without duplicating the per-item scheduleReminder/
+    /// scheduleEndNotification calls those call sites already make for
+    /// immediate feedback.
+    static func reconcileScheduleNotifications(schedules: [ScheduleDetail], now: Date = .now) async {
+        let center = UNUserNotificationCenter.current()
+        let status = await center.notificationSettings().authorizationStatus
+        guard status == .authorized || status == .provisional else { return }
+
+        let candidates = reconciledNotificationCandidates(schedules: schedules, now: now)
+        let desiredIDs = Set(candidates.map { identifier(for: $0) })
+
+        let pendingScheduleIDs = await center.pendingNotificationRequests()
+            .map(\.identifier)
+            .filter { $0.hasPrefix("memdo.reminder-") || $0.hasPrefix("memdo.end-") }
+
+        let toCancel = pendingScheduleIDs.filter { !desiredIDs.contains($0) }
+        if !toCancel.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: toCancel)
+        }
+
+        let alreadyPending = Set(pendingScheduleIDs)
+        let schedulesByID = Dictionary(uniqueKeysWithValues: schedules.map { ($0.id, $0) })
+        for candidate in candidates {
+            let id = identifier(for: candidate)
+            guard !alreadyPending.contains(id), let schedule = schedulesByID[candidate.scheduleID] else { continue }
+            switch candidate.kind {
+            case .reminder: await scheduleReminder(for: schedule)
+            case .end: await scheduleEndNotification(for: schedule)
+            }
+        }
+    }
+
     private static func endNotificationID(for id: UUID) -> String {
         "memdo.end-\(id.uuidString.lowercased())"
     }

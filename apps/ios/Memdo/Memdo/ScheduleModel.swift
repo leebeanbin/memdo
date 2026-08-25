@@ -554,6 +554,14 @@ final class ScheduleStore {
         try await repository.deleteAgentKey()
     }
 
+    func exchangeAppleAuthCode(_ authorizationCode: String) async throws {
+        try await repository.exchangeAppleAuthCode(authorizationCode)
+    }
+
+    func deleteAccount() async throws {
+        try await repository.deleteAccount()
+    }
+
     func agentModels() async throws -> [AgentModelDTO] {
         try await repository.agentModels()
     }
@@ -974,6 +982,16 @@ final class ScheduleStore {
         }
     }
 
+    /// Public entry point for triggers besides load() itself -- app
+    /// activation in particular (docs/07 §10's "앱 활성화... 때 reconciliation
+    /// 한다"), wired from MemdoApp.swift's existing scenePhase hook. A no-op
+    /// against whatever `schedules` currently holds; safe to call anytime,
+    /// including before the initial load() completes (an empty schedule
+    /// list just produces an empty candidate set).
+    func reconcileNotifications() async {
+        await NotificationScheduler.reconcileScheduleNotifications(schedules: schedules)
+    }
+
     func reset() {
         schedules = []
         calendars = []
@@ -1159,17 +1177,13 @@ final class ScheduleStore {
         }
     }
 
+    /// Enforces docs/07-notification-and-daily-review.md §10's rolling
+    /// window (7-day-including-today, 48-request cap, keep-nearest-on-
+    /// overflow) rather than the old unbounded "reschedule every future
+    /// item" loop -- see NotificationScheduler.reconcileScheduleNotifications
+    /// for the actual cancel/reschedule diffing logic.
     private func refreshUpcomingReminders() async {
-        let now = Date.now
-        let upcoming = schedules.filter { s in
-            s.isActive && s.startAt.map { $0 > now } == true
-        }
-        for schedule in upcoming {
-            if schedule.reminderOffsetMinutes != nil {
-                await NotificationScheduler.scheduleReminder(for: schedule)
-            }
-            await NotificationScheduler.scheduleEndNotification(for: schedule)
-        }
+        await NotificationScheduler.reconcileScheduleNotifications(schedules: schedules)
     }
 
     private func updateWidgetSnapshot() {
