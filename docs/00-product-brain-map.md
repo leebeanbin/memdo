@@ -99,6 +99,7 @@ flowchart TD
 32. [UI ↔ 백엔드 계약 감사](./31-ui-backend-contract-audit.md)
 33. [Agent 수동 테스트 계획](./32-agent-manual-test-plan.md)
 34. [Experience 로드맵](./33-experience-roadmap.md)
+35. [TestFlight 배포 런북 + 실기기 검증 매트릭스](./35-testflight-release-runbook.md)
 
 구현자는 첫 migration 또는 API client 생성 전에 `26`의 P0 항목이 해소됐는지 확인한다.
 
