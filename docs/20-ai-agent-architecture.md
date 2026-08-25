@@ -17,6 +17,10 @@
 > seeding)·F-2(다중 모델 비교)·G(registry 구현) 이후 실제 상태로 다시 갱신했다. 14절의 100-case
 > 목표 세트는 여전히 존재하지 않는다는 점, 15절의 registry는 라이브 텔레메트리가 아니라 사람이
 > 검토·승격하는 스냅샷이라는 점을 명시적으로 남겼다.
+>
+> 이 문서가 다루는 Agent 작업은 [`09-roadmap-and-backlog.md`](./09-roadmap-and-backlog.md)의
+> v0.9(Agent Foundation Closeout)에 해당하며, Agent가 결정론적으로 계산된 사실을 해석해 proposal을
+> 만드는 동일한 패턴은 v1.3(Insight → Proposal)에서 그대로 재사용될 예정이다.
 
 ## 0. 실제 제공 경로와 비용 경계
 
