@@ -100,6 +100,10 @@ struct AgentResponse: View {
         if message.isError                              { return "오류" }
         if isToolPhase                                  { return "실행 중" }
         if message.isStreaming && message.text.isEmpty  { return "생각 중…" }
+        // Distinct from every other intent -- there's nothing to approve
+        // here, just a question the user answers in their next message, so
+        // this is deliberately NOT rendered like a proposal card header.
+        if message.intent == .clarificationRequired      { return "확인이 필요해요" }
         return "Agent"
     }
 
@@ -118,6 +122,10 @@ struct AgentResponse: View {
                     Image(systemName: "exclamationmark.circle.fill")
                         .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(.red)
+                } else if message.intent == .clarificationRequired {
+                    Image(systemName: "questionmark.circle")
+                        .font(MemdoTypography.captionEmphasis)
+                        .foregroundStyle(MemdoTheme.brand)
                 } else {
                     Image(systemName: "sparkle")
                         .font(MemdoTypography.captionEmphasis)

@@ -48,3 +48,54 @@ enum AgentDateExpression: Equatable {
 enum AgentUpdateAction: String {
     case complete, reschedule, delete
 }
+
+/// Canonical classification of what an Agent turn actually did. Produced by
+/// BOTH runtimes: cloud via classifyAgentIntent(...) below (fed by
+/// AgentCloudChatResult's done-payload fields), on-device via the reactive
+/// AgentScheduleProposal/AgentScheduleUpdateProposal state at
+/// AgentCoordinatorEvent.finished (AssistantView.swift) -- the same state
+/// messageList already renders cards from for both runtimes, not a new
+/// signal. On-device can only ever produce .answer/.proposeSchedule/
+/// .proposeScheduleUpdate (AgentRuntimeKind.onDevice.capabilities has just
+/// those 3 tools) -- the other 5 cases are cloud-only by tool availability,
+/// not a classification gap. UNSUPPORTED is deliberately NOT a case here:
+/// nothing observable at runtime distinguishes "no tool fits, correctly
+/// explained" from "a tool was available but the model just answered in
+/// text" -- both are the same zero-tool-call, no-clarificationRequest
+/// shape. UNSUPPORTED stays an eval-only fixture label (see
+/// memdo-backend's eval/grade.ts).
+enum AgentIntent: Equatable {
+    case answer
+    case clarificationRequired
+    case proposeSchedule
+    case proposeScheduleUpdate
+    case proposeRoutineUpdate
+    case proposeReviewAction
+    case findFreeSlots
+    case searchSchedules
+}
+
+/// Cloud-path classifier. Priority-ordered: a turn that both searches AND
+/// proposes (search first, to check for conflicts) classifies as the
+/// proposal, not the search -- the search was supporting work, not the
+/// point of the turn. Tool name string literals must match the backend's
+/// AGENT_TOOL_NAMES values -- no shared constant across languages, drift
+/// caught server-side by buildDonePayload's drift-guard tests, not by a
+/// shared type.
+func classifyAgentIntent(
+    clarificationRequest: CloudClarificationRequestDTO?,
+    proposedSchedule: CloudProposedScheduleDTO?,
+    proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?,
+    proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?,
+    proposedReviewAction: CloudProposedReviewActionDTO?,
+    toolNames: [String]
+) -> AgentIntent {
+    if clarificationRequest != nil { return .clarificationRequired }
+    if proposedSchedule != nil { return .proposeSchedule }
+    if proposedScheduleUpdate != nil { return .proposeScheduleUpdate }
+    if proposedRoutineUpdate != nil { return .proposeRoutineUpdate }
+    if proposedReviewAction != nil { return .proposeReviewAction }
+    if toolNames.contains("find_free_slots") { return .findFreeSlots }
+    if toolNames.contains("search_schedules") { return .searchSchedules }
+    return .answer
+}

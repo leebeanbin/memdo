@@ -19,14 +19,16 @@ Sprint, or the model swaps in Epic F) are actual improvements.
 ```
 
 - `expectedBehavior` is one of: `SEARCH_SCHEDULES`, `FIND_FREE_SLOTS`,
-  `PROPOSE_SCHEDULE`, `PROPOSE_SCHEDULE_UPDATE`, `ANSWER` (no tool call —
-  plain-text reply, including cases where the model should ask a follow-up
-  question instead of guessing), `UNSUPPORTED` (no tool covers the request).
-  **These are canonical evaluation labels only, not a runtime enum** — Sprint
-  1 deliberately does not introduce a full `AgentIntent` union in code (see
-  `docs/20-ai-agent-architecture.md` §5-1 and the Sprint 1 plan); don't treat
-  a case passing here as evidence that this taxonomy already exists as a
-  type anywhere in `agent-cloud-contract.ts` or `AgentTools.swift`.
+  `PROPOSE_SCHEDULE`, `PROPOSE_SCHEDULE_UPDATE`, `CLARIFICATION_REQUIRED`
+  (the model calls `request_clarification`, Epic J), `ANSWER` (no tool call —
+  a plain-text reply that isn't a clarification question), `UNSUPPORTED` (no
+  tool covers the request). **This is an eval-corpus label set, related to
+  but not identical with iOS's `AgentIntent` enum** (`AgentIntent.swift`) —
+  `UNSUPPORTED` in particular exists only here, since nothing at runtime can
+  distinguish "correctly explained no tool fits" from "answered in text when
+  a tool was available." Only `ANSWER`/`UNSUPPORTED` require manual review
+  (see below); every other label, including `CLARIFICATION_REQUIRED`, is
+  gradable directly from `dispatchedTools`.
 - `expected` is optional and partial — fill in only the fields worth pinning
   down for that case. An empty `{}` is fine.
 - `notes` explains why the case is interesting, not what it does.
@@ -47,12 +49,15 @@ already connected via the app's normal connect flow) in
 never runs in CI, only manually. See `memdo-backend/eval/run.ts`'s header
 comment for the exact invocation.
 
-Coverage isn't 100%: `ANSWER`/`UNSUPPORTED` (10 of 38 cases) can't be told
-apart from each other purely from whether a tool was called — both look
-like "no tool, some text" from the outside — so those come back as
-`manual-review` with the model's actual response text attached, not an
-automatic pass/fail. That's an inherent limit of grading from the outside,
-not something a bigger corpus or a smarter grader fixes.
+Coverage isn't 100%: `ANSWER`/`UNSUPPORTED` can't be told apart from each
+other purely from whether a tool was called — both look like "no tool, some
+text" from the outside — so those come back as `manual-review` with the
+model's actual response text attached, not an automatic pass/fail. That's an
+inherent limit of grading from the outside, not something a bigger corpus or
+a smarter grader fixes. As of Epic J, only `unsupported.jsonl`'s 4 cases fall
+into this bucket — every `ambiguity-*` case that used to be labeled `ANSWER`
+is now `CLARIFICATION_REQUIRED` (gradable via `request_clarification`
+dispatch), so the corpus currently has no fixtures actually labeled `ANSWER`.
 
 ### State-dependent fixtures: seeded via Epic F-1
 

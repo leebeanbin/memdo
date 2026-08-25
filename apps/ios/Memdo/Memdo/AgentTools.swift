@@ -144,10 +144,20 @@ final class AgentScheduleProposal {
     /// signal (a local recomputation can't fail the way a DB fetch can), so
     /// it stays independent of `conflict`.
     var conflictCheckFailed: Bool = false
+    /// Bumped every time propose(_:) stages something new -- lets callers
+    /// ask "did a new proposal get staged during THIS turn" instead of "is
+    /// something staged right now" (draft != nil stays true for an old,
+    /// not-yet-approved-or-declined proposal across many later turns, which
+    /// would otherwise misattribute a later turn's intent -- see
+    /// AssistantView.handleCoordinatorEvent's .finished case). Monotonic:
+    /// clear() does NOT reset it -- clearing means "the user resolved this
+    /// proposal," not "this proposal never happened."
+    private(set) var revision = 0
     func propose(_ d: ProposedScheduleDraft, conflict: AgentConflictSnapshot? = nil, conflictCheckFailed: Bool = false) {
         draft = d
         self.conflict = conflict
         self.conflictCheckFailed = conflictCheckFailed
+        revision += 1
     }
     func clear() { draft = nil; conflict = nil; conflictCheckFailed = false }
 }
@@ -172,6 +182,10 @@ final class AgentScheduleUpdateProposal {
     var conflictCheckFailed: Bool = false
 
     var isPending: Bool { id != nil }
+
+    /// Same monotonic-staging-generation contract as
+    /// AgentScheduleProposal.revision -- see that doc comment.
+    private(set) var revision = 0
 
     var displayActionLabel: String {
         switch action {
@@ -205,6 +219,7 @@ final class AgentScheduleUpdateProposal {
         self.endTimeString = endTimeString
         self.conflict = conflict
         self.conflictCheckFailed = conflictCheckFailed
+        revision += 1
     }
 
     func clear() {
