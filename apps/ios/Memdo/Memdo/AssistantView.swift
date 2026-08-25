@@ -10,6 +10,11 @@ struct AgentMessage: Identifiable, Equatable {
     var isStreaming: Bool = false
     var isError: Bool = false
     var toolHint: String? = nil   // shown while a tool is executing and no text yet
+    /// Canonical classification of this turn (Epic J, AgentIntent.swift) --
+    /// nil until classification runs (ingestCloudResult for a cloud turn, or
+    /// handleCoordinatorEvent's .finished fallback for on-device). Never
+    /// overwritten once set for a given message.
+    var intent: AgentIntent? = nil
 
     enum Role: Equatable { case user, assistant }
 }
@@ -92,6 +97,16 @@ struct AgentSheet: View {
     @State private var updateProposal = AgentScheduleUpdateProposal()
     @State private var routineProposal = AgentRoutineUpdateProposal()
     @State private var reviewProposal = AgentReviewActionProposal()
+    /// Snapshot of proposal.revision/updateProposal.revision taken at the
+    /// start of the in-flight turn (dispatchToModel(_:)) -- lets the
+    /// on-device fallback in handleCoordinatorEvent's .finished case ask "did
+    /// THIS turn stage something new" instead of "is something currently
+    /// pending" (see AgentScheduleProposal.revision's doc comment). A single
+    /// scalar per proposal type is sufficient since AgentCoordinator only
+    /// ever has one turn in flight, the same invariant currentAssistantMessageID
+    /// already relies on.
+    @State private var proposalRevisionAtTurnStart = 0
+    @State private var updateProposalRevisionAtTurnStart = 0
     /// The placeholder assistant bubble for whichever turn is currently in
     /// flight -- read by ingestCloudResult(_:), which CloudAgentRuntime
     /// calls back into after this View has moved on to constructing the
@@ -287,6 +302,8 @@ struct AgentSheet: View {
         messages.append(placeholder)
         let messageID = placeholder.id
         currentAssistantMessageID = messageID
+        proposalRevisionAtTurnStart = proposal.revision
+        updateProposalRevisionAtTurnStart = updateProposal.revision
         coordinator?.send(
             prompt: prompt,
             history: history,
@@ -369,6 +386,33 @@ struct AgentSheet: View {
             isLoading = false
             if let index = messages.firstIndex(where: { $0.id == messageID }) {
                 messages[index].isStreaming = false
+                // ingestCloudResult(_:) already ran (and set intent) for a
+                // cloud turn by the time .finished fires -- CloudAgentRuntime.
+                // send() awaits agentCloudChat and calls onResult (which
+                // ingestCloudResult wraps) BEFORE returning, and
+                // AgentCoordinator only emits .finished after awaiting
+                // runtime.send() (see AgentCoordinator.swift). On-device
+                // turns never call ingestCloudResult at all, so intent is
+                // still nil here for them, and this is the only
+                // classification point they get.
+                if messages[index].intent == nil {
+                    // Revision INCREASE during this turn, not draft != nil /
+                    // isPending (global pending-state) -- an old, still-
+                    // pending proposal from an earlier turn must never make
+                    // an unrelated later turn look like it staged something.
+                    if proposal.revision > proposalRevisionAtTurnStart {
+                        messages[index].intent = .proposeSchedule
+                    } else if updateProposal.revision > updateProposalRevisionAtTurnStart {
+                        messages[index].intent = .proposeScheduleUpdate
+                    } else {
+                        // Also covers on-device find_free_slots calls -- no
+                        // observable signal exists for that tool today (see
+                        // AgentIntent.swift's doc comment), so it's
+                        // classified as .answer rather than left
+                        // unclassified or guessed at.
+                        messages[index].intent = .answer
+                    }
+                }
             }
         case .failed(let failure):
             isLoading = false
@@ -470,6 +514,27 @@ struct AgentSheet: View {
         }
         if let proposedReviewAction = result.proposedReviewAction {
             reviewProposal.propose(proposedReviewAction)
+        }
+
+        let intent = classifyAgentIntent(
+            clarificationRequest: result.clarificationRequest,
+            proposedSchedule: result.proposedSchedule,
+            proposedScheduleUpdate: result.proposedScheduleUpdate,
+            proposedRoutineUpdate: result.proposedRoutineUpdate,
+            proposedReviewAction: result.proposedReviewAction,
+            toolNames: result.toolNames
+        )
+        if let index = messages.firstIndex(where: { $0.id == messageID }) {
+            messages[index].intent = intent
+            // The model is expected to stop at request_clarification with no
+            // further text (see systemPrompt()'s instruction), but if it
+            // streamed nothing, fall back to the question itself so the
+            // bubble isn't left empty.
+            if intent == .clarificationRequired,
+               messages[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let question = result.clarificationRequest?.question {
+                messages[index].text = question
+            }
         }
     }
 

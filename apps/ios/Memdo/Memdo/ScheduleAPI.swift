@@ -180,11 +180,21 @@ struct CloudProposedReviewActionDTO: Decodable, Equatable {
     let reflection: String
 }
 
+/// Mirrors request_clarification's shape (agent-cloud-contract.ts) -- staged
+/// when the model needs more information instead of guessing. No approval UI
+/// exists for this (see AgentIntent.swift's doc comment): the user's reply
+/// flows into the next normal turn.
+struct CloudClarificationRequestDTO: Decodable, Equatable {
+    let question: String
+    let missingFields: [String]?
+    let reason: String?
+}
+
 /// One line of the newline-delimited stream agent-cloud-chat responds with.
 /// Every line has exactly one of these populated: `delta` while text is
 /// still arriving, or `done`/`proposedSchedule`/`proposedScheduleUpdate`/
-/// `proposedRoutineUpdate`/`proposedReviewAction` on the terminal line, or
-/// `error` if something failed mid-stream.
+/// `proposedRoutineUpdate`/`proposedReviewAction`/`clarificationRequest` on
+/// the terminal line, or `error` if something failed mid-stream.
 struct AgentStreamLineDTO: Decodable {
     let delta: String?
     let done: Bool?
@@ -192,17 +202,25 @@ struct AgentStreamLineDTO: Decodable {
     let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
     let proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?
     let proposedReviewAction: CloudProposedReviewActionDTO?
+    let clarificationRequest: CloudClarificationRequestDTO?
+    let toolNames: [String]?
     let error: String?
 }
 
 /// agentCloudChat's terminal result -- the model calls at most one propose_*
-/// tool per turn, but all four are carried through so the caller doesn't
-/// need a fifth enum just to unwrap.
+/// tool per turn, but all four (plus clarificationRequest) are carried
+/// through so the caller doesn't need a sixth enum just to unwrap.
+/// `toolNames` is the full dispatched-tool-name sequence, used by
+/// classifyAgentIntent (AgentIntent.swift) to tell FIND_FREE_SLOTS/
+/// SEARCH_SCHEDULES apart from ANSWER when no proposal/clarification field
+/// is set.
 struct AgentCloudChatResult {
     let proposedSchedule: CloudProposedScheduleDTO?
     let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
     let proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?
     let proposedReviewAction: CloudProposedReviewActionDTO?
+    let clarificationRequest: CloudClarificationRequestDTO?
+    let toolNames: [String]
 }
 
 struct TodoListResponseDTO: Decodable {
@@ -725,6 +743,8 @@ actor MemdoAPIClient {
         var proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
         var proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?
         var proposedReviewAction: CloudProposedReviewActionDTO?
+        var clarificationRequest: CloudClarificationRequestDTO?
+        var toolNames: [String] = []
         for try await line in bytes.lines {
             guard let lineData = line.data(using: .utf8),
                   let parsed = try? decoder.decode(AgentStreamLineDTO.self, from: lineData) else { continue }
@@ -737,13 +757,17 @@ actor MemdoAPIClient {
                 proposedScheduleUpdate = parsed.proposedScheduleUpdate
                 proposedRoutineUpdate = parsed.proposedRoutineUpdate
                 proposedReviewAction = parsed.proposedReviewAction
+                clarificationRequest = parsed.clarificationRequest
+                toolNames = parsed.toolNames ?? []
             }
         }
         return AgentCloudChatResult(
             proposedSchedule: proposedSchedule,
             proposedScheduleUpdate: proposedScheduleUpdate,
             proposedRoutineUpdate: proposedRoutineUpdate,
-            proposedReviewAction: proposedReviewAction
+            proposedReviewAction: proposedReviewAction,
+            clarificationRequest: clarificationRequest,
+            toolNames: toolNames
         )
     }
 
