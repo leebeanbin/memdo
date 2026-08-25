@@ -107,3 +107,35 @@ MVP는 핵심 상태 전이와 실제 기기 위젯·알림 검증에 집중한�
 - [ ] 로컬→계정 UUID 유지와 sync 충돌 검증
 - [ ] 알림 7일·48개 rolling window 실제 기기 검증
 - [ ] 출시 게이트 책임자·기한 충족
+
+## 9. 출시 검증 단계 (Release Validation Stages)
+
+> [`09-roadmap-and-backlog.md`](./09-roadmap-and-backlog.md)의 v1.0(Public Beta / Stability)에
+> 대응하는 실행 계획이다. **원칙: beta 기간에는 신규 기능 추가보다 correctness/UX 안정화를
+> 우선한다** — v1.0의 "Out of scope: 신규 제품 기능" 결정과 동일한 원칙을 여기서도 반복한다.
+
+### 9.1 단계 구성
+
+1. **Internal dogfooding — 1주**: 개발자 본인만, 실제 기기, 실제 데이터. 목적: 시뮬레이터/CI로는
+   잡히지 않는 것(알림 타이밍, 백그라운드 refresh, 실제 OAuth 왕복)을 먼저 잡는다.
+2. **Closed Beta — 2주**: TestFlight을 통한 소규모 known 그룹.
+3. **Expanded Beta — 2~4주**: 더 넓은 TestFlight 그룹. 동일한 metric을 더 큰 표본으로, closed
+   beta에서는 보이지 않던 기기/OS 다양성에 따른 회귀를 특히 주시한다.
+4. **v1.0 release gate**: 아래 metric이 2주 이상 연속으로 허용 범위 안에 있고, `08` §8의 MVP
+   체크리스트가 전부 닫혀야 한다.
+
+### 9.2 각 단계에서 보는 metric (Closed Beta부터 동일하게 적용)
+
+- 크래시/오류율
+- Agent runtime 실패율
+- proposal 승인/거절 비율
+- latency(p50/p95 turn time)
+- 재시도율
+- onboarding/BYOK 연결 실패율
+- mutation 정확성(데이터 유실/중복 신고 없음)
+- 알림 피로도(opt-out率)
+- 주간 재방문율
+
+구체적인 숫자 임계값은 이 문서에서 지금 고정하지 않는다 — 실제 beta 데이터가 쌓이기 전에 숫자를
+확정하는 것은 로드맵 전체가 피하려는 조기 확정과 같은 문제다. 임계값은 각 단계를 실제로 운영하며
+정한다.

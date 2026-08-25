@@ -97,6 +97,8 @@ flowchart TD
 30. [전체 문서 정합성 감사](./26-document-consistency-audit.md)
 31. [백엔드 구현 실행 계획](./30-backend-implementation-plan.md)
 32. [UI ↔ 백엔드 계약 감사](./31-ui-backend-contract-audit.md)
+33. [Agent 수동 테스트 계획](./32-agent-manual-test-plan.md)
+34. [Experience 로드맵](./33-experience-roadmap.md)
 
 구현자는 첫 migration 또는 API client 생성 전에 `26`의 P0 항목이 해소됐는지 확인한다.
 
