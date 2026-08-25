@@ -102,14 +102,21 @@ MVP는 핵심 상태 전이와 실제 기기 위젯·알림 검증에 집중한�
   `apps/ios/Memdo/Memdo/ScheduleModel.swift`/`ScheduleAPI.swift`/`NotificationScheduler.swift`,
   `memdo-backend/supabase/functions/todos`/`rules`/`reviews`/`days`. 전체 P0 항목의 line-by-line
   전수 검증은 아님 — 표본 검증)
-- [ ] OpenAPI와 구현 일치 — **non-blocker** (사용자에게 보이는 blocker는 아니지만 문서 부채).
-  `docs/05-api-spec.yaml`이 약 50개 미구현 경로(`/slack/*`, `/briefings*`, `/devices*`,
-  `/automations*`, `/agent-runs*`, `/connections*`, `/change-proposals*`, `/health/*` 등)를 포함하고
-  있고, 반대로 `agent-cloud-chat`/`agent-usage`/`categories`/`workout-logs`는 스펙에 없음. v1.0
-  Epic K에서 current(실제 구현)/planned(설계됐지만 미구현) 구조로 재정리 예정 — Epic L 완료 후
-  진행
+- [x] OpenAPI와 구현 일치 — **non-blocker, 완료**. `docs/05-api-spec.yaml`에 `x-implementation-status`
+  블록 추가(Epic K, Epic L 완료 후 진행) — 58개 경로 전부를 current(실제 routeTemplate까지 코드로
+  검증)/planned(설계만 되고 미구현, 삭제하지 않고 보존)로 분류. `DELETE /account`는 실제 구현된
+  동기 `200` 계약으로 스펙 수정, 원래 202+AsyncOperation 설계는 planned로 보존
 - [x] DB 마이그레이션 검증 — **non-blocker, 통과**. `memdo-backend/supabase/migrations/`에 25개
   마이그레이션, 최근까지 활발히 유지됨
+- [ ] 백엔드 프로덕션 배포 파이프라인 정상 동작 — **blocker**. v1.0 release readiness 점검 중
+  발견: `Deploy Supabase` GitHub Actions가 2026-08-24(PR #9, eval-account-seeding) 이후 모든
+  머지에서 실패해 왔음(`gh run list --workflow=deploy-supabase.yml`로 확인) — `account`/
+  `apple-auth-token-exchange`/`eval-bootstrap` 3개 함수가 `supabase/config.toml`에 `import_map`
+  항목 없이 추가되어 Supabase CLI 번들러가 `@supabase/server` import를 해석하지 못함(로컬
+  `deno check`/`deno test`는 다른 config 탐색 경로를 써서 이 문제를 못 잡음). 수정 PR
+  memdo-backend#16 준비 완료(CI 통과, 머지 대기) — **머지 전까지 Epic G/H/J/L의 백엔드 변경사항이
+  하나도 프로덕션에 반영되지 않은 상태일 가능성이 높음**. 머지 후 다음 배포 run이 실제로
+  success하는지 재확인 필수
 - [x] 실제 iPhone 위젯·딥링크 통과 (코드 존재, 실기기 검증은 Epic N 매트릭스로) — **blocker
   (실기기 검증 자체는)**. 커스텀 `memdo://` scheme(true universal link 아님) + 위젯 타겟 코드는
   존재. 실기기 확인은 Epic N의 real-device verification matrix에서 진행
@@ -117,23 +124,32 @@ MVP는 핵심 상태 전이와 실제 기기 위젯·알림 검증에 집중한�
   `MemdoNotificationDelegate`에 `UNNotificationCategory`/액션 구현 확인
 - [x] 오프라인 동작 통과 — **non-blocker, 통과**. `OutboxQueue`, `pendingWriteIDs` 기반 로컬
   우선 모델 확인
-- [ ] 개인정보 처리방침 게시 — **blocker**. 코드에 없음 — v1.0 Epic K에서 실제 public URL로 게시
-- [ ] Privacy Manifest 작성 — **blocker**. `PrivacyInfo.xcprivacy` 파일 자체가 없음 — App Store
-  Connect 업로드 자체를 막는 항목. v1.0 Epic K에서 실제 Required Reason API 감사 기반으로 작성
-- [ ] App Store 개인정보 답변 검토 — **blocker**. 초안 없음 — v1.0 Epic K에서 작성
-- [ ] 계정 및 데이터 삭제 흐름 검증 — **blocker**. 코드 자체가 없음(백엔드 endpoint, iOS UI 둘 다
-  없음) — "미검증"이 아니라 "미구현". v1.0 Epic L에서 Apple 토큰 revocation을 포함해 구현
-- [ ] 장애 모니터링과 지원 채널 준비 — **non-blocker (앱스토어 제출을 막지는 않음), 하지만 beta를
-  책임감 있게 운영하려면 사실상 필요**. `_shared/http.ts`의 구조화 JSON 요청 로깅만 존재, 실시간
-  알림/지원 채널 없음. v1.0 Epic M에서 MetricKit 기반 최소 crash/hang 진단만 추가 — 실시간
-  alerting/Sentry는 이번 버전 범위 밖(로드맵 decision gate로 이후 판단)
+- [x] 개인정보 처리방침 게시 — **blocker, 완료**. `https://leebeanbin.github.io/memdo/privacy/`
+  실제 공개, `curl -I` 200 확인(2026-08-25). GitHub Pages `.nojekyll` + 전용 정적 페이지로 repo
+  내부 문서가 함께 노출되지 않도록 구성
+- [x] Privacy Manifest 작성 — **blocker, 완료**. `PrivacyInfo.xcprivacy`를 3개 타겟(Memdo/
+  MemdoWidget/MemdoShare) 모두에 추가, 실제 Required Reason API 사용(앱 코드 + 모든 SPM 의존성)을
+  감사해 근거로 작성 — `NSPrivacyAccessedAPICategoryUserDefaults`만 해당(1C8F.1/CA92.1)
+- [x] App Store 개인정보 답변 검토 — **blocker, 초안 완료**. [`docs/34-app-store-privacy-answers.md`](./34-app-store-privacy-answers.md)에
+  실제 코드 기준 초안 작성 — 최종 제출은 App Store Connect 웹 UI에서 진행 필요(Epic N 런북 §1)
+- [x] 계정 및 데이터 삭제 흐름 검증 — **blocker, 구현 완료·실기기 검증 대기**. 백엔드
+  `account`(DELETE)/`apple-auth-token-exchange` 함수, iOS Settings "계정 삭제" UI 모두 구현
+  완료(Epic L) — Apple Sign In 토큰 revocation 포함. 실제 Apple 계정으로 authorizationCode →
+  refresh token 저장 → 삭제 → revoke happy path 검증은 아직 실행 전(docs/35 실기기 매트릭스)
+- [x] 장애 모니터링과 지원 채널 준비 — **non-blocker (앱스토어 제출을 막지는 않음), MetricKit
+  최소 안전망 구현 완료(Epic M)**. `MetricsCollector.swift`가 crash/hang diagnostic을 기기 로컬
+  로그로만 수집(전송 없음) + Xcode Organizer의 자동 symbolicated crash report 확인 절차 문서화
+  (`08` §9.4). 실시간 alerting/Sentry는 이번 버전 범위 밖 — beta 운영 중 실제 관찰 가능성 공백이
+  확인되면 로드맵 decision gate로 재판단(`09` v1.0 항목). 실제 diagnostic 수신 여부는 beta 중
+  operational validation 대상(pre-beta 하드 게이트 아님)
 - [ ] 로컬→계정 UUID 유지와 sync 충돌 검증 — **non-blocker**. UUID 연속성은 익명 인증 승격으로
   암묵적으로 동작 확인(`MemdoApp.swift`), `sync/index.ts`에 명시적 409/conflict 처리 코드는
   발견되지 않음 — v1.0 범위에서 별도 구현 예정 없음, 실사용 중 문제 관찰 시 별도 Epic으로 대응
-- [ ] 알림 7일·48개 rolling window 실제 기기 검증 — **blocker**. `docs/07-notification-and-daily-review.md`
-  §10 스펙(오늘 포함 7일 window, 최대 48개 pending, 예정 시각 오름차순+Todo ID tiebreak, 초과 시
-  가까운 알림 우선 유지)이 `NotificationScheduler.swift`에 전혀 구현되지 않음(반복 알림 2개 +
-  개별 일정 알림만 개별 예약, cap/window/reconciliation 로직 없음) — v1.0 Epic L에서 구현
+- [x] 알림 7일·48개 rolling window 실제 기기 검증 — **blocker, 구현 완료·실기기 검증 대기**.
+  `NotificationScheduler.reconciledNotificationCandidates`/`reconcileScheduleNotifications`로
+  §10 스펙(7일 window, 48개 cap, 오름차순+Todo ID tiebreak, keep-nearest-on-overflow) 구현, 9개
+  단위 테스트로 sort/tiebreak/cap/window 경계 검증 완료(Epic L). 실제 여러 기기에서 여러 날에 걸친
+  cap 동작 확인은 아직 실행 전(docs/35 실기기 매트릭스)
 - [ ] 출시 게이트 책임자·기한 충족 — 조직 항목, 코드로 검증 불가
 
 ## 9. 출시 검증 단계 (Release Validation Stages)
