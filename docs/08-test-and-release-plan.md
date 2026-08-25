@@ -139,3 +139,22 @@ MVP는 핵심 상태 전이와 실제 기기 위젯·알림 검증에 집중한�
 구체적인 숫자 임계값은 이 문서에서 지금 고정하지 않는다 — 실제 beta 데이터가 쌓이기 전에 숫자를
 확정하는 것은 로드맵 전체가 피하려는 조기 확정과 같은 문제다. 임계값은 각 단계를 실제로 운영하며
 정한다.
+
+### 9.3 Xcode Organizer로 crash report 확인하기 (v1.0 Epic M)
+
+앱 자체는 `MetricsCollector.swift`가 MetricKit crash/hang diagnostic을 기기 로컬 로그로만
+남긴다(어디로도 전송하지 않음) — 이것과 별개로, TestFlight/App Store로 배포된 빌드의 crash는
+Xcode Organizer가 앱 코드와 무관하게 자동으로 수집·symbolicate한다. Beta 기간 동안 이 절차로
+crash를 확인한다:
+
+1. Xcode → Window → Organizer.
+2. 왼쪽에서 Memdo 앱을 선택하고 "Crashes" 탭으로 이동.
+3. TestFlight/App Store로 배포된 빌드에서 발생한 crash가 여기 나타난다(전달까지 지연될 수
+   있음 — 실시간이 아니다).
+4. 각 crash를 열면 이미 symbolicate된 스택 트레이스를 볼 수 있다 — 별도 dSYM 업로드 없이도
+   Xcode가 자동으로 처리한다(Archive 시 dSYM이 함께 생성·보관되는 한).
+5. "Hangs"/"Disk Writes"/"Launch Time" 등 다른 MetricKit 기반 탭도 같은 화면에서 확인 가능하다.
+
+기기에 연결된 사용자 계정(Apple ID)이 App Store Connect의 해당 앱에 접근 권한이 있어야 데이터가
+보인다. 실기기에서 직접 강제 크래시를 발생시켜 이 절차 자체가 실제로 동작하는지 사전에 한 번
+확인하는 것을 Epic N의 실기기 검증 매트릭스 항목으로 포함한다.

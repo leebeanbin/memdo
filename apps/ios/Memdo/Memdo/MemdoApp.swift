@@ -21,6 +21,7 @@ struct MemdoApp: App {
                 .task {
                     UNUserNotificationCenter.current().delegate = MemdoNotificationDelegate.shared
                     NotificationScheduler.registerCategories()
+                    MetricsCollector.shared.start()
                 }
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active else { return }
