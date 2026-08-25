@@ -4,7 +4,28 @@
 > 데이터 파이프라인: [데이터 파이프라인](./17-data-pipeline.md)  
 > 개인정보: [개인정보·동의·AI 정책](./06-privacy-consent-ai-policy.md)
 
-## 1. 선택
+> **실제 구현 현황(2026-08-25, v1.0 Epic M)**: 이 문서 전체는 원래 설계된 목표 상태를 현재
+> 시제로 서술하지만, **실제로 구현된 것은 아래 8절의 MetricKit crash/hang diagnostic
+> 수집(`MetricsCollector.swift`)뿐**이다. Sentry, Grafana Cloud(metrics/logs/traces/OTLP),
+> Supabase Dashboard 연동, Grafana Synthetic Monitoring, 9절의 `/health/live`·`/health/ready`
+> 엔드포인트는 전부 아직 만들지 않았다 — 이 스택 전체를 지금 구축하는 건 v1.0의 범위가 아니다
+> (Epic M은 "최소 안전망"만 목표로 했다, 풀 observability 플랫폼이 아니다).
+>
+> **MetricKit의 실제 한계** (v1.0에서 이걸로 충분한지 beta 기간 동안 실사용으로 판단한다):
+>
+> - 실시간 alert가 아니다 — 진단 payload는 시스템이 스케줄링해서, 하루에 한 번 정도만 전달을
+>   보장하며 지연될 수 있다.
+> - crash/hang diagnostic만 다룬다 — API 실패나 Agent 실패 같은 non-fatal operational error는
+>   여기서 다루지 않는다. 그런 오류는 이미 있는 서버 측 구조화 로그(`_shared/http.ts`의
+>   `logRequest`)와 `agent_audit_log`(Epic H)로 계속 본다.
+> - 시뮬레이터에서 트리거할 수 없고, 실기기의 실제 crash/hang에서만 전달된다.
+>
+> **로드맵 decision gate**: v1.0 beta를 MetricKit + Xcode Organizer만으로 운영해보고, 실제로
+> 관찰 가능성 공백이 발견되면 그때 Sentry(또는 유사 서비스) 도입 여부를 판단한다 —
+> [`09-roadmap-and-backlog.md`](./09-roadmap-and-backlog.md)의 v1.0 항목에 이 gate를 명시했다.
+> 지금 미리 Sentry를 도입하지 않는다.
+
+## 1. 선택 (원래 설계, 대부분 미구현 — 위 실제 구현 현황 참고)
 
 ```text
 Backend metrics/logs/traces: Grafana Cloud Free
@@ -163,14 +184,20 @@ Agent 요청 100%
 
 ## 8. iOS
 
-Sentry:
+**실제 구현(v1.0 Epic M)**: MetricKit의 crash diagnostic·hang만 `MetricsCollector.swift`로
+수집 — os.Logger로 기기 로컬에만 남기고 어디로도 전송하지 않는다(Xcode Organizer가 이와
+별개로 TestFlight/App Store 빌드의 symbolicated crash report를 자동 수집한다). CPU·memory·
+launch time(MXMetricPayload 쪽 metric)과 Sentry 전체는 **아직 구현하지 않았다** — 아래는
+원래 설계다.
+
+Sentry (미구현):
 
 - crash
 - handled error
 - 앱 시작 지연
 - network breadcrumb에서 URL path template만
 
-MetricKit:
+MetricKit (crash/hang diagnostic만 구현, CPU/memory/launch time 미구현):
 
 - hang
 - crash diagnostic
@@ -178,9 +205,10 @@ MetricKit:
 - memory
 - launch time
 
-사용자 메시지와 일정 내용을 Sentry context에 첨부하지 않는다.
+사용자 메시지와 일정 내용을 Sentry context에 첨부하지 않는다 -- 이 원칙은 Sentry를 실제로
+도입하게 될 때도 그대로 적용한다.
 
-## 9. health endpoints
+## 9. health endpoints (미구현)
 
 ```text
 GET /health/live

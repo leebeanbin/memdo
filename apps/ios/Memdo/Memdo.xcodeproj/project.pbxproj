@@ -53,6 +53,7 @@
 		7E76ED8B0A95132D8C445E02 /* SecureSessionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B159571A9900C21AA6BE4349 /* SecureSessionStorage.swift */; };
 		8440D2E9F99B1C9848CF21ED /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD6B2D482673663626353C2 /* CalendarView.swift */; };
 		84884B9604E82F5666617F18 /* WallpaperPreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C12B14694C882524384138 /* WallpaperPreviewSheet.swift */; };
+		8536B44B386E9207B515D325 /* MetricsCollector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AF5F6934F60994B33CA80FF /* MetricsCollector.swift */; };
 		87E2689DFF3C0F8C22A74D06 /* CoachMarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD366DE45CA454C72F2BBC3 /* CoachMarks.swift */; };
 		8D2EE9F6F32DD94165E33E60 /* Pretendard-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = 5DD8651FBD4E38159886A3B3 /* Pretendard-Regular.otf */; };
 		90F89ECA1FB60194F0A9A09C /* ScheduleAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA8A453029530AB440AFEB03 /* ScheduleAPI.swift */; };
@@ -141,6 +142,7 @@
 		25993FA0A6C348E04CC8573E /* AppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShortcuts.swift; sourceTree = "<group>"; };
 		2779812E7FB556A785234A2F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		282B54EFD5EB0ED2655D512E /* LiveActivityScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityScheduler.swift; sourceTree = "<group>"; };
+		2AF5F6934F60994B33CA80FF /* MetricsCollector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsCollector.swift; sourceTree = "<group>"; };
 		2C57EC467343059432D7D60D /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
 		2E4BAF77735FE322B2A29952 /* MemdoShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MemdoShare.entitlements; sourceTree = "<group>"; };
 		38E5C3282FBC0EF28AA5FBD5 /* Pretendard-SemiBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pretendard-SemiBold.otf"; sourceTree = "<group>"; };
@@ -327,6 +329,7 @@
 				D4F83C89D78FD9D59E7C1EE3 /* MemdoLiveActivity.swift */,
 				F29F2315ADA3175E0D4A894C /* MemdoTheme.swift */,
 				D7840EFE57EB95989FBC7696 /* MemdoWidgetSchedule.swift */,
+				2AF5F6934F60994B33CA80FF /* MetricsCollector.swift */,
 				027C4773F8BAC3F78AF09125 /* NotificationScheduler.swift */,
 				7DD71F391186F9CA01A625C1 /* OnDeviceAgentRuntime.swift */,
 				1FC52CA73A8785841A1E45A0 /* OutboxQueue.swift */,
@@ -587,6 +590,7 @@
 				127639652BAACB34DA1E4279 /* MemdoLiveActivity.swift in Sources */,
 				00D267B5D29A0D25FE6E98FA /* MemdoTheme.swift in Sources */,
 				B9BE1E1D72E8D516A1E5022D /* MemdoWidgetSchedule.swift in Sources */,
+				8536B44B386E9207B515D325 /* MetricsCollector.swift in Sources */,
 				F3426B7FCF7A6E73261D2D93 /* NotificationScheduler.swift in Sources */,
 				10D229CD2DFD8802FF479DC2 /* OnDeviceAgentRuntime.swift in Sources */,
 				D51C8D4F2F01CBD92D0CFDB3 /* OutboxQueue.swift in Sources */,

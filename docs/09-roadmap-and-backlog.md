@@ -60,11 +60,12 @@
 
 - **Product goal**: 처음으로 실제 외부 사용자 앞에 앱을 내놓는다. 신규 기능보다 정확성과 안정성이
   우선한다.
-- **주요 Epic 후보**: TestFlight/beta 배포 파이프라인(현재 존재하지 않음 — 신규 작업);
-  `08-test-and-release-plan.md`의 MVP 체크리스트를 실제 구현 상태와 대조해 전부 닫기; 크래시/오류
-  리포팅 연동(존재 여부 미확인 — 확인 후 없으면 추가); Apple/Google/GitHub OAuth 실기기 재검증
-  ([`memdo-backend/docs/roadmap.md`](../../memdo-backend/docs/roadmap.md) B1: "완료(재확인 필요)"로
-  표시됨).
+- **주요 Epic 후보** (2026-08-25 기준, 4개 Epic으로 실행): Epic K(Compliance & Release-Blocker
+  Triage — MVP 체크리스트 재검증, Privacy Manifest, privacy policy 공개, App Store 개인정보 답변,
+  OpenAPI current-vs-planned 정리); Epic L(Release-Blocking Correctness Gaps — 계정/데이터 삭제 +
+  Apple Sign In 토큰 revocation, 알림 7일·48개 rolling window); Epic M(MetricKit crash/hang
+  diagnostics, 최소 안전망); Epic N(TestFlight 수동 업로드 런북 + 실기기 검증 매트릭스). 각 PR이
+  머지되는 대로 이 항목들의 상태를 갱신한다 — 지금은 진행 중.
 - **In scope**: TestFlight internal + closed beta 배포; App Store Connect 메타데이터/개인정보 답변;
   `08`의 모든 출시 차단 조건 실기기 검증.
 - **Out of scope**: insight, 제안형 알림, personalization 등 신규 제품 기능 — beta 기간에는 신규
@@ -74,6 +75,11 @@
 - **운영 metric**: 크래시/오류율; Agent runtime 실패율; proposal 승인/거절 비율; latency(p50/p95
   turn time); 재시도율; onboarding/BYOK 연결 실패율; mutation 정확성(데이터 유실/중복 없음);
   알림 피로도(opt-out率); 주간 재방문율.
+- **Decision gate — 크래시/오류 관찰 도구**: v1.0은 Sentry 같은 외부 observability SaaS를
+  도입하지 않고 MetricKit(crash/hang diagnostic, 기기 로컬 로그만) + Xcode Organizer의 자동
+  symbolicated crash report만으로 beta를 운영한다([`23-observability-and-alerting.md`](./23-observability-and-alerting.md)
+  참고). beta 기간 동안 이걸로 실제 관찰 가능성 공백이 발견되면 그때 Sentry 도입 여부를 판단한다 —
+  지금 미리 결정하지 않는다.
 - **Gate to v1.1**: beta 지표가 최소 2주 연속 허용 범위 안에 있고 `08`의 모든 항목이 닫히면 Go
   (구체적 임계값은 실제 데이터가 쌓인 뒤 정한다 — 지금 숫자를 미리 정하는 것은 이 로드맵이 피하려는
   조기 확정과 같다).
