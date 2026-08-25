@@ -25,7 +25,6 @@
 		1ACFAEEBEB53F95656F314FC /* MemdoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4EA7A02C55094DEBD06AF37 /* MemdoWidget.swift */; };
 		1F8672E2C40ED8E8853E55EA /* Pretendard-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 97B6BAE4945DFFB47769CA5C /* Pretendard-LICENSE.txt */; };
 		216569CCC3FCC4402CA66A1C /* AgentDomainServicesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC09836B4409CD8802D9A9E1 /* AgentDomainServicesTests.swift */; };
-		0A3623641E064C5EAD742439 /* AgentIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9143095B9E7A47B682FDCE14 /* AgentIntentTests.swift */; };
 		27F704F7116840EA5D152218 /* WallpaperIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFB1F40579E7D5062404CC55 /* WallpaperIntent.swift */; };
 		28ACEBD7EE2EC6276D9F3CFE /* WorkoutAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67DDB3585BB47A7B725E0F95 /* WorkoutAPI.swift */; };
 		2A29175D38335F059C4AE766 /* MemdoComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42994A317F898780763B33D4 /* MemdoComponents.swift */; };
@@ -45,6 +44,7 @@
 		6D1456762B22F0F5585F1589 /* MemdoWidgetSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7840EFE57EB95989FBC7696 /* MemdoWidgetSchedule.swift */; };
 		6D52CEFC8B695B018FB30EAD /* MemdoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B25474359568B8C6264B6E8 /* MemdoApp.swift */; };
 		6D563326AB9CE5FDE9058501 /* WorkoutModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A32B5F7D73399A9F62D92CA /* WorkoutModel.swift */; };
+		7457DB90063BE2771605A5AA /* NotificationSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96F566C420B634E1C8FE4B5C /* NotificationSchedulerTests.swift */; };
 		76D234B343C9376873066059 /* EventCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB3E052299D1A953107E411D /* EventCapture.swift */; };
 		78F5DD11294A40F25A5A9524 /* DailySummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6561C352731005322618C740 /* DailySummaryView.swift */; };
 		78FEB722CFF3DC8EE7034FBD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A5FCF0E385E87960B56A11F4 /* Assets.xcassets */; };
@@ -58,6 +58,7 @@
 		98172737F1AC51B31154A93D /* ScheduleRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19BD21007334C06C0B2028F9 /* ScheduleRow.swift */; };
 		A09C21CAE62B67DF6753F375 /* AssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C57EC467343059432D7D60D /* AssistantView.swift */; };
 		AA47BAB65B42078F49070D0E /* AgentCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F8C1DE6F959CF3423D1DD8 /* AgentCoordinatorTests.swift */; };
+		B34D55BB23AB902823B3C287 /* AgentIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CAF5C62FEE7A3ECA9E67EB4 /* AgentIntentTests.swift */; };
 		B9BE1E1D72E8D516A1E5022D /* MemdoWidgetSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7840EFE57EB95989FBC7696 /* MemdoWidgetSchedule.swift */; };
 		BFC6AD583CB383FAF7ABE782 /* SlackNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 420E092EB2A4627375577F43 /* SlackNotifier.swift */; };
 		C058A05E23195B992D283DC5 /* FakeAgentRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA8E9E99B2955B5F2A3FABD6 /* FakeAgentRuntime.swift */; };
@@ -147,6 +148,7 @@
 		4E9F76C022917F1D22E0D1CE /* GoogleCalendarSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCalendarSettings.swift; sourceTree = "<group>"; };
 		54A9DCC8471814155094BAFF /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		592EA12B6FF1AB799EF6869C /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		5CAF5C62FEE7A3ECA9E67EB4 /* AgentIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIntentTests.swift; sourceTree = "<group>"; };
 		5DD8651FBD4E38159886A3B3 /* Pretendard-Regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pretendard-Regular.otf"; sourceTree = "<group>"; };
 		5DE3D42537298C53BC842A35 /* WorkoutViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutViews.swift; sourceTree = "<group>"; };
 		6561C352731005322618C740 /* DailySummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySummaryView.swift; sourceTree = "<group>"; };
@@ -163,6 +165,7 @@
 		89D11582497A9B52756B755E /* AgentIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIntent.swift; sourceTree = "<group>"; };
 		8DFEC754269D8947FB18E952 /* AgentRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRuntimeTests.swift; sourceTree = "<group>"; };
 		8FD6B2D482673663626353C2 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
+		96F566C420B634E1C8FE4B5C /* NotificationSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSchedulerTests.swift; sourceTree = "<group>"; };
 		97B6BAE4945DFFB47769CA5C /* Pretendard-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Pretendard-LICENSE.txt"; sourceTree = "<group>"; };
 		98D1929733AE37B7C5892133 /* CloudAgentRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudAgentRuntime.swift; sourceTree = "<group>"; };
 		99214A59192502A52C8A73AD /* MemdoGuideSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoGuideSheet.swift; sourceTree = "<group>"; };
@@ -194,7 +197,6 @@
 		E81203EAFA09124BA54F8AE7 /* TodayComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayComponents.swift; sourceTree = "<group>"; };
 		EA8A453029530AB440AFEB03 /* ScheduleAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleAPI.swift; sourceTree = "<group>"; };
 		EC09836B4409CD8802D9A9E1 /* AgentDomainServicesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDomainServicesTests.swift; sourceTree = "<group>"; };
-		9143095B9E7A47B682FDCE14 /* AgentIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIntentTests.swift; sourceTree = "<group>"; };
 		F29F2315ADA3175E0D4A894C /* MemdoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoTheme.swift; sourceTree = "<group>"; };
 		F2C12B14694C882524384138 /* WallpaperPreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperPreviewSheet.swift; sourceTree = "<group>"; };
 		F8BB7B0BC6E2F7CAF1981DF2 /* AgentPrompts.yml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = AgentPrompts.yml; sourceTree = "<group>"; };
@@ -250,10 +252,11 @@
 			children = (
 				E5F8C1DE6F959CF3423D1DD8 /* AgentCoordinatorTests.swift */,
 				EC09836B4409CD8802D9A9E1 /* AgentDomainServicesTests.swift */,
-				9143095B9E7A47B682FDCE14 /* AgentIntentTests.swift */,
+				5CAF5C62FEE7A3ECA9E67EB4 /* AgentIntentTests.swift */,
 				8DFEC754269D8947FB18E952 /* AgentRuntimeTests.swift */,
 				17E8C08961FC90CC6CA2A3B6 /* CloudAgentRuntimeTests.swift */,
 				AA8E9E99B2955B5F2A3FABD6 /* FakeAgentRuntime.swift */,
+				96F566C420B634E1C8FE4B5C /* NotificationSchedulerTests.swift */,
 				E3F01099D4577BD460F6C20F /* ScheduleModelTests.swift */,
 			);
 			path = MemdoTests;
@@ -504,10 +507,11 @@
 			files = (
 				AA47BAB65B42078F49070D0E /* AgentCoordinatorTests.swift in Sources */,
 				216569CCC3FCC4402CA66A1C /* AgentDomainServicesTests.swift in Sources */,
-				0A3623641E064C5EAD742439 /* AgentIntentTests.swift in Sources */,
+				B34D55BB23AB902823B3C287 /* AgentIntentTests.swift in Sources */,
 				D0E0E2E1A7122A5734E8C07A /* AgentRuntimeTests.swift in Sources */,
 				C69C49A6035C81CD2F48A9F3 /* CloudAgentRuntimeTests.swift in Sources */,
 				C058A05E23195B992D283DC5 /* FakeAgentRuntime.swift in Sources */,
+				7457DB90063BE2771605A5AA /* NotificationSchedulerTests.swift in Sources */,
 				CA69FB6F6D5B184690B56D4A /* ScheduleModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
