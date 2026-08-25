@@ -28,6 +28,134 @@ x-api-conventions:
     searchPerUserPerMinute: 30
     aiPerUserPerHour: 10
     mcpPerClientUserPerMinute: 60
+x-implementation-status:
+  note: >
+    v1.0 Epic K 정리(2026-08-25). "current"는 memdo-backend/supabase/functions에 실제 구현이
+    있고 routeTemplate까지 코드에서 직접 확인한 경로. "planned"는 설계는 됐지만 아직 구현되지
+    않은 경로다 -- 삭제하지 않고 향후 참고용으로 보존한다 (예: /change-proposals와
+    AsyncOperation 스키마는 pgmq 기반 비동기 큐를 전제로 설계됐고, 그 큐 자체가 아직 없다).
+    아래 paths: 아래 정의된 경로 이름이 실제 구현과 다른 경우(개발 과정에서 실제 구현이 다른
+    이름으로 자리잡은 경우) realPath로 실제 경로를 명시한다. current인데 realPath가 없으면
+    이름까지 정확히 일치한다는 뜻이다. current로 실제 존재하지만 이 파일의 paths: 아래에
+    아예 항목이 없는 실제 엔드포인트도 별도로 표시한다.
+  current:
+    - path: /days/{date}
+    - path: /calendars
+    - path: /calendars/{calendarId}
+    - path: /todos
+    - path: /todos/{todoId}
+    - path: /todos/{todoId}/status
+    - path: /todos/{todoId}/reschedule
+    - path: /search/todos
+      realPath: /search
+    - path: /sync
+    - path: /schedule-rules
+      realPath: /rules
+    - path: /schedule-rules/{ruleId}
+      realPath: /rules
+    - path: /daily-reviews/{date}
+      realPath: /reviews/{date}
+    - path: /preferences
+    - path: /connections/google-calendar/authorize
+      realPath: /google-calendar-start
+    - path: /connections/google-calendar/callback
+      realPath: /google-calendar-callback
+      note: redirect-only, no Memdo session on this request
+    - path: /connections/{connectionId}/sync
+      realPath: /google-calendar-sync
+      note: primarily pg_cron-triggered every 15 minutes, not a typical user-facing REST call
+    - path: /account
+      note: >
+        DELETE만 구현됨(Epic L), 그리고 이 문서 아래 실제 스펙은 원래 설계된 202+AsyncOperation이
+        아니라 동기 200/204로 수정했다 -- pgmq 큐가 없어 실제로 비동기 처리가 일어나지 않는데
+        202로 응답하면 거짓 계약이 되기 때문. 원래 202+AsyncOperation 설계는 x-implementation-status.
+        plannedAsyncOperationEvolution에 보존.
+  currentButMissingFromPathsBelow:
+    - path: /categories
+      note: iOS 카테고리 CRUD, 이 스펙 파일에 항목 자체가 없음
+    - path: /summaries
+      note: 하루 요약, 이 스펙 파일에 항목 자체가 없음
+    - path: /agent-cloud-chat
+      note: 클라우드 Agent 채팅(SSE 스트림), 이 스펙 파일에 항목 자체가 없음
+    - path: /agent-key
+      note: OpenRouter BYOK 키 저장/조회/삭제, 이 스펙 파일에 항목 자체가 없음
+    - path: /agent-models
+      note: 모델 registry 목록, 이 스펙 파일에 항목 자체가 없음
+    - path: /agent-usage
+      note: Agent 사용량/비용 조회, 이 스펙 파일에 항목 자체가 없음
+    - path: /workout-logs
+      note: 운동 기록 CRUD, 이 스펙 파일에 항목 자체가 없음
+    - path: /apple-auth-token-exchange
+      note: Sign in with Apple 토큰 교환(Epic L), 이 스펙 파일에 항목 자체가 없음
+    - path: /demo-bootstrap
+    - path: /eval-bootstrap
+      note: eval 계정 seeding, 사용자 대상 API 아님
+  planned:
+    - path: /daily-plans/{date}
+    - path: /daily-reviews/{date}/responses
+    - path: /daily-reviews/{date}/complete
+    - path: /daily-review/settings
+      note: 실제로는 /preferences로 통합됨 -- 이 경로 자체는 구현되지 않음
+    - path: /ai/plan-drafts
+    - path: /ai/plan-drafts/{draftId}
+    - path: /ai/plan-drafts/{draftId}/commit
+      note: >
+        Agent 파이프라인이 Epic C~J를 거치며 propose_*/승인 흐름으로 대체 -- 이 REST 리소스
+        형태로는 구현되지 않았고 앞으로도 이 형태로 구현될 가능성은 낮다
+    - path: /privacy/consents
+    - path: /privacy/consents/{consentType}
+    - path: /privacy/export
+    - path: /connections/slack/authorize
+    - path: /connections/slack/callback
+    - path: /slack/channels
+    - path: /slack/message-proposals
+      note: >
+        실제 Slack 연동은 OAuth가 아니라 사용자가 직접 발급한 Incoming Webhook 저장 방식으로
+        구현됨(ADR-075) -- 이 OAuth 기반 설계 전체가 미구현이며, 채택될 가능성도 낮다
+    - path: /calendar-sources
+    - path: /calendar-sources/{sourceId}
+    - path: /calendar-entries
+      note: Google Calendar 연동은 google-calendar-* 함수들로 다른 이름/구조로 구현됨
+    - path: /change-proposals
+    - path: /change-proposals/{proposalId}
+    - path: /change-proposals/{proposalId}/approve
+    - path: /change-proposals/{proposalId}/reject
+      note: Agent propose_*/승인 흐름으로 사실상 대체(위 /ai/plan-drafts 참고)
+    - path: /briefing-keywords
+    - path: /briefing-keywords/{briefingKeywordId}
+      note: 실제로는 온디바이스 카테고리 선택(UserDefaults)으로 구현, 서버 엔드포인트 아님
+    - path: /briefings
+    - path: /briefings/today
+    - path: /briefings/generate
+    - path: /briefings/{briefingId}/view
+      note: 뉴스 브리핑은 iOS가 RSS를 직접 수집·온디바이스 요약(ADR-074) -- 서버 파이프라인 없음
+    - path: /insights/weekly
+      note: 로드맵 v1.1(Weekly Insight)의 목표 -- 아직 구현 전
+    - path: /devices
+    - path: /devices/{deviceId}
+      note: APNs push 토큰 등록용으로 보이나, 현재 로컬 알림만 사용하고 원격 push 없음
+    - path: /notifications/test
+    - path: /agent-runs
+    - path: /agent-runs/{agentRunId}
+    - path: /agent-history
+      note: Epic H의 agent_audit_log는 존재하지만 REST로 노출되지 않음
+    - path: /automations
+    - path: /automations/{automationId}
+    - path: /connections
+      note: 범용 연동 목록 aggregator -- 실제로는 provider별 개별 status 함수로 구현됨
+    - path: /webhooks/google-calendar
+      note: 실제 동기화는 pg_cron 폴링(15분 주기)이며 webhook 수신 방식이 아님
+    - path: /operations/{operationId}
+      note: pgmq 기반 AsyncOperation 큐 전제 -- 그 큐 자체가 아직 없음
+    - path: /health/live
+    - path: /health/ready
+      note: docs/23-observability-and-alerting.md도 이 두 경로를 미구현으로 정정함(Epic M)
+  plannedAsyncOperationEvolution:
+    note: >
+      /account DELETE의 원래 설계(202 + AsyncOperation, pending/processing/succeeded/failed
+      상태 모델)는 실제로 구현하지 않았지만 미래에 pgmq 기반 범용 비동기 작업 큐를 실제로
+      만들게 되면 다시 꺼낼 수 있는 설계로 여기 보존한다. AsyncOperation 스키마 정의 자체는
+      아래 components.schemas.AsyncOperation에 그대로 남아 있다.
 servers:
   - url: https://api.memdo.example/v1
 security:
@@ -1290,9 +1418,14 @@ paths:
               schema: { $ref: '#/components/schemas/AsyncOperation' }
   /account:
     delete:
-      summary: Request account and user-data deletion
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+      summary: Delete the authenticated user's account and all application data
+      description: >
+        Implemented synchronously (Epic L, v1.0) -- NOT the AsyncOperation/202 shape this path
+        was originally designed with (see x-implementation-status.plannedAsyncOperationEvolution
+        above), since that assumes a pgmq-backed async operation queue that doesn't exist. If a
+        stored Apple Sign In refresh token exists for this user, revocation is attempted first,
+        but a revoke failure never blocks deletion (fail-open). Cascades every application table
+        via existing FKs, then deletes the Supabase auth user itself.
       requestBody:
         required: true
         content:
@@ -1303,11 +1436,15 @@ paths:
               properties:
                 confirmation: { type: string, const: DELETE }
       responses:
-        '202':
-          description: Deletion queued and sessions revoked
+        '200':
+          description: Account and all application data deleted
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/AsyncOperation' }
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted: { type: boolean, const: true }
   /health/live:
     get:
       summary: Process liveness

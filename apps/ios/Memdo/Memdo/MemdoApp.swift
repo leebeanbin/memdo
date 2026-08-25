@@ -21,6 +21,7 @@ struct MemdoApp: App {
                 .task {
                     UNUserNotificationCenter.current().delegate = MemdoNotificationDelegate.shared
                     NotificationScheduler.registerCategories()
+                    MetricsCollector.shared.start()
                 }
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active else { return }
@@ -37,6 +38,11 @@ struct MemdoApp: App {
                         )
                         session.workoutStore.save(log)
                     }
+                    // Rolling-window reconciliation (docs/07 §10) at app
+                    // activation -- the same trigger this session's Epic L
+                    // plan named as the reuse target, rather than inventing
+                    // a new lifecycle hook.
+                    Task { await session.scheduleStore?.reconcileNotifications() }
                 }
         }
     }
@@ -183,7 +189,7 @@ final class MemdoSession {
         }
     }
 
-    func signInWithApple(idToken: String, nonce: String) async {
+    func signInWithApple(idToken: String, nonce: String, authorizationCode: String?) async {
         guard let client else { return }
         isBusy = true
         errorMessage = nil
@@ -195,6 +201,24 @@ final class MemdoSession {
             )
         } catch {
             errorMessage = error.localizedDescription
+            return
+        }
+
+        // Best-effort, and deliberately after signInWithIdToken already
+        // succeeded: this exchange (Epic L) is what makes real Apple token
+        // revocation possible at account-deletion time, but it must never
+        // turn into a sign-in failure -- the user is already signed in by
+        // this point. The code is single-use/~5-minute-lived, so this must
+        // run at every Apple sign-in, not just the first. A nil
+        // authorizationCode (shouldn't happen, but defensively handled at
+        // the call site) just skips this step.
+        guard let authorizationCode else { return }
+        do {
+            try await scheduleStore?.exchangeAppleAuthCode(authorizationCode)
+        } catch {
+            // Swallowed deliberately -- see comment above. If this keeps
+            // failing, account deletion still works (fail-open), just
+            // without a stored token to revoke for this user.
         }
     }
 
@@ -468,7 +492,19 @@ struct MemdoSignInView: View {
                       let idToken = String(data: tokenData, encoding: .utf8),
                       let nonce = currentNonce
                 else { return }
-                Task { await session.signInWithApple(idToken: idToken, nonce: nonce) }
+                // authorizationCode is expected to always be present alongside
+                // identityToken for this credential type, but its absence must
+                // never block sign-in itself -- only the (also best-effort)
+                // Apple token-revocation setup in Epic L depends on it.
+                let authorizationCode = credential.authorizationCode
+                    .flatMap { String(data: $0, encoding: .utf8) }
+                Task {
+                    await session.signInWithApple(
+                        idToken: idToken,
+                        nonce: nonce,
+                        authorizationCode: authorizationCode
+                    )
+                }
             }
             .opacity(0.011)
             .frame(height: 52)

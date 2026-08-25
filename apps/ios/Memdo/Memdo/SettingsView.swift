@@ -12,6 +12,7 @@ struct SettingsView: View {
     let coachMarkTarget: CoachMarkTarget?
     let onStartCoachMarkTour: ((CoachMarkTour) -> Void)?
     @Environment(MemdoSession.self) private var session
+    @Environment(ScheduleStore.self) private var scheduleStore
     @State private var dailySummary = true
     @State private var planningPromptEnabled = true
     @State private var notifications = true
@@ -20,6 +21,9 @@ struct SettingsView: View {
     @State private var presentedSheet: SettingsSheet?
     @State private var showsWallpaperPreview = false
     @State private var showsSignOutConfirmation = false
+    @State private var showsDeleteAccountConfirmation = false
+    @State private var isDeletingAccount = false
+    @State private var deleteAccountErrorMessage: String?
     @State private var summaryTimePushTask: Task<Void, Never>?
     @State private var promptTimePushTask: Task<Void, Never>?
     @AppStorage(
@@ -130,6 +134,35 @@ struct SettingsView: View {
                         .foregroundStyle(.red)
                         .memdoSettingsRow()
                 }
+
+                Divider()
+                Button { showsDeleteAccountConfirmation = true } label: {
+                    HStack {
+                        Text("계정 삭제")
+                            .font(MemdoTypography.subtitle)
+                            .foregroundStyle(.red)
+                        Spacer()
+                        if isDeletingAccount {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "trash")
+                                .font(MemdoTypography.captionEmphasis)
+                                .foregroundStyle(.red)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .memdoSettingsRow()
+                }
+                .buttonStyle(.plain)
+                .disabled(session.isBusy || isDeletingAccount)
+
+                if let deleteAccountErrorMessage {
+                    Divider()
+                    Label(deleteAccountErrorMessage, systemImage: "exclamationmark.circle.fill")
+                        .font(MemdoTypography.caption)
+                        .foregroundStyle(.red)
+                        .memdoSettingsRow()
+                }
             }
 
             if let onStartCoachMarkTour {
@@ -166,6 +199,18 @@ struct SettingsView: View {
             Text(session.phase == .guest
                 ? "저장된 일정과 기록이 모두 삭제됩니다."
                 : "이 기기에서 로그아웃합니다.")
+        }
+        .confirmationDialog(
+            "계정을 삭제하시겠어요?",
+            isPresented: $showsDeleteAccountConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("계정 삭제", role: .destructive) {
+                Task { await deleteAccountAndSignOut() }
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("계정과 저장된 모든 일정·기록이 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없어요.")
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
@@ -251,6 +296,25 @@ struct SettingsView: View {
     private func push(_ transform: @escaping (inout UserPreferences) -> Void) {
         guard session.preferencesStore != nil else { return }
         Task { await session.preferencesStore?.update(transform) }
+    }
+
+    /// DELETE /account (Epic L) -- the backend attempts Apple token
+    /// revocation and cascades all application data itself, fail-open on
+    /// the revoke step; this only needs to call it once and then return
+    /// the app to unauthenticated state via the existing signOut()-driven
+    /// reactive reset (scheduleStore/preferencesStore/workoutStore already
+    /// reset themselves via MemdoSession.observe()'s authStateChanges
+    /// handler -- no separate local-clear code needed here).
+    private func deleteAccountAndSignOut() async {
+        isDeletingAccount = true
+        deleteAccountErrorMessage = nil
+        defer { isDeletingAccount = false }
+        do {
+            try await scheduleStore.deleteAccount()
+            await session.signOut()
+        } catch {
+            deleteAccountErrorMessage = error.localizedDescription
+        }
     }
 
     private var routineSummary: String {

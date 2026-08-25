@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memdo 개인정보 처리방침 · Privacy Policy</title>
+<meta name="robots" content="index, follow">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #5a5a5a;
+    --border: #e2e2e2;
+    --accent: #2b6cb0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121212;
+      --fg: #f0f0f0;
+      --muted: #b5b5b5;
+      --border: #333333;
+      --accent: #6cb2eb;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.6;
+  }
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 4rem;
+  }
+  h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.15rem; margin-top: 2.25rem; border-top: 1px solid var(--border); padding-top: 1.25rem; }
+  p, li { font-size: 0.95rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; margin-bottom: 2rem; }
+  .tldr {
+    background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 2rem;
+    font-size: 0.9rem;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.88rem; }
+  th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  a { color: var(--accent); }
+  code { font-size: 0.85em; background: color-mix(in srgb, var(--fg) 8%, var(--bg)); padding: 0.1em 0.35em; border-radius: 4px; }
+  .footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.82rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Memdo 개인정보 처리방침</h1>
+  <p class="meta">시행일 2026-08-25 · 최종 수정일 2026-08-25 · 버전 1.0</p>
+
+  <div class="tldr">
+    <strong>Summary (English)</strong> — Memdo is a personal schedule app. We store what you enter
+    (schedule items, optional workout logs) and your sign-in identity from Apple/Google/GitHub. Optional
+    AI features either run entirely on your device, or — if you connect your own OpenRouter API key — send
+    only what's needed for that request to OpenRouter under your own account, never sold or used to train
+    models we control. You can request full account and data deletion at any time. Contact:
+    <a href="https://github.com/leebeanbin/memdo/issues">GitHub Issues</a>.
+  </div>
+
+  <p>
+    이 문서는 Memdo(이하 "서비스")가 어떤 정보를 어떤 목적으로 처리하는지 설명합니다. 서비스의 핵심
+    일정 관리 기능은 별도 동의 없이 사용할 수 있으며, 알림·캘린더 연동·AI·뉴스 브리핑처럼 선택적인
+    기능만 각각 별도의 동의를 거쳐 활성화됩니다.
+  </p>
+
+  <h2>1. 수집하는 정보와 목적</h2>
+  <table>
+    <tr><th>정보</th><th>수집 시점</th><th>목적</th></tr>
+    <tr><td>이메일, 로그인 식별자</td><td>Apple/Google/GitHub 로그인 시</td><td>계정 식별, 기기 간 동기화</td></tr>
+    <tr><td>일정 제목·시간·메모·반복 규칙</td><td>사용자가 직접 입력</td><td>일정 관리 핵심 기능</td></tr>
+    <tr><td>운동 기록(종류·시간·메모)</td><td>사용자가 직접 기록</td><td>운동 로그 기능</td></tr>
+    <tr><td>알림 설정, 기기 알림 토큰</td><td>알림 동의 시</td><td>일정·요약 알림 발송</td></tr>
+    <tr><td>OpenRouter API 키</td><td>사용자가 직접 연결(BYOK)</td><td>클라우드 AI 기능 실행 — 서버에 저장되며 사용자 대신 OpenRouter를 호출하는 용도로만 사용</td></tr>
+    <tr><td>Google Calendar 읽기 전용 접근</td><td>사용자가 연동 시</td><td>바쁜 시간·일정 제목 미러링 표시</td></tr>
+    <tr><td>Slack Incoming Webhook 주소</td><td>사용자가 직접 연결</td><td>사용자 본인의 Slack으로 알림 전송</td></tr>
+    <tr><td>관심 뉴스 카테고리</td><td>뉴스 브리핑 동의 시</td><td>기사 선별 — 요약은 기기 내에서만 처리</td></tr>
+  </table>
+
+  <h2>2. AI 기능과 데이터 흐름</h2>
+  <p>
+    AI 기능은 기본적으로 꺼져 있으며, 사용자가 명시적으로 켜야 동작합니다. 두 가지 실행 경로가 있습니다.
+  </p>
+  <ul>
+    <li><strong>온디바이스</strong>: 지원 기기에서는 Apple의 기기 내 모델(FoundationModels)이 사용되며,
+      요청 내용이 기기 밖으로 전송되지 않습니다.</li>
+    <li><strong>클라우드(BYOK)</strong>: 온디바이스를 지원하지 않는 기기이거나 사용자가 더 큰 모델을
+      원할 경우, 사용자 본인이 연결한 OpenRouter API 키로 요청을 처리합니다. 이때 필요한 최소한의
+      내용만 OpenRouter로 전송되며, Memdo는 이 통신 내용을 자체 목적으로 저장·학습에 사용하지
+      않습니다.</li>
+  </ul>
+  <p>
+    AI가 일정을 생성·수정·삭제하기 전에는 항상 사용자의 명시적 승인이 필요합니다. AI 실행 기록에는
+    호출된 기능 이름, 실행 시각, 처리 결과 같은 최소 메타데이터만 남기며, 일정 제목이나 메모 원문은
+    실행 기록에 별도로 저장하지 않습니다.
+  </p>
+
+  <h2>3. 보관 기간</h2>
+  <table>
+    <tr><th>데이터</th><th>보관 기간</th></tr>
+    <tr><td>활성 일정</td><td>계정이 유지되는 동안</td></tr>
+    <tr><td>삭제한 일정</td><td>30일 후 영구 삭제</td></tr>
+    <tr><td>AI 초안(승인 전)</td><td>24시간</td></tr>
+    <tr><td>AI 실행 메타데이터</td><td>30일</td></tr>
+    <tr><td>AI 프롬프트 원문</td><td>기본적으로 저장하지 않음</td></tr>
+    <tr><td>외부 서비스 연결 토큰(Google/Slack 등)</td><td>연결 해제 즉시 폐기</td></tr>
+  </table>
+
+  <h2>4. 제3자 서비스</h2>
+  <p>서비스 제공을 위해 아래 외부 서비스를 이용하며, 각 서비스는 자체 개인정보 처리방침을 따릅니다.</p>
+  <ul>
+    <li><strong>Apple, Google, GitHub</strong> — 로그인(OAuth), 사용자가 직접 개시</li>
+    <li><strong>Supabase</strong> — 계정·일정 데이터 저장 및 인증 인프라</li>
+    <li><strong>OpenRouter</strong> — 클라우드 AI 기능 사용 시, 사용자 본인의 API 키로 호출</li>
+    <li><strong>Google Calendar API</strong> — 사용자가 연동한 경우에만, 읽기 전용</li>
+    <li><strong>Slack</strong> — 사용자가 직접 발급한 Webhook 주소로만 전송</li>
+  </ul>
+
+  <h2>5. 계정 및 데이터 삭제</h2>
+  <p>
+    사용자는 언제든 계정과 그에 연결된 데이터 전체의 삭제를 요청할 수 있습니다. 설정 화면에서 직접
+    요청하는 기능을 준비 중이며, 그 전까지는 아래 문의 채널로 삭제를 요청하면 계정과 데이터를
+    삭제합니다. Apple로 로그인한 계정의 경우, 가능한 범위에서 Apple 로그인 인증도 함께 해제합니다.
+    이 절차가 변경되면 이 문서의 최종 수정일을 갱신합니다.
+  </p>
+
+  <h2>6. 아동 대상 여부</h2>
+  <p>서비스는 만 14세 이상 사용자를 대상으로 하며, 만 14세 미만을 의도적으로 대상으로 하지 않습니다.</p>
+
+  <h2>7. 문의</h2>
+  <p>
+    개인정보 관련 문의나 삭제 요청은 <a href="https://github.com/leebeanbin/memdo/issues">GitHub
+    Issues</a>로 남겨 주세요.
+  </p>
+
+  <div class="footer">
+    이 문서는 법률 자문을 대체하지 않으며, 서비스 범위 확대 또는 법률 요건 변경에 따라 갱신될 수
+    있습니다. 변경 시 이 페이지의 최종 수정일이 갱신됩니다.
+  </div>
+</main>
+</body>
+</html>
