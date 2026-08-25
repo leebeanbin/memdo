@@ -93,20 +93,48 @@ MVP는 핵심 상태 전이와 실제 기기 위젯·알림 검증에 집중한�
 
 ## 8. MVP 승인 체크리스트
 
-- [ ] PRD P0 요구사항 전부 구현
-- [ ] OpenAPI와 구현 일치
-- [ ] DB 마이그레이션 검증
-- [ ] 실제 iPhone 위젯·딥링크 통과
-- [ ] 알림 액션 통과
-- [ ] 오프라인 동작 통과
-- [ ] 개인정보 처리방침 게시
-- [ ] Privacy Manifest 작성
-- [ ] App Store 개인정보 답변 검토
-- [ ] 계정 및 데이터 삭제 흐름 검증
-- [ ] 장애 모니터링과 지원 채널 준비
-- [ ] 로컬→계정 UUID 유지와 sync 충돌 검증
-- [ ] 알림 7일·48개 rolling window 실제 기기 검증
-- [ ] 출시 게이트 책임자·기한 충족
+> **개정(v1.0 Epic K, 2026-08-25)**: 아래 각 항목은 실제 코드 기준으로 재검증했다 — 체크박스가
+> 비어 있던 이전 버전은 실제 구현 여부와 무관하게 전부 미확인 상태였을 뿐이다. 이제부터는 실제
+> 코드에 없는 항목만 미체크로 남긴다. **blocker**는 v1.0(Public Beta) 출시를 막는 항목,
+> **non-blocker**는 출시를 막지는 않지만 추적이 필요한 항목이다.
+
+- [x] PRD P0 요구사항 전부 구현 — **non-blocker** (표본 검증 결과 대부분 구현 확인 —
+  `apps/ios/Memdo/Memdo/ScheduleModel.swift`/`ScheduleAPI.swift`/`NotificationScheduler.swift`,
+  `memdo-backend/supabase/functions/todos`/`rules`/`reviews`/`days`. 전체 P0 항목의 line-by-line
+  전수 검증은 아님 — 표본 검증)
+- [ ] OpenAPI와 구현 일치 — **non-blocker** (사용자에게 보이는 blocker는 아니지만 문서 부채).
+  `docs/05-api-spec.yaml`이 약 50개 미구현 경로(`/slack/*`, `/briefings*`, `/devices*`,
+  `/automations*`, `/agent-runs*`, `/connections*`, `/change-proposals*`, `/health/*` 등)를 포함하고
+  있고, 반대로 `agent-cloud-chat`/`agent-usage`/`categories`/`workout-logs`는 스펙에 없음. v1.0
+  Epic K에서 current(실제 구현)/planned(설계됐지만 미구현) 구조로 재정리 예정 — Epic L 완료 후
+  진행
+- [x] DB 마이그레이션 검증 — **non-blocker, 통과**. `memdo-backend/supabase/migrations/`에 25개
+  마이그레이션, 최근까지 활발히 유지됨
+- [x] 실제 iPhone 위젯·딥링크 통과 (코드 존재, 실기기 검증은 Epic N 매트릭스로) — **blocker
+  (실기기 검증 자체는)**. 커스텀 `memdo://` scheme(true universal link 아님) + 위젯 타겟 코드는
+  존재. 실기기 확인은 Epic N의 real-device verification matrix에서 진행
+- [x] 알림 액션 통과 — **non-blocker, 통과**. `NotificationScheduler.swift`/
+  `MemdoNotificationDelegate`에 `UNNotificationCategory`/액션 구현 확인
+- [x] 오프라인 동작 통과 — **non-blocker, 통과**. `OutboxQueue`, `pendingWriteIDs` 기반 로컬
+  우선 모델 확인
+- [ ] 개인정보 처리방침 게시 — **blocker**. 코드에 없음 — v1.0 Epic K에서 실제 public URL로 게시
+- [ ] Privacy Manifest 작성 — **blocker**. `PrivacyInfo.xcprivacy` 파일 자체가 없음 — App Store
+  Connect 업로드 자체를 막는 항목. v1.0 Epic K에서 실제 Required Reason API 감사 기반으로 작성
+- [ ] App Store 개인정보 답변 검토 — **blocker**. 초안 없음 — v1.0 Epic K에서 작성
+- [ ] 계정 및 데이터 삭제 흐름 검증 — **blocker**. 코드 자체가 없음(백엔드 endpoint, iOS UI 둘 다
+  없음) — "미검증"이 아니라 "미구현". v1.0 Epic L에서 Apple 토큰 revocation을 포함해 구현
+- [ ] 장애 모니터링과 지원 채널 준비 — **non-blocker (앱스토어 제출을 막지는 않음), 하지만 beta를
+  책임감 있게 운영하려면 사실상 필요**. `_shared/http.ts`의 구조화 JSON 요청 로깅만 존재, 실시간
+  알림/지원 채널 없음. v1.0 Epic M에서 MetricKit 기반 최소 crash/hang 진단만 추가 — 실시간
+  alerting/Sentry는 이번 버전 범위 밖(로드맵 decision gate로 이후 판단)
+- [ ] 로컬→계정 UUID 유지와 sync 충돌 검증 — **non-blocker**. UUID 연속성은 익명 인증 승격으로
+  암묵적으로 동작 확인(`MemdoApp.swift`), `sync/index.ts`에 명시적 409/conflict 처리 코드는
+  발견되지 않음 — v1.0 범위에서 별도 구현 예정 없음, 실사용 중 문제 관찰 시 별도 Epic으로 대응
+- [ ] 알림 7일·48개 rolling window 실제 기기 검증 — **blocker**. `docs/07-notification-and-daily-review.md`
+  §10 스펙(오늘 포함 7일 window, 최대 48개 pending, 예정 시각 오름차순+Todo ID tiebreak, 초과 시
+  가까운 알림 우선 유지)이 `NotificationScheduler.swift`에 전혀 구현되지 않음(반복 알림 2개 +
+  개별 일정 알림만 개별 예약, cap/window/reconciliation 로직 없음) — v1.0 Epic L에서 구현
+- [ ] 출시 게이트 책임자·기한 충족 — 조직 항목, 코드로 검증 불가
 
 ## 9. 출시 검증 단계 (Release Validation Stages)
 
@@ -140,7 +168,37 @@ MVP는 핵심 상태 전이와 실제 기기 위젯·알림 검증에 집중한�
 확정하는 것은 로드맵 전체가 피하려는 조기 확정과 같은 문제다. 임계값은 각 단계를 실제로 운영하며
 정한다.
 
-### 9.3 Xcode Organizer로 crash report 확인하기 (v1.0 Epic M)
+### 9.3 GitHub Pages (Privacy Policy 호스팅) 런북
+
+Privacy policy 공개 URL(`https://leebeanbin.github.io/memdo/privacy/`)은 새 도메인/호스팅 없이
+memdo repo(이미 public)의 GitHub Pages로 제공한다. **아래 1회성 설정은 이미 완료됨(2026-08-25,
+`gh api -X POST repos/leebeanbin/memdo/pages -f "source[branch]=main" -f "source[path]=/"`)**:
+
+```text
+source: main branch, path "/"
+build type: legacy (별도 GitHub Actions 워크플로 불필요)
+https: 강제 적용됨
+```
+
+**Pages가 전체 repo를 탐색 가능한 사이트로 만들지 않도록 하는 구조**:
+
+- `.nojekyll`을 repo 루트에 둬서 Jekyll 자동 테마/네비게이션 생성을 끈다 — `docs/*.md`가 자동으로
+  브라우징 가능한 사이트 메뉴로 노출되지 않는다.
+- Privacy policy는 `/privacy/index.html` 단일 정적 페이지로만 존재한다. 이 페이지 자체가
+  `docs/`의 다른 문서로 링크하지 않는다.
+- repo 루트에 별도 `index.html`을 두지 않아 `https://leebeanbin.github.io/memdo/` 루트 자체는
+  아무 것도 서빙하지 않는다(브라우징 가능한 랜딩 페이지 없음).
+- 정책 원문은 `privacy/index.html`로 repo에 version-controlled 상태로 유지되며, 수정 시 파일
+  안의 "최종 수정일"을 함께 갱신한다.
+
+**만약 향후 Pages 설정을 다시 바꿔야 한다면**(예: 커스텀 도메인 추가, source 변경): GitHub repo
+Settings → Pages 화면에서 사람이 직접 변경하거나, 동일한 `gh api` 패턴을 재사용한다. 이 설정
+자체를 v1.0 이후 별도로 확장할 계획은 없다.
+
+**배포 확인**: `main`에 머지된 뒤 `curl -I https://leebeanbin.github.io/memdo/privacy/`로 실제
+`200`을 반환하는지 확인 — 이것이 Epic K DoD의 "실제 public URL 접근 가능" 항목이다.
+
+### 9.4 Xcode Organizer로 crash report 확인하기 (v1.0 Epic M)
 
 앱 자체는 `MetricsCollector.swift`가 MetricKit crash/hang diagnostic을 기기 로컬 로그로만
 남긴다(어디로도 전송하지 않음) — 이것과 별개로, TestFlight/App Store로 배포된 빌드의 crash는
