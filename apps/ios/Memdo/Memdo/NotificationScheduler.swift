@@ -1,4 +1,5 @@
 import Foundation
+import os
 import UIKit
 import UserNotifications
 
@@ -9,6 +10,11 @@ enum NotificationScheduler {
     private static let reviewPrefix = "memdo.daily-review-"
     private static let reminderCategoryID = "memdo.category.reminder"
     static let completeActionID = "memdo.action.complete"
+    // `try?` on center.add(...) below used to swallow scheduling failures
+    // silently -- no signal anywhere that a request never got scheduled.
+    // Found during founder dogfooding while debugging "notifications never
+    // arrive" with permission already granted.
+    private static let logger = Logger(subsystem: "com.memdo.ios", category: "notifications")
 
     /// Registers the notification category that powers the "완료" banner button.
     /// Call once at launch before any notifications are displayed.
@@ -55,12 +61,17 @@ enum NotificationScheduler {
         guard preferences.notificationsEnabled,
               status == .authorized || status == .provisional
         else {
+            logger.notice(
+                "schedule(for:) skipped -- notificationsEnabled=\(preferences.notificationsEnabled), authorizationStatus=\(status.rawValue)"
+            )
             await cancelAll()
             return
         }
         await cancelAll()
         await schedulePlanningPrompt(preferences, center: center)
         await scheduleDailyReview(preferences, center: center)
+        let pending = await center.pendingNotificationRequests()
+        logger.notice("schedule(for:) finished -- \(pending.count) memdo.* requests now pending")
     }
 
     /// Removes every pending Memdo notification without touching non-Memdo ones.
@@ -89,7 +100,11 @@ enum NotificationScheduler {
         var components = Calendar.current.dateComponents([.hour, .minute], from: time)
         components.second = 0
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
-        try? await center.add(UNNotificationRequest(identifier: planningID, content: content, trigger: trigger))
+        do {
+            try await center.add(UNNotificationRequest(identifier: planningID, content: content, trigger: trigger))
+        } catch {
+            logger.error("schedulePlanningPrompt failed: \(error.localizedDescription)")
+        }
     }
 
     private static func scheduleDailyReview(
@@ -114,11 +129,15 @@ enum NotificationScheduler {
 
             var trigger = timeComponents
             trigger.weekday = weekday
-            try? await center.add(UNNotificationRequest(
-                identifier: "\(reviewPrefix)\(day)",
-                content: content,
-                trigger: UNCalendarNotificationTrigger(dateMatching: trigger, repeats: true)
-            ))
+            do {
+                try await center.add(UNNotificationRequest(
+                    identifier: "\(reviewPrefix)\(day)",
+                    content: content,
+                    trigger: UNCalendarNotificationTrigger(dateMatching: trigger, repeats: true)
+                ))
+            } catch {
+                logger.error("scheduleDailyReview(\(day)) failed: \(error.localizedDescription)")
+            }
         }
     }
 
