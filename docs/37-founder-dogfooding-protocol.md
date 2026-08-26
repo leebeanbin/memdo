@@ -164,6 +164,10 @@ Forums에 유사 사례 보고됨 — 조건 미충족 시 에러 없이 조용�
 **확인 순서**:
 1. **먼저 이 Mac 설정 → Apple Intelligence & Siri에서 Apple Intelligence가 켜져 있고,
    모델이 완전히 다운로드됐는지 확인.** macOS는 Tahoe 이상이어야 함(`sw_vers`로 확인 가능).
+   → 이 세션에서는 확인 결과 이미 켜져 있었음(2026-08-26) — 즉 일반 Apple Intelligence
+   토글이 원인은 아니었고, Siri/Writing Tools가 쓰는 모델과 별개로 FoundationModels
+   프레임워크(서드파티 앱용) 전용 온디바이스 모델이 시뮬레이터에서 준비 안 됐거나, 시뮬레이터
+   자체의 알려진 불안정성일 가능성이 더 높음 — 정확한 원인은 미확정으로 남김.
 2. 그래도 재현되면 — 코드 레벨 안전장치가 이미 있음: `AssistantView.swift`의
    `isOnDeviceAvailable()`이 `#if targetEnvironment(simulator)`에서 무조건 `false`를
    반환하도록 되어 있어(PR #40), 시뮬레이터에서는 `SystemLanguageModel.default.availability`
