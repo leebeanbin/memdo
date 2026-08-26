@@ -46,12 +46,17 @@ struct TodayView: View {
         })
     }
 
+    // `schedules` (scheduleStore.items(for:)) is already isActive-filtered
+    // for the day, any kind. A `kind == .task` filter here excluded every
+    // timed event from the header's completion ring/progress -- same root
+    // cause as DailySummaryView's summary bug (docs/07 §5 has no kind
+    // restriction), found during founder dogfooding.
     private var completedCount: Int {
-        schedules.filter { $0.kind == .task && $0.isDone }.count
+        schedules.filter(\.isDone).count
     }
 
     private var taskCount: Int {
-        schedules.filter { $0.kind == .task }.count
+        schedules.count
     }
 
     private var dateSwipeGesture: some Gesture {

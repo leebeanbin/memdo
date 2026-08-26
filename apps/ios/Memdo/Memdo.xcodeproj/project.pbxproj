@@ -33,6 +33,7 @@
 		328C3099158F53FA548F9F7E /* AgentRoutePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADB58B6ED6A1235B1E6FD1DD /* AgentRoutePolicy.swift */; };
 		34C226C7140C637FA392B0B1 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = BA381B15831EFB2DC3181BCA /* Supabase */; };
 		352FF44217347DA1AF4B9262 /* AgentRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C251476A8194801A86B8B41 /* AgentRuntime.swift */; };
+		46C4AF8230A9E34403A557BF /* DailySummaryViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27D626BB1584385C72608775 /* DailySummaryViewTests.swift */; };
 		47980E617A1DA64917EB0AEB /* BriefingFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = D74BAC4CE2DAFC9BABA5244E /* BriefingFeed.swift */; };
 		480BC8CB74B2601AFEEF5DBD /* ScheduleSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F8C4864695656352FE70BA3 /* ScheduleSheets.swift */; };
 		48BFE42E9CDDAC5BAEE6BA40 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 72F40B29582C13FA7CF10006 /* PrivacyInfo.xcprivacy */; };
@@ -141,6 +142,7 @@
 		257B3BF059A0E5D9A80D8E50 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		25993FA0A6C348E04CC8573E /* AppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShortcuts.swift; sourceTree = "<group>"; };
 		2779812E7FB556A785234A2F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		27D626BB1584385C72608775 /* DailySummaryViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailySummaryViewTests.swift; sourceTree = "<group>"; };
 		282B54EFD5EB0ED2655D512E /* LiveActivityScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityScheduler.swift; sourceTree = "<group>"; };
 		2AF5F6934F60994B33CA80FF /* MetricsCollector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetricsCollector.swift; sourceTree = "<group>"; };
 		2C57EC467343059432D7D60D /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
@@ -264,6 +266,7 @@
 				5CAF5C62FEE7A3ECA9E67EB4 /* AgentIntentTests.swift */,
 				8DFEC754269D8947FB18E952 /* AgentRuntimeTests.swift */,
 				17E8C08961FC90CC6CA2A3B6 /* CloudAgentRuntimeTests.swift */,
+				27D626BB1584385C72608775 /* DailySummaryViewTests.swift */,
 				AA8E9E99B2955B5F2A3FABD6 /* FakeAgentRuntime.swift */,
 				96F566C420B634E1C8FE4B5C /* NotificationSchedulerTests.swift */,
 				E3F01099D4577BD460F6C20F /* ScheduleModelTests.swift */,
@@ -541,6 +544,7 @@
 				B34D55BB23AB902823B3C287 /* AgentIntentTests.swift in Sources */,
 				D0E0E2E1A7122A5734E8C07A /* AgentRuntimeTests.swift in Sources */,
 				C69C49A6035C81CD2F48A9F3 /* CloudAgentRuntimeTests.swift in Sources */,
+				46C4AF8230A9E34403A557BF /* DailySummaryViewTests.swift in Sources */,
 				C058A05E23195B992D283DC5 /* FakeAgentRuntime.swift in Sources */,
 				7457DB90063BE2771605A5AA /* NotificationSchedulerTests.swift in Sources */,
 				CA69FB6F6D5B184690B56D4A /* ScheduleModelTests.swift in Sources */,

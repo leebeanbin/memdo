@@ -1012,8 +1012,13 @@ final class ScheduleStore {
     }
 
     func toggleDone(id: UUID) {
-        guard let index = schedules.firstIndex(where: { $0.id == id }),
-              schedules[index].kind == .task else { return }
+        // No kind restriction here (was `kind == .task` -- silently blocked
+        // completion toggling for events, with no save() call at all, so no
+        // DB write was ever attempted). The summary screen's existing
+        // "complete" action already lets any kind become done via save()
+        // directly with no such guard, so this only closed the undo side of
+        // that asymmetry. Found during founder dogfooding.
+        guard let index = schedules.firstIndex(where: { $0.id == id }) else { return }
         // Update local state immediately so the ring reflects the change even
         // when save() returns early due to a concurrent in-flight write.
         schedules[index].isDone.toggle()

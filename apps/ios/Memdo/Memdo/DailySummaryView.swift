@@ -15,16 +15,31 @@ struct DailySummaryView: View {
         self.date = date
     }
 
-    private var tasks: [ScheduleDetail] {
-        let interval = scope.interval(endingAt: date)
-        return scheduleStore.schedules
+    // docs/07 §5's daily-summary target is defined by date/status only --
+    // planned/in_progress/partial (isActive), no kind restriction. A
+    // `kind == .task` filter here used to silently drop every timed event
+    // from the summary (found during founder dogfooding). Extracted as a
+    // static func so it's directly unit-testable without a live ScheduleStore.
+    nonisolated static func summaryTasks(
+        from schedules: [ScheduleDetail],
+        interval: DateInterval,
+        ascending: Bool
+    ) -> [ScheduleDetail] {
+        schedules
             .filter {
                 $0.isActive &&
-                $0.kind == .task &&
                 $0.scheduledDate >= interval.start &&
                 $0.scheduledDate < interval.end
             }
-            .sorted { scope == .today ? $0.timeSortKey < $1.timeSortKey : $0.timeSortKey > $1.timeSortKey }
+            .sorted { ascending ? $0.timeSortKey < $1.timeSortKey : $0.timeSortKey > $1.timeSortKey }
+    }
+
+    private var tasks: [ScheduleDetail] {
+        Self.summaryTasks(
+            from: scheduleStore.schedules,
+            interval: scope.interval(endingAt: date),
+            ascending: scope == .today
+        )
     }
 
     private var completedTasks: [ScheduleDetail] {
@@ -63,11 +78,31 @@ struct DailySummaryView: View {
                     onComplete: complete,
                     onMoveToTomorrow: moveToTomorrow,
                     onChooseDate: { presentedSheet = .move($0) },
+                    onEdit: { presentedSheet = .edit($0) },
+                    onDelete: { pendingDeletion = $0 }
+                )
+                SummaryHistorySection(
+                    status: .completed,
+                    schedules: completedTasks,
+                    onToggleDone: toggleDone,
+                    onEdit: { presentedSheet = .edit($0) },
                     onDelete: { pendingDeletion = $0 }
                 )
             } else {
-                SummaryHistorySection(status: .completed, schedules: completedTasks)
-                SummaryHistorySection(status: .missed, schedules: incompleteTasks)
+                SummaryHistorySection(
+                    status: .completed,
+                    schedules: completedTasks,
+                    onToggleDone: toggleDone,
+                    onEdit: { presentedSheet = .edit($0) },
+                    onDelete: { pendingDeletion = $0 }
+                )
+                SummaryHistorySection(
+                    status: .missed,
+                    schedules: incompleteTasks,
+                    onToggleDone: toggleDone,
+                    onEdit: { presentedSheet = .edit($0) },
+                    onDelete: { pendingDeletion = $0 }
+                )
             }
         }
         .memdoSheetPresentation([.large])
@@ -83,6 +118,8 @@ struct DailySummaryView: View {
                 MoveScheduleSheet(schedule: schedule) { newDate in
                     scheduleStore.move(id: schedule.id, to: newDate)
                 }
+            case .edit(let schedule):
+                ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
             }
         }
         .confirmationDialog(
@@ -109,6 +146,10 @@ struct DailySummaryView: View {
         scheduleStore.save(completed)
     }
 
+    private func toggleDone(_ schedule: ScheduleDetail) {
+        scheduleStore.toggleDone(id: schedule.id)
+    }
+
     private func moveToTomorrow(_ schedule: ScheduleDetail) {
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date
         scheduleStore.move(id: schedule.id, to: tomorrow)
@@ -118,16 +159,18 @@ struct DailySummaryView: View {
 private enum SummarySheetDestination: Identifiable {
     case agent(SummaryScope)
     case move(ScheduleDetail)
+    case edit(ScheduleDetail)
 
     var id: String {
         switch self {
         case .agent: "agent"
         case .move(let schedule): "move-\(schedule.id)"
+        case .edit(let schedule): "edit-\(schedule.id)"
         }
     }
 }
 
-private enum SummaryScope: String, CaseIterable, Identifiable {
+enum SummaryScope: String, CaseIterable, Identifiable {
     case today
     case week
     case month
@@ -168,14 +211,19 @@ private enum SummaryScope: String, CaseIterable, Identifiable {
                 end: calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
             )
         case .week:
+            // "지난 7일" means 7 calendar days including today -- start 6
+            // days back, end at tomorrow's midnight (exclusive). The
+            // previous `end: startOfDay` boundary put today exactly on the
+            // excluded edge, so anything scheduled today never appeared
+            // here (found during founder dogfooding).
             return DateInterval(
-                start: calendar.date(byAdding: .day, value: -7, to: startOfDay) ?? startOfDay,
-                end: startOfDay
+                start: calendar.date(byAdding: .day, value: -6, to: startOfDay) ?? startOfDay,
+                end: calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
             )
         case .month:
             return DateInterval(
-                start: calendar.date(byAdding: .day, value: -30, to: startOfDay) ?? startOfDay,
-                end: startOfDay
+                start: calendar.date(byAdding: .day, value: -29, to: startOfDay) ?? startOfDay,
+                end: calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
             )
         }
     }
@@ -333,6 +381,9 @@ private struct SummaryHistorySection: View {
     @State private var isExpanded = false
     let status: SummaryHistoryStatus
     let schedules: [ScheduleDetail]
+    let onToggleDone: (ScheduleDetail) -> Void
+    let onEdit: (ScheduleDetail) -> Void
+    let onDelete: (ScheduleDetail) -> Void
 
     private var visibleSchedules: [ScheduleDetail] {
         Array(schedules.prefix(isExpanded ? schedules.count : 3))
@@ -348,7 +399,13 @@ private struct SummaryHistorySection: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(visibleSchedules) { schedule in
-                        SummaryHistoryRow(schedule: schedule, status: status)
+                        SummaryHistoryRow(
+                            schedule: schedule,
+                            status: status,
+                            onToggleDone: { onToggleDone(schedule) },
+                            onEdit: { onEdit(schedule) },
+                            onDelete: { onDelete(schedule) }
+                        )
                         if schedule.id != visibleSchedules.last?.id {
                             Divider().padding(.leading, MemdoMetrics.rowContentLeading)
                         }
@@ -372,14 +429,20 @@ private struct SummaryHistorySection: View {
 private struct SummaryHistoryRow: View {
     let schedule: ScheduleDetail
     let status: SummaryHistoryStatus
+    let onToggleDone: () -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         HStack(spacing: MemdoMetrics.rowSpacing) {
-            Image(systemName: status.systemImage)
-                .font(MemdoTypography.title3)
-                .foregroundStyle(status == .completed ? MemdoTheme.secondaryInk : MemdoTheme.brand)
-                .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
-                .accessibilityHidden(true)
+            Button(action: onToggleDone) {
+                Image(systemName: schedule.isDone ? "checkmark.circle.fill" : "circle")
+                    .font(MemdoTypography.title3)
+                    .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : MemdoTheme.brand)
+                    .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(schedule.isDone ? "\(schedule.title) 완료 취소" : "\(schedule.title) 완료로 표시")
             VStack(alignment: .leading, spacing: 4) {
                 Text(schedule.title)
                     .font(MemdoTypography.action)
@@ -389,10 +452,16 @@ private struct SummaryHistoryRow: View {
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            Menu {
+                Button("편집", systemImage: "pencil", action: onEdit)
+                Button("삭제", systemImage: "trash", role: .destructive, action: onDelete)
+            } label: {
+                MemdoIconButtonLabel(systemImage: "ellipsis")
+            }
+            .accessibilityLabel("\(schedule.title) 더보기")
         }
         .padding(.horizontal, MemdoMetrics.rowInset)
         .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -403,6 +472,7 @@ private struct SummaryReviewSection: View {
     let onComplete: (ScheduleDetail) -> Void
     let onMoveToTomorrow: (ScheduleDetail) -> Void
     let onChooseDate: (ScheduleDetail) -> Void
+    let onEdit: (ScheduleDetail) -> Void
     let onDelete: (ScheduleDetail) -> Void
 
     private var visibleReviews: [ScheduleDetail] {
@@ -425,6 +495,7 @@ private struct SummaryReviewSection: View {
                             onComplete: { onComplete(schedule) },
                             onMoveToTomorrow: { onMoveToTomorrow(schedule) },
                             onChooseDate: { onChooseDate(schedule) },
+                            onEdit: { onEdit(schedule) },
                             onDelete: { onDelete(schedule) }
                         )
                         if schedule.id != visibleReviews.last?.id {
@@ -453,6 +524,7 @@ private struct SummaryReviewRow: View {
     let onComplete: () -> Void
     let onMoveToTomorrow: () -> Void
     let onChooseDate: () -> Void
+    let onEdit: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -518,6 +590,7 @@ private struct SummaryReviewRow: View {
 
     private var moreMenu: some View {
         Menu {
+            Button("편집", systemImage: "pencil", action: onEdit)
             Button("다른 날짜로", systemImage: "calendar", action: onChooseDate)
             Button("삭제", systemImage: "trash", role: .destructive, action: onDelete)
         } label: {
