@@ -135,33 +135,41 @@ struct SettingsView: View {
                         .memdoSettingsRow()
                 }
 
-                Divider()
-                Button { showsDeleteAccountConfirmation = true } label: {
-                    HStack {
-                        Text("계정 삭제")
-                            .font(MemdoTypography.subtitle)
-                            .foregroundStyle(.red)
-                        Spacer()
-                        if isDeletingAccount {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "trash")
-                                .font(MemdoTypography.captionEmphasis)
-                                .foregroundStyle(.red)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    .memdoSettingsRow()
-                }
-                .buttonStyle(.plain)
-                .disabled(session.isBusy || isDeletingAccount)
-
-                if let deleteAccountErrorMessage {
+                // Guests have no real account (no email/external identity) to
+                // delete -- "게스트 로그아웃" above already clears local data
+                // with the same warning. Showing this too was redundant and
+                // routed to the backend DELETE /account (Apple revoke, etc.)
+                // for a session that was never meant to hit that path. Found
+                // during founder dogfooding.
+                if session.phase != .guest {
                     Divider()
-                    Label(deleteAccountErrorMessage, systemImage: "exclamationmark.circle.fill")
-                        .font(MemdoTypography.caption)
-                        .foregroundStyle(.red)
+                    Button { showsDeleteAccountConfirmation = true } label: {
+                        HStack {
+                            Text("계정 삭제")
+                                .font(MemdoTypography.subtitle)
+                                .foregroundStyle(.red)
+                            Spacer()
+                            if isDeletingAccount {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "trash")
+                                    .font(MemdoTypography.captionEmphasis)
+                                    .foregroundStyle(.red)
+                                    .accessibilityHidden(true)
+                            }
+                        }
                         .memdoSettingsRow()
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(session.isBusy || isDeletingAccount)
+
+                    if let deleteAccountErrorMessage {
+                        Divider()
+                        Label(deleteAccountErrorMessage, systemImage: "exclamationmark.circle.fill")
+                            .font(MemdoTypography.caption)
+                            .foregroundStyle(.red)
+                            .memdoSettingsRow()
+                    }
                 }
             }
 
