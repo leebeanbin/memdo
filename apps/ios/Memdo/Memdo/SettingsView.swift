@@ -91,7 +91,12 @@ struct SettingsView: View {
                     Divider()
                     Button { showsSignOutConfirmation = true } label: {
                         HStack {
-                            Text("로그아웃")
+                            // "로그아웃" reads oddly for a guest who never
+                            // signed in -- this clears the anonymous session/
+                            // local data, so name it after what it does
+                            // (matches the confirmation dialog below). Found
+                            // during founder dogfooding.
+                            Text("게스트 데이터 초기화")
                                 .font(MemdoTypography.subtitle)
                                 .foregroundStyle(.red)
                             Spacer()
@@ -136,8 +141,8 @@ struct SettingsView: View {
                 }
 
                 // Guests have no real account (no email/external identity) to
-                // delete -- "게스트 로그아웃" above already clears local data
-                // with the same warning. Showing this too was redundant and
+                // delete -- "게스트 데이터 초기화" above already clears local
+                // data with the same warning. Showing this too was redundant and
                 // routed to the backend DELETE /account (Apple revoke, etc.)
                 // for a session that was never meant to hit that path. Found
                 // during founder dogfooding.
@@ -195,11 +200,11 @@ struct SettingsView: View {
 
         }
         .confirmationDialog(
-            session.phase == .guest ? "게스트 로그아웃" : "로그아웃 하시겠어요?",
+            session.phase == .guest ? "게스트 데이터를 초기화할까요?" : "로그아웃 하시겠어요?",
             isPresented: $showsSignOutConfirmation,
             titleVisibility: .visible
         ) {
-            Button("로그아웃", role: .destructive) {
+            Button(session.phase == .guest ? "초기화" : "로그아웃", role: .destructive) {
                 Task { await session.signOut() }
             }
             Button("취소", role: .cancel) {}
