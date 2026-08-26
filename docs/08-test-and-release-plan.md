@@ -72,6 +72,10 @@ MVP는 핵심 상태 전이와 실제 기기 위젯·알림 검증에 집중한�
 
 ## 6. 보안·개인정보 테스트
 
+> 아래 체크리스트를 **언제/어떻게/누가** 실행하는지의 실행 계획은
+> [`38-security-review-plan.md`](./38-security-review-plan.md) 참고(Personal Team dogfooding
+> 기간 중 진행, 2026-08-26 개정).
+
 - 다른 사용자의 UUID로 API 접근 차단
 - RLS 우회 시도 차단
 - 삭제된 동의로 AI 요청 차단
