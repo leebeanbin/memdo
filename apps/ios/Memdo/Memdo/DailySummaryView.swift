@@ -15,19 +15,31 @@ struct DailySummaryView: View {
         self.date = date
     }
 
-    private var tasks: [ScheduleDetail] {
-        // docs/07 §5's daily-summary target is defined by date/status only --
-        // planned/in_progress/partial (isActive), no kind restriction. A
-        // `kind == .task` filter here silently dropped every timed event
-        // from the summary (found during founder dogfooding).
-        let interval = scope.interval(endingAt: date)
-        return scheduleStore.schedules
+    // docs/07 §5's daily-summary target is defined by date/status only --
+    // planned/in_progress/partial (isActive), no kind restriction. A
+    // `kind == .task` filter here used to silently drop every timed event
+    // from the summary (found during founder dogfooding). Extracted as a
+    // static func so it's directly unit-testable without a live ScheduleStore.
+    nonisolated static func summaryTasks(
+        from schedules: [ScheduleDetail],
+        interval: DateInterval,
+        ascending: Bool
+    ) -> [ScheduleDetail] {
+        schedules
             .filter {
                 $0.isActive &&
                 $0.scheduledDate >= interval.start &&
                 $0.scheduledDate < interval.end
             }
-            .sorted { scope == .today ? $0.timeSortKey < $1.timeSortKey : $0.timeSortKey > $1.timeSortKey }
+            .sorted { ascending ? $0.timeSortKey < $1.timeSortKey : $0.timeSortKey > $1.timeSortKey }
+    }
+
+    private var tasks: [ScheduleDetail] {
+        Self.summaryTasks(
+            from: scheduleStore.schedules,
+            interval: scope.interval(endingAt: date),
+            ascending: scope == .today
+        )
     }
 
     private var completedTasks: [ScheduleDetail] {
