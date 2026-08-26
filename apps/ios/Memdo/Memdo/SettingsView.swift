@@ -470,8 +470,13 @@ private struct SettingsDisclosureRow: View {
             }
             Spacer(minLength: 8)
             if !dynamicTypeSize.isAccessibilitySize {
+                // Long values (e.g. "시작 오전 9:00 · 정리 오후 11:24") wrap
+                // with no explicit alignment here, so they inherited the
+                // row's .leading default and broke awkwardly mid-value.
+                // Found during founder dogfooding.
                 Text(value)
                     .foregroundStyle(MemdoTheme.secondaryInk)
+                    .multilineTextAlignment(.trailing)
             }
             Image(systemName: "chevron.right")
                 .font(MemdoTypography.captionEmphasis)
