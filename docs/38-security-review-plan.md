@@ -25,14 +25,29 @@
   `alter table ... force row level security` 존재(2026-08-26 확인, `grep`으로 전수 검사). 앞으로
   새 테이블 추가 시 이 패턴이 깨지지 않는지 PR 리뷰 시 확인하는 습관으로 유지(자동화된 CI 체크는
   이번 범위 밖).
-- [ ] **인증/인가 경로 감사** — `withApi`/`context.userClaims`가 모든 함수에서 실제로 요청자
-  본인의 `user_id`만 사용하는지(다른 요청 파라미터의 user_id를 신뢰하는 코드가 없는지) 함수별로
-  확인. 특히 `account`(DELETE), `agent-key`, `apple-auth-token-exchange`처럼 민감 데이터를
-  다루는 함수 우선.
-- [ ] **secret 취급 일관성** — Vault(`vault_create_secret`/`vault_read_secret`/
-  `vault_update_secret`/`vault_delete_secret`) 사용이 `user_api_keys`/`apple_oauth_tokens`/
-  `google_calendar_connections` 전부에서 동일 패턴인지 확인(이미 세션 중 확인된 선례 — 재검증
-  목적).
+- [x] **인증/인가 경로 감사(1차, 2026-08-26)** — 공격자 관점으로 확인:
+  - Google Calendar OAuth 콜백(`google-calendar-callback`, `verify_jwt=false`) — Memdo
+    세션/JWT 없이 Google이 직접 리다이렉트하는 요청이라 `state`가 유일한 인증 근거인데, 이게
+    1회용 nonce로 `delete ... returning`(원자적 소비) + 만료 체크까지 되어 있어 재사용/추측
+    공격이 막힘. 값도 최소한만 노출(`status`/`reason`만, 토큰 없음).
+  - Apple/Google/GitHub 로그인은 `MemdoApp.swift`가 `ASWebAuthenticationSession`을 사용 —
+    콜백을 iOS가 발신 앱에만 격리해서 전달하므로, 아래에서 발견한 `memdo://` 커스텀 스킴 문제의
+    영향을 받지 않음.
+  - `apple-auth-contract.ts`에 `console.*` 호출이 아예 없음 — private key가 로그로 새어나갈
+    코드 경로 자체가 없음(grep 전수 확인).
+  - **새로 발견(낮은 심각도)**: `memdo://`는 Associated Domains/Universal Link가 아니라 순수
+    custom URL scheme(`Info.plist` `CFBundleURLSchemes`) — 이론상 다른 앱이 같은 스킴을 등록해
+    가로챌 수 있음. 로그인은 위처럼 보호되고, 이 스킴으로 실제 오가는 값(캘린더 연결 콜백 status,
+    알림 딥링크)엔 토큰/secret이 없어 실질 피해는 낮음. 고치려면 유료 Program + 도메인 필요 —
+    지금 고칠 가치는 낮음, 기록만 하고 넘어감.
+  - 남은 범위: `account`/`agent-key`/`apple-auth-token-exchange` 외 나머지 함수들의 `user_id`
+    신뢰 경로 전수 확인은 아직 안 함(표본만).
+- [x] **secret 취급 일관성(2026-08-26)** — Vault RPC 4개(`vault_create/read/update/
+  delete_secret`)가 `SECURITY DEFINER` + `set search_path = ''`(search_path 인젝션을 통한
+  권한 상승 방지) + `revoke ... from public, authenticated, anon` 후 `service_role`에만
+  `grant`하는 패턴으로 정의됨(`202608090004_google_calendar_mirror.sql`) — anon/authenticated
+  키가 유출돼도 이 RPC들을 직접 호출해 다른 사용자의 secret을 읽을 수 없음. `user_api_keys`/
+  `apple_oauth_tokens`/`google_calendar_connections` 전부 동일 패턴으로 확인.
 - [ ] **에러 로깅 정제 여부** — `apple-auth-contract.ts`는 `error instanceof Error ?
   error.message : String(error)` 패턴(안전)을 쓰는 반면, `agent-key/index.ts`의 여러
   `console.error`(예: 25, 79, 96, 111, 123줄)는 `JSON.stringify({..., error})`로 **캐치된 에러
@@ -43,9 +58,12 @@
 - [ ] **입력 검증** — 모든 mutation 엔드포인트가 zod 스키마로 파싱하는지(`*.safeParse`) 표본
   확인 — 이미 다수 확인됨(`accountDeletionRequestSchema`, `appleTokenExchangeRequestSchema`,
   `agentKeySaveSchema` 등), 나머지 함수 표본 점검.
-- [ ] **CORS/rate limit 설정** — `_shared/http.ts`의 CORS 헤더가 와일드카드 오리진을 허용하지
-  않는지, `agent-cloud-chat`의 rate limit(`resolveRateLimitPerHour`)이 우회 가능한 경로가 없는지
-  확인.
+- [x] **CORS 설정(2026-08-26)** — `_shared/http.ts`에 CORS 헤더 자체가 없음. 취약점 아님 —
+  native 클라이언트 전용 백엔드고 cookie가 아니라 bearer JWT를 쓰므로 브라우저 CORS는 애초에
+  이 시스템의 보안 경계가 아님.
+- [ ] **rate limit 우회 가능성** — `agent-cloud-chat`의 rate limit(`resolveRateLimitPerHour`)이
+  우회 가능한 경로가 없는지 확인(실제 다수 요청을 보내야 하므로 §C 라이브 테스트 표에 포함, 승인
+  후 진행).
 - [ ] **번들에 secret 없음 재확인** — `08` §6에 이미 있는 "앱 번들에 API 키 없음" 항목을 이번에
   `strings`/grep으로 Release 빌드 산출물에 대해 재실행(Epic K 이후 코드가 늘었으므로 재확인 가치
   있음).
