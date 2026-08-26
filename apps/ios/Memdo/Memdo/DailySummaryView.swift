@@ -170,7 +170,7 @@ private enum SummarySheetDestination: Identifiable {
     }
 }
 
-private enum SummaryScope: String, CaseIterable, Identifiable {
+enum SummaryScope: String, CaseIterable, Identifiable {
     case today
     case week
     case month
@@ -211,14 +211,19 @@ private enum SummaryScope: String, CaseIterable, Identifiable {
                 end: calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
             )
         case .week:
+            // "지난 7일" means 7 calendar days including today -- start 6
+            // days back, end at tomorrow's midnight (exclusive). The
+            // previous `end: startOfDay` boundary put today exactly on the
+            // excluded edge, so anything scheduled today never appeared
+            // here (found during founder dogfooding).
             return DateInterval(
-                start: calendar.date(byAdding: .day, value: -7, to: startOfDay) ?? startOfDay,
-                end: startOfDay
+                start: calendar.date(byAdding: .day, value: -6, to: startOfDay) ?? startOfDay,
+                end: calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
             )
         case .month:
             return DateInterval(
-                start: calendar.date(byAdding: .day, value: -30, to: startOfDay) ?? startOfDay,
-                end: startOfDay
+                start: calendar.date(byAdding: .day, value: -29, to: startOfDay) ?? startOfDay,
+                end: calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay
             )
         }
     }

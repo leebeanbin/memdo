@@ -67,4 +67,27 @@ final class DailySummaryViewTests: XCTestCase {
 
         XCTAssertEqual(result.map(\.id), [today.id])
     }
+
+    func testWeekAndMonthIntervalsIncludeToday() throws {
+        let systemCalendar = Calendar(identifier: .gregorian)
+        let today = try XCTUnwrap(systemCalendar.date(from: DateComponents(year: 2026, month: 8, day: 26)))
+        let startOfToday = systemCalendar.startOfDay(for: today)
+        let startOfTomorrow = try XCTUnwrap(systemCalendar.date(byAdding: .day, value: 1, to: startOfToday))
+
+        let weekInterval = SummaryScope.week.interval(endingAt: today)
+        XCTAssertEqual(weekInterval.end, startOfTomorrow, "오늘이 범위에 포함되도록 end는 내일 자정이어야 함")
+        XCTAssertEqual(
+            systemCalendar.dateComponents([.day], from: weekInterval.start, to: weekInterval.end).day,
+            7,
+            "지난 7일은 오늘을 포함해 정확히 7일이어야 함"
+        )
+
+        let monthInterval = SummaryScope.month.interval(endingAt: today)
+        XCTAssertEqual(monthInterval.end, startOfTomorrow)
+        XCTAssertEqual(
+            systemCalendar.dateComponents([.day], from: monthInterval.start, to: monthInterval.end).day,
+            30,
+            "지난 30일은 오늘을 포함해 정확히 30일이어야 함"
+        )
+    }
 }
