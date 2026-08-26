@@ -160,6 +160,15 @@ MVP는 핵심 상태 전이와 실제 기기 위젯·알림 검증에 집중한�
 
 ### 9.1 단계 구성
 
+0. **Personal Team Founder Dogfooding — 3~4주**: Apple Developer Program 등록 **전**, 무료 Xcode
+   Personal Team으로 개발자 본인 기기에 설치해 실제 일상 앱으로 사용하는 기간. TestFlight을
+   대체하지 않고 그 앞에 추가되는 단계다 — Widget/Share Extension/Live Activities/Sign in with
+   Apple는 Personal Team 빌드에서 의도적으로 제외되므로 이 단계에서는 검증하지 않는다(아래 1~3
+   단계에서 검증). 프로토콜/체크리스트/exit gate는
+   [`37-founder-dogfooding-protocol.md`](./37-founder-dogfooding-protocol.md), 브랜치/설치
+   절차는 [`36-personal-team-dogfood-setup.md`](./36-personal-team-dogfood-setup.md) 참고. 이
+   단계 종료 후 dogfooding 중 발견된 v1.0 안정화 수정을 반영하고 나서 Apple Developer Program
+   등록으로 진행한다.
 1. **Internal dogfooding — 1주**: 개발자 본인만, 실제 기기, 실제 데이터. 목적: 시뮬레이터/CI로는
    잡히지 않는 것(알림 타이밍, 백그라운드 refresh, 실제 OAuth 왕복)을 먼저 잡는다.
 2. **Closed Beta — 2주**: TestFlight을 통한 소규모 known 그룹.

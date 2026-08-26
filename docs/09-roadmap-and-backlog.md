@@ -66,6 +66,12 @@
   Apple Sign In 토큰 revocation, 알림 7일·48개 rolling window); Epic M(MetricKit crash/hang
   diagnostics, 최소 안전망); Epic N(TestFlight 수동 업로드 런북 + 실기기 검증 매트릭스). 각 PR이
   머지되는 대로 이 항목들의 상태를 갱신한다 — 지금은 진행 중.
+- **실행 순서(2026-08-26 개정)**: Epic K/L/M/N 구현 완료 후, Apple Developer Program 등록 전에
+  Personal Team Founder Dogfooding(3~4주, [`37`](./37-founder-dogfooding-protocol.md))을 먼저
+  거친다 — TestFlight을 대체하는 게 아니라 그 앞에 추가되는 검증 단계다. 순서: **Personal Team
+  founder dogfood → (발견된 v1.0 안정화 수정) → Apple Developer Program/TestFlight → Internal
+  Dogfooding → Closed Beta → Expanded Beta**. 상세 단계는
+  [`08` §9](./08-test-and-release-plan.md#9-출시-검증-단계-release-validation-stages) 참고.
 - **In scope**: TestFlight internal + closed beta 배포; App Store Connect 메타데이터/개인정보 답변;
   `08`의 모든 출시 차단 조건 실기기 검증.
 - **Out of scope**: insight, 제안형 알림, personalization 등 신규 제품 기능 — beta 기간에는 신규
