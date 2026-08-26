@@ -16,11 +16,14 @@ struct DailySummaryView: View {
     }
 
     private var tasks: [ScheduleDetail] {
+        // docs/07 §5's daily-summary target is defined by date/status only --
+        // planned/in_progress/partial (isActive), no kind restriction. A
+        // `kind == .task` filter here silently dropped every timed event
+        // from the summary (found during founder dogfooding).
         let interval = scope.interval(endingAt: date)
         return scheduleStore.schedules
             .filter {
                 $0.isActive &&
-                $0.kind == .task &&
                 $0.scheduledDate >= interval.start &&
                 $0.scheduledDate < interval.end
             }
