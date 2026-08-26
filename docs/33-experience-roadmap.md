@@ -34,6 +34,9 @@
 - **Out of scope**: 새 motion vocabulary 발명(v1.1의 영역).
 - **의존성**: 없음 — 지금 바로 시작 가능. 제품 v0.9/v1.0 시기와 자연스럽게 맞물린다(Agent UI가
   이미 이번 세션에서 크게 확장됐으므로).
+- **근거 수집**: Personal Team Founder Dogfooding 기간([`37-founder-dogfooding-protocol.md`](./37-founder-dogfooding-protocol.md)
+  §6) 동안의 실사용 관찰이 이 감사의 입력 중 하나다 — 새 motion vocabulary를 그 기간에 미리
+  만들지는 않는다.
 
 ## Experience v1.1 — Motion Language
 
