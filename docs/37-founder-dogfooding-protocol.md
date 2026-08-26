@@ -148,3 +148,27 @@ Personal Team 빌드를 처음 설치한 직후, 정상적인 일상 사용을 �
 - Agent presence/tool-phase 피드백(`isToolPhase`/`toolHint`)이 실제 진행 상황과 일치하는지
 - Reduce Motion 켰을 때 커스텀 opacity/scale이 실제로 꺼지는지
 - Haptic 일관성(같은 종류의 액션에 같은 haptic이 오는지)
+
+## 7. 트러블슈팅
+
+### 시뮬레이터에서 온디바이스 Agent가 "실행 중"에서 멈춤 (2026-08-26 발견)
+
+**증상**: tool 호출(예: propose_schedule)이 실제로 성공해서 제안 카드가 렌더링되는데도,
+"실행 중" 배지와 입력창의 로딩 스피너가 계속 돌고 멈추지 않음. 이후 새 메시지도 못 보냄.
+
+**원인**: Foundation Models는 시뮬레이터에서도 동작하긴 하지만, **호스트 Mac 자체의 Apple
+Intelligence 활성화 여부·모델 다운로드 완료 여부에 조건부로 의존**한다(Apple Developer
+Forums에 유사 사례 보고됨 — 조건 미충족 시 에러 없이 조용히 응답이 안 나옴). `LanguageModelSession`의
+스트림이 안 끝나서 `runtime.send()`가 반환되지 않고, `.finished` 이벤트가 영영 안 옴.
+
+**확인 순서**:
+1. **먼저 이 Mac 설정 → Apple Intelligence & Siri에서 Apple Intelligence가 켜져 있고,
+   모델이 완전히 다운로드됐는지 확인.** macOS는 Tahoe 이상이어야 함(`sw_vers`로 확인 가능).
+2. 그래도 재현되면 — 코드 레벨 안전장치가 이미 있음: `AssistantView.swift`의
+   `isOnDeviceAvailable()`이 `#if targetEnvironment(simulator)`에서 무조건 `false`를
+   반환하도록 되어 있어(PR #40), 시뮬레이터에서는 `SystemLanguageModel.default.availability`
+   결과와 무관하게 항상 클라우드로 라우팅된다. 클라우드 키가 연결 안 되어 있으면 자동으로
+   연결 시트가 뜬다.
+3. **온디바이스 Agent 자체를 시뮬레이터에서 검증하고 싶다면** 1번 조건을 전부 맞춘 뒤,
+   `AssistantView.swift`의 시뮬레이터 가드를 임시로 우회해야 한다 — 다만 이건 실기기 검증을
+   대체하지 않는다. 온디바이스 Agent의 최종 확인은 항상 실기기 기준(baseline 체크리스트 §1).
