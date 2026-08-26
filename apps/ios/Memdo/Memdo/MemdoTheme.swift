@@ -228,7 +228,15 @@ extension View {
         cornerRadius: CGFloat = MemdoMetrics.fieldRadius
     ) -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
+            // .interactive() adds continuous touch-response glass morphing --
+            // meant for controls the user actually presses/drags. Applied to
+            // a container wrapping a live TextField (search field, Agent
+            // composer), it forced a glass recompute on every keystroke,
+            // producing visible typing lag and "glassEffect() tried to
+            // update multiple times per frame" warnings (found during
+            // founder dogfooding). Plain .regular keeps the same visual
+            // material without the per-keystroke recompute.
+            glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
         } else {
             background(
                 .ultraThinMaterial,
