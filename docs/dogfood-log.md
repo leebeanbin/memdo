@@ -120,6 +120,36 @@
 - 다음 단계: `33-experience-roadmap.md`의 Experience 백로그 후보로 남겨두고, weekly review에서
   재논의.
 
+### 2026-08-26 — [BUG] [DATA_INTEGRITY]
+- 맥락: Google 로그인 시도 시 "액세스 차단됨: 401 invalid_client — The OAuth client was not
+  found" 발생. 처음엔 Google Cloud Console의 비활성화된 키 문제로 오판(재활성화했지만 근본
+  원인 아니었음).
+- 실제 원인: Supabase Dashboard → Authentication → Providers → Google/GitHub의 Client
+  ID/Secret 필드에 **실제 값이 아니라 `env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)` 같은
+  리터럴 문자열이 그대로 저장**되어 있었음. `config.toml`의 `env(...)` 문법은 로컬 CLI 전용이고,
+  `supabase config push`가 원격에 반영할 때 명령을 실행한 셸의 환경변수로 치환해야 하는데, 셸에
+  해당 env var가 없는 상태로 push된 것으로 추정됨.
+- **이 세션 이전 기록과의 연결**: 이 세션 초반에 프로덕션 프로젝트에 대해 `supabase
+  --experimental config push`를 관련 env var 미설정 상태로 2회 실행한 사건이 있었고, 당시
+  대시보드 확인으로 "문제 없음"이라 결론 내렸으나 — 이번에 실제 값이 `env(...)` 리터럴로 저장돼
+  있는 게 확인되면서, 그때 놓친 실제 피해였을 가능성이 높음.
+- 심각도: **P0**(Google/GitHub 로그인 자체가 완전히 차단된 상태 — 신규 사용자 온보딩 핵심 경로
+  전체 불능)
+- 재현 가능: yes(발견 당시)
+- 조치: 사용자가 Supabase Dashboard에서 Google/GitHub 양쪽 Client ID/Secret을 실제 값으로
+  직접 교체 완료(2026-08-26). 코드 변경 없음 — 순수 프로덕션 설정 문제였음. 이후 코드 exchange
+  단계(`Unable to exchange external code`)까지는 진행되어 client_id 문제 자체는 해결 확인.
+  전체 로그인 왕복 최종 확인은 진행 중.
+- 재발 방지 아이디어(구현 안 함): 향후 `config push` 실행 전 관련 env var가 실제 설정돼 있는지
+  사전 확인하는 절차/스크립트를 만들지 검토 가치 있음 — 지금은 기록만.
+
+### 2026-08-26 — [UX_FRICTION]
+- 맥락: 게스트 모드 설정 화면에 "로그아웃"이 떠 있는 게 혼란스럽다는 지적
+- 판단: 실제 문제 맞음 — 로그인한 적 없는 게스트에게 "로그아웃"은 부적절한 용어. 실제로는
+  익명 세션+로컬 데이터를 초기화하는 기능이라 "게스트 데이터 초기화"로 라벨/확인 다이얼로그
+  전부 변경.
+- 조치: 수정 완료, PR #38 (`fix/settings-guest-logout-label`)
+
 ---
 
 ## Weekly Review
