@@ -75,4 +75,21 @@ final class CloudAgentRuntimeTests: XCTestCase {
         let parsed = try JSONDecoder().decode(AgentStreamLineDTO.self, from: Data(json.utf8))
         XCTAssertNil(parsed.debugTrace)
     }
+
+    // MARK: - AgentModelDTO.tier (D3 free-model tier)
+
+    func test_agentModelDTO_decodesEveryTierRawValue() throws {
+        func decode(tier: String) throws -> AgentModelTier {
+            let json = """
+            {"id": "x", "name": "X", "promptPricePerM": 0, "completionPricePerM": 0, \
+            "contextLength": 100, "tier": "\(tier)", "latencyClass": null, "costClass": null, \
+            "evalScore": null}
+            """
+            return try JSONDecoder().decode(AgentModelDTO.self, from: Data(json.utf8)).tier
+        }
+        XCTAssertEqual(try decode(tier: "recommended"), .recommended)
+        XCTAssertEqual(try decode(tier: "free-auto"), .freeAuto)
+        XCTAssertEqual(try decode(tier: "validated-free"), .validatedFree)
+        XCTAssertEqual(try decode(tier: "experimental"), .experimental)
+    }
 }

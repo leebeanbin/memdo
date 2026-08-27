@@ -46,18 +46,24 @@ struct CloudAgentConnectionSheet: View {
                         }
                     }
 
-                    Section {
-                        if models.isEmpty {
+                    if models.isEmpty {
+                        Section {
                             loadingRow(isLoadingDetails ? "모델을 불러오는 중" : "모델을 불러오지 못했어요")
-                        } else {
-                            ForEach(models) { model in
-                                modelRow(model)
+                        } header: {
+                            Text("모델")
+                        }
+                    } else {
+                        ForEach(Self.visibleTierOrder(models: models), id: \.self) { tier in
+                            Section {
+                                ForEach(models(in: tier)) { model in
+                                    modelRow(model)
+                                }
+                            } header: {
+                                Text(tierHeader(tier))
+                            } footer: {
+                                Text(tierFooter(tier))
                             }
                         }
-                    } header: {
-                        Text("모델")
-                    } footer: {
-                        Text("가격은 OpenRouter의 현재 1M 토큰당 요금이에요.")
                     }
 
                     Section("최근 30일") {
@@ -360,6 +366,50 @@ struct CloudAgentConnectionSheet: View {
             detailErrorMessage = [detailErrorMessage, "사용량을 불러오지 못했어요."]
                 .compactMap { $0 }
                 .joined(separator: " ")
+        }
+    }
+
+    /// Fixed display order; the backend's own array order is price-sorted,
+    /// which would otherwise interleave free and paid models confusingly.
+    /// .experimental is dropped entirely outside DEBUG builds -- "selectable
+    /// for developer testing" (D3's policy) is not the same as "shown to
+    /// every beta user," matching D2's #if DEBUG-gated trace surface.
+    private static func visibleTierOrder(models: [AgentModelDTO]) -> [AgentModelTier] {
+        let present = Set(models.map(\.tier))
+        return [.recommended, .freeAuto, .validatedFree, .experimental].filter {
+            present.contains($0) && ($0 != .experimental || isDebugBuild)
+        }
+    }
+
+    private static var isDebugBuild: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
+    private func models(in tier: AgentModelTier) -> [AgentModelDTO] {
+        models.filter { $0.tier == tier }
+    }
+
+    private func tierHeader(_ tier: AgentModelTier) -> String {
+        switch tier {
+        case .recommended: return "추천"
+        case .freeAuto: return "무료 · 자동 라우터"
+        case .validatedFree: return "무료 · 검증됨"
+        case .experimental: return "실험적 (개발자 전용)"
+        }
+    }
+
+    private func tierFooter(_ tier: AgentModelTier) -> String {
+        switch tier {
+        case .recommended, .validatedFree:
+            return "가격은 OpenRouter의 현재 1M 토큰당 요금이에요."
+        case .freeAuto:
+            return "요청마다 실제로 응답하는 모델이 달라질 수 있어요. 항상 무료예요."
+        case .experimental:
+            return "아직 Memdo 평가를 통과하지 않은 무료 모델이에요. 개발자 테스트용으로만 보여요."
         }
     }
 
