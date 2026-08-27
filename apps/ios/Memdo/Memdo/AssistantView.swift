@@ -9,7 +9,10 @@ struct AgentMessage: Identifiable, Equatable {
     var text: String
     var isStreaming: Bool = false
     var isError: Bool = false
-    var toolHint: String? = nil   // shown while a tool is executing and no text yet
+    /// Shown while a tool is executing and no text has streamed in yet.
+    /// Set only from AgentCoordinatorEvent.toolCallStarted (D4) -- a real
+    /// per-tool-call signal from either runtime, never a fabricated state.
+    var toolHint: String? = nil
     /// Canonical classification of this turn (Epic J, AgentIntent.swift) --
     /// nil until classification runs (ingestCloudResult for a cloud turn, or
     /// handleCoordinatorEvent's .finished fallback for on-device). Never
@@ -187,13 +190,6 @@ struct AgentSheet: View {
                 // will need the cloud path, so check the connection now
                 // rather than waiting for the user to type something first.
                 needsCloudConnection = (try? await scheduleStore.agentKeyConnected()) != true
-            }
-        }
-        .onChange(of: proposal.draft) { _, draft in
-            guard draft != nil else { return }
-            if let last = messages.indices.last,
-               messages[last].isStreaming, messages[last].text.isEmpty {
-                messages[last].toolHint = "일정을 제안하는 중..."
             }
         }
         .sheet(isPresented: $needsCloudConnection) {
@@ -382,13 +378,30 @@ struct AgentSheet: View {
         // shouldn't hold the whole (transient) View struct, and every call
         // reads scheduleStore.schedules live rather than whatever existed
         // when this runtime/session was constructed (Epic D-2).
-        OnDeviceAgentRuntime(
+        //
+        // One sink per session (D4), matching the Tools' own lifetime --
+        // both are constructed once here and reused across every send() in
+        // this conversation.
+        let activitySink = AgentToolActivitySink()
+        return OnDeviceAgentRuntime(
             tools: [
-                ProposeScheduleTool(proposal: proposal, existingProvider: { [scheduleStore] in existingItemsSnapshot(scheduleStore) }),
-                FindFreeSlotTool(snapshotProvider: { [scheduleStore] in scheduleIntervalSnapshot(scheduleStore) }),
-                UpdateScheduleTool(proposal: updateProposal, existingProvider: { [scheduleStore] in existingItemsSnapshot(scheduleStore) })
+                ProposeScheduleTool(
+                    proposal: proposal,
+                    existingProvider: { [scheduleStore] in existingItemsSnapshot(scheduleStore) },
+                    onStart: { [activitySink] in activitySink.report($0) }
+                ),
+                FindFreeSlotTool(
+                    snapshotProvider: { [scheduleStore] in scheduleIntervalSnapshot(scheduleStore) },
+                    onStart: { [activitySink] in activitySink.report($0) }
+                ),
+                UpdateScheduleTool(
+                    proposal: updateProposal,
+                    existingProvider: { [scheduleStore] in existingItemsSnapshot(scheduleStore) },
+                    onStart: { [activitySink] in activitySink.report($0) }
+                ),
             ],
-            instructions: agentInstructions()
+            instructions: agentInstructions(),
+            activitySink: activitySink
         )
     }
 
@@ -407,6 +420,14 @@ struct AgentSheet: View {
         case .textSnapshot(let text):
             if let index = messages.firstIndex(where: { $0.id == messageID }) {
                 messages[index].text = text
+            }
+        case .toolCallStarted(let capability):
+            // Same guard the retired proposal.draft-based hint used: only
+            // shown before any text has streamed in, so a hint never
+            // clobbers text the user is already reading.
+            if let index = messages.firstIndex(where: { $0.id == messageID }),
+               messages[index].isStreaming, messages[index].text.isEmpty {
+                messages[index].toolHint = Self.toolHintText(for: capability)
             }
         case .finished:
             isLoading = false
@@ -455,6 +476,26 @@ struct AgentSheet: View {
                 messages[index].text = "오류가 발생했어요. 다시 시도해주세요."
                 messages[index].isError = true
             }
+        }
+    }
+
+    /// D4: one truthful wording per capability GROUP, not per raw tool
+    /// name -- read-only context lookups (get_day_context/
+    /// get_routine_preferences/get_review_history) don't need 3 separate
+    /// phrasings the user has no way to tell apart in practice, and all 4
+    /// propose_* tools genuinely are "preparing a change" from the user's
+    /// point of view. Every wording here corresponds to a real
+    /// .toolCallStarted event; nothing here is shown speculatively.
+    private static func toolHintText(for capability: AgentCapability) -> String {
+        switch capability {
+        case .scheduleSearch:
+            "기존 일정 찾는 중..."
+        case .freeSlotSearch:
+            "빈 시간 계산하는 중..."
+        case .dayContext, .routinePreferences, .reviewHistory:
+            "일정 확인하는 중..."
+        case .proposeSchedule, .proposeScheduleUpdate, .proposeRoutineUpdate, .proposeReviewActions:
+            "변경안 준비하는 중..."
         }
     }
 

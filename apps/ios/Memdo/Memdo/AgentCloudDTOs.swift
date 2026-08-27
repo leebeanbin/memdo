@@ -228,6 +228,11 @@ struct AgentDebugTraceDTO: Decodable {
 /// request's `debug` flag was set.
 struct AgentStreamLineDTO: Decodable {
     let delta: String?
+    /// The instant a tool call begins (D4), sent before the -- possibly
+    /// slow -- handler runs, so a client can show a truthful live hint
+    /// instead of inferring one from `toolNames` after everything already
+    /// happened.
+    let toolCallStarted: String?
     let done: Bool?
     let proposedSchedule: CloudProposedScheduleDTO?
     let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?

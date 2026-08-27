@@ -574,9 +574,16 @@ final class ScheduleStore {
         message: String,
         history: [AgentChatTurnDTO],
         model: String?,
-        onDelta: @escaping @MainActor (String) -> Void
+        onDelta: @escaping @MainActor (String) -> Void,
+        onToolCallStarted: @escaping @MainActor (String) -> Void = { _ in }
     ) async throws -> AgentCloudChatResult {
-        try await repository.agentCloudChat(message: message, history: history, model: model, onDelta: onDelta)
+        try await repository.agentCloudChat(
+            message: message,
+            history: history,
+            model: model,
+            onDelta: onDelta,
+            onToolCallStarted: onToolCallStarted
+        )
     }
 
     func review(on date: String) async throws -> ReviewDTO? {

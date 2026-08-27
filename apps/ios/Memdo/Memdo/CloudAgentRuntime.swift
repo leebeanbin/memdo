@@ -42,11 +42,17 @@ final class CloudAgentRuntime: AgentRuntime, @unchecked Sendable {
         let result = try await scheduleStore.agentCloudChat(
             message: request.prompt,
             history: history,
-            model: CloudAgentModelPreference.selected
-        ) { delta in
-            accumulated += delta
-            onEvent(.textSnapshot(accumulated))
-        }
+            model: CloudAgentModelPreference.selected,
+            onDelta: { delta in
+                accumulated += delta
+                onEvent(.textSnapshot(accumulated))
+            },
+            onToolCallStarted: { rawName in
+                if let capability = cloudToolCapability(forRawName: rawName) {
+                    onEvent(.toolCallStarted(capability))
+                }
+            }
+        )
         if let onResult {
             await onResult(result)
         }

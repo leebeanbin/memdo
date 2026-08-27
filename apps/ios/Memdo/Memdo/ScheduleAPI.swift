@@ -594,7 +594,12 @@ actor MemdoAPIClient {
         history: [AgentChatTurnDTO],
         model: String?,
         accessToken: String,
-        onDelta: @escaping @MainActor (String) -> Void
+        onDelta: @escaping @MainActor (String) -> Void,
+        /// Fires for each `toolCallStarted` line, in order, as they arrive --
+        /// a truthful live "tool is executing" signal (D4). Default no-op so
+        /// existing call sites (tests, anything not wired to the toolHint
+        /// pipeline yet) don't need updating.
+        onToolCallStarted: @escaping @MainActor (String) -> Void = { _ in }
     ) async throws -> AgentCloudChatResult {
         let url = functionsURL.appending(path: "agent-cloud-chat")
         var request = URLRequest(url: url)
@@ -640,6 +645,7 @@ actor MemdoAPIClient {
             guard let lineData = line.data(using: .utf8),
                   let parsed = try? decoder.decode(AgentStreamLineDTO.self, from: lineData) else { continue }
             if let delta = parsed.delta { await onDelta(delta) }
+            if let toolCallStarted = parsed.toolCallStarted { await onToolCallStarted(toolCallStarted) }
             if let message = parsed.error {
                 throw ScheduleAPIError.server(status: 502, code: "INTERNAL_ERROR", message: message, requestID: nil)
             }
@@ -900,14 +906,16 @@ actor ScheduleRepository {
         message: String,
         history: [AgentChatTurnDTO],
         model: String?,
-        onDelta: @escaping @MainActor (String) -> Void
+        onDelta: @escaping @MainActor (String) -> Void,
+        onToolCallStarted: @escaping @MainActor (String) -> Void = { _ in }
     ) async throws -> AgentCloudChatResult {
         try await api.agentCloudChat(
             message: message,
             history: history,
             model: model,
             accessToken: accessToken(),
-            onDelta: onDelta
+            onDelta: onDelta,
+            onToolCallStarted: onToolCallStarted
         )
     }
 
