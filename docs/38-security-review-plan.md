@@ -90,14 +90,22 @@
 프로덕션 Supabase 프로젝트를 대상으로 하므로, **테스트 전용 계정(본인의 실제 계정이 아닌)**으로
 진행한다. 아래 항목은 실행 계획일 뿐 — 승인 없이는 어느 것도 실행하지 않는다.
 
-| 테스트 | 방법 | 기대 결과 |
-|---|---|---|
-| 다른 사용자 UUID로 접근 | 계정 A로 인증한 JWT로 계정 B의 `todos`/`preferences` 등에 GET 요청 | RLS에 의해 빈 결과 또는 403 |
-| RLS 우회 시도 | anon key로 service-role 전용 함수(`account` DELETE 등) 직접 호출 | 인증 실패(401/403) |
-| JWT 변조 | 만료/서명 조작된 JWT로 요청 | 거부 |
-| `DELETE /account`에 confirmation 없이 요청 | `{}` 바디로 호출 | 400(zod 스키마 거부, `accountDeletionRequestSchema`) |
-| rate limit 우회 | `agent-cloud-chat`에 짧은 시간 내 다수 요청 | 설정된 시간당 한도에서 차단 |
-| Apple revoke fail-open 검증 | 저장된 refresh token을 의도적으로 무효화한 뒤 계정 삭제 요청 | Apple revoke 실패해도 계정/데이터 삭제는 정상 완료(설계된 fail-open 동작 재확인) |
+| 테스트 | 방법 | 기대 결과 | 상태 |
+|---|---|---|---|
+| RLS 우회 시도 | anon key(publishable key)만으로 `account` DELETE 직접 호출 | 인증 실패(401) | [x] **완료(2026-08-27)** — `HTTP 401` 확인 |
+| RLS 우회 시도(추가) | anon key만으로 나머지 서비스-role 전용 함수 5개(`agent-cloud-chat`/`apple-auth-token-exchange`/`agent-key` 등) 호출 | 인증 실패(401) | [x] **완료(2026-08-27)** — 전부 `HTTP 401` |
+| JWT 변조 | 서명이 조작/무의미한 Bearer 토큰(`garbage.invalid.token`)으로 `account` DELETE 호출 | 거부(401) | [x] **완료(2026-08-27)** — `HTTP 401` |
+| PostgREST 직접 접근 | anon key로 `rest/v1/todos` 직접 GET | 권한 거부 | [x] **완료(2026-08-27)** — `42501 permission denied`(RLS 이전에 GRANT 자체가 없음 — anon role에 SELECT 권한 자체가 부여 안 됨, RLS보다 한 단계 더 엄격) |
+| 다른 사용자 UUID로 접근 | 계정 A로 인증한 JWT로 계정 B의 `todos`/`preferences` 등에 GET 요청 | RLS에 의해 빈 결과 또는 403 | [ ] **보류 — 테스트 계정 2개 필요**, 자격증명 없음 |
+| `DELETE /account`에 confirmation 없이 요청 | 유효한 사용자 세션으로 `{}` 바디 호출 | 400(zod 스키마 거부) | [ ] **보류 — 유효한 사용자 세션 필요** |
+| rate limit 우회 | `agent-cloud-chat`에 짧은 시간 내 다수 요청(유효 세션 필요) | 설정된 시간당 한도에서 차단 | [ ] **보류 — 유효한 사용자 세션 필요** |
+| Apple revoke fail-open 검증 | 저장된 refresh token을 의도적으로 무효화한 뒤 계정 삭제 요청 | fail-open 동작 재확인 | [ ] **보류 — 파괴적 테스트, 전용 Apple 테스트 계정 필요** |
+
+**보류 항목 공통 사유**: anon/publishable key는 앱 빌드에 공개적으로 포함되는 값이라 코드에서 바로
+꺼내 테스트할 수 있었지만, 나머지 항목은 실제 로그인된 사용자 세션(JWT)이 필요하다 — 이건 실제
+계정 자격증명이 있어야 발급되고, 여기엔 그런 자격증명이 없다(그리고 프로덕션 실사용자 계정의
+자격증명을 대화에 붙여넣거나 이 세션에 넘기는 것 자체를 권장하지 않는다). 진행하려면 사용자가
+직접 테스트 전용 계정으로 로그인해 얻은 JWT를 전달하거나, 직접 실행해야 한다.
 
 이 표의 각 행은 실제로 실행하기 전에 대화에서 "이 항목 지금 실행해도 돼"라는 명시적 승인을
 받는다. 실행 결과는 `dogfood-log.md`에 `DATA_INTEGRITY` 또는 `BUG` 카테고리로 기록한다.
