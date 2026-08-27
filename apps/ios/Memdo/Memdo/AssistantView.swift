@@ -325,11 +325,25 @@ struct AgentSheet: View {
         dispatchToModel(prompt)
     }
 
+    /// Single source of truth for on-device eligibility (also used by
+    /// ensureCoordinator() below, instead of each re-checking
+    /// SystemLanguageModel.default.availability separately). Forces cloud
+    /// on Simulator regardless of what availability reports: FoundationModels
+    /// generation there isn't backed by real Neural Engine hardware and can
+    /// hang mid-turn after a tool call completes, with no completion signal
+    /// ever firing (found during founder dogfooding -- Agent got stuck on
+    /// "실행 중" indefinitely after propose_schedule ran on Simulator). Real
+    /// devices are unaffected; SystemLanguageModel.default.availability is
+    /// still authoritative there.
     private func isOnDeviceAvailable() -> Bool {
+        #if targetEnvironment(simulator)
+        return false
+        #else
         if #available(iOS 26, *), case .available = SystemLanguageModel.default.availability {
             return true
         }
         return false
+        #endif
     }
 
     /// Builds the Coordinator once per sheet lifetime -- mirrors the old
@@ -339,7 +353,13 @@ struct AgentSheet: View {
     private func ensureCoordinator() {
         guard coordinator == nil else { return }
         var onDeviceFactory: (() -> AgentRuntime)?
-        if #available(iOS 26, *), case .available = SystemLanguageModel.default.availability {
+        // The #available gate is required at this call site for the
+        // compiler's proof that makeOnDeviceRuntime() (@available(iOS 26,*))
+        // can be called here -- isOnDeviceAvailable() re-checks the same
+        // condition internally (plus the Simulator exclusion), so this looks
+        // redundant but isn't: a plain Bool alone doesn't establish an
+        // availability context.
+        if #available(iOS 26, *), isOnDeviceAvailable() {
             onDeviceFactory = { self.makeOnDeviceRuntime() }
         }
         coordinator = AgentCoordinator(
