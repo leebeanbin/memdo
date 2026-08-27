@@ -643,14 +643,14 @@ struct AgentSheet: View {
 
         switch action {
         case .complete:
-            // toggleDone silently no-ops for a non-task item (events have no
-            // completion state in this app) -- check first so the confirmation
-            // message never claims a change that didn't happen.
-            if scheduleStore.schedules.first(where: { $0.id == id })?.kind == .task {
+            // toggleDone no longer restricts by kind (founder-dogfooding fix
+            // to ScheduleModel.swift) -- this guard used to mirror that
+            // restriction but now just needs the schedule to exist at all.
+            if scheduleStore.schedules.contains(where: { $0.id == id }) {
                 scheduleStore.toggleDone(id: id)
                 messages.append(AgentMessage(role: .assistant, text: "'\(title)' 완료 처리했어요 ✓"))
             } else {
-                messages.append(AgentMessage(role: .assistant, text: "'\(title)'은(는) 완료 처리할 수 없는 일정이에요.", isError: true))
+                messages.append(AgentMessage(role: .assistant, text: "'\(title)'을(를) 찾을 수 없어요.", isError: true))
             }
         case .reschedule:
             guard let dateString = updateProposal.dateString,

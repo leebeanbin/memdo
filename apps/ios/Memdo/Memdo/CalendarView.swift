@@ -232,7 +232,7 @@ private struct CalendarSearchControls: View {
             }
             .padding(.horizontal, 12)
             .frame(minHeight: MemdoMetrics.touchTarget)
-            .memdoFloatingSurface()
+            .memdoFloatingSurface(interactive: false)
 
             Picker("검색 범위", selection: $scope) {
                 ForEach(ScheduleSearchScope.allCases) { option in

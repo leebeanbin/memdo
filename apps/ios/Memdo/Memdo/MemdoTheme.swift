@@ -225,18 +225,19 @@ extension View {
 
     @ViewBuilder
     func memdoFloatingSurface(
-        cornerRadius: CGFloat = MemdoMetrics.fieldRadius
+        cornerRadius: CGFloat = MemdoMetrics.fieldRadius,
+        interactive: Bool = true
     ) -> some View {
         if #available(iOS 26.0, *) {
             // .interactive() adds continuous touch-response glass morphing --
-            // meant for controls the user actually presses/drags. Applied to
-            // a container wrapping a live TextField (search field, Agent
-            // composer), it forced a glass recompute on every keystroke,
-            // producing visible typing lag and "glassEffect() tried to
-            // update multiple times per frame" warnings (found during
-            // founder dogfooding). Plain .regular keeps the same visual
-            // material without the per-keystroke recompute.
-            glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+            // fine (and wanted) for plain pressable buttons, but wrapping a
+            // live TextField (search field, Agent composer) forced a glass
+            // recompute on every keystroke, producing visible typing lag and
+            // "glassEffect() tried to update multiple times per frame"
+            // warnings (found during founder dogfooding). Those two call
+            // sites now pass interactive: false; every other caller keeps
+            // the original touch-response morph.
+            glassEffect(interactive ? .regular.interactive() : .regular, in: .rect(cornerRadius: cornerRadius))
         } else {
             background(
                 .ultraThinMaterial,
