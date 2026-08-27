@@ -150,6 +150,31 @@
   전부 변경.
 - 조치: 수정 완료, PR #38 (`fix/settings-guest-logout-label`)
 
+### 2026-08-27 — [BUG] [PERFORMANCE]
+- 맥락: 이번 dogfooding 세션 전체 diff(`2614710^..78c8afb`)에 대해 multi-angle 코드 리뷰
+  실행 — 10개 발견, 5개는 즉시 수정(PR #43), 5개는 제품 판단이 필요해 보류
+- 즉시 수정된 것: Agent "완료" 액션이 여전히 `kind == .task`로 막혀 있던 것(toggleDone은
+  이미 수정됐는데 Agent 경로만 안 따라감), `scheduleReminder`/`scheduleEndNotification`에
+  남아있던 동일한 silent `try?` 패턴, pending count 로그가 memdo.* 외 알림까지 세던 것,
+  `SummaryHistoryRow`의 VoiceOver title/subtitle 페어링 소실, `.interactive()` 제거가
+  공유 modifier 레벨이라 무관한 버튼(WallpaperPreviewSheet)까지 영향받던 것
+- 보류(제품 판단 필요, 로그만):
+  1. `toggleDone`이 빠르게 두 번 탭하면 `pendingWriteIDs` guard 때문에 두 번째 탭이
+     조용히 무시되고 첫 번째 네트워크 응답이 나중에 도착해서 되돌릴 수 있음(race condition)
+  2. `ScheduleRow`(메인 Today 목록)는 여전히 이벤트에 체크마크 자체가 없음 — 이미 8/26
+     항목에서 별도 논의 필요로 기록된 것과 동일 이슈
+  3. 시뮬레이터 온디바이스 Agent 멈춤에 대한 수정이 플랫폼 분기(`#if targetEnvironment
+     (simulator)`)뿐이라, 실기기에서 같은 현상(tool 호출 후 완료 시그널 안 옴)이 나면
+     막을 방법이 없음 — 일반적인 timeout/watchdog은 별도 기능 단위 작업
+  4. `SummaryHistoryRow`/`SummaryReviewRow`의 편집/삭제 메뉴 코드가 거의 동일하게
+     중복됨 — 공유 컴포넌트로 뽑을 수 있음(리팩터, 버그 아님)
+  5. 게스트 계정삭제 숨김(PR #37)이 클라이언트 UI 레벨뿐 — 백엔드 `DELETE /account`가
+     익명 세션을 서버 측에서 별도 처리하지 않는 것도 확인됨(코드에 `is_anonymous`
+     분기 없음). 추가로 발견: 게스트 "데이터 초기화"는 `client.auth.signOut()`만 호출해서
+     로컬 세션만 지우고, 서버의 익명 사용자 row는 실제로 삭제되지 않음 — 익명 사용자가
+     DB에 무기한 누적되는 별도의 데이터 위생 문제. 백엔드 정리 정책(예: 일정 기간 미접속
+     익명 계정 자동 삭제) 결정이 필요.
+
 ---
 
 ## Weekly Review
