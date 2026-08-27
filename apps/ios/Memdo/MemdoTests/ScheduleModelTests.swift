@@ -506,6 +506,40 @@ final class ScheduleModelTests: XCTestCase {
         XCTAssertTrue(tooLong.contains("짧거나 길어요"))
     }
 
+    // Absence of durationMinutes means "how free am I" (availability query),
+    // not "duration unspecified, guess one" -- never silently defaulted.
+    // Found during founder dogfooding: an empty day used to answer "언제
+    // 비어 있어?" with a single arbitrary duration-sized slot instead of the
+    // whole open window.
+    @available(iOS 26, *)
+    func testFindFreeSlotToolWithNoDurationOnEmptyDayAnswersAvailabilityNotADurationSlice() async throws {
+        let tool = FindFreeSlotTool(snapshotProvider: { [] })
+        let result = try await tool.call(arguments: .init(scope: "today", durationMinutes: nil, windowStart: "", windowEnd: ""))
+        XCTAssertTrue(result.contains("등록된 일정이 없어서"))
+        XCTAssertTrue(result.contains("전부 비어 있어요"))
+    }
+
+    @available(iOS 26, *)
+    func testFindFreeSlotToolWithNoDurationAndOneEventListsBothFreeExtents() async throws {
+        let day = Calendar.current.startOfDay(for: .now)
+        let busyStart = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: day)!
+        let busyEnd = Calendar.current.date(bySettingHour: 13, minute: 0, second: 0, of: day)!
+        let tool = FindFreeSlotTool(snapshotProvider: {
+            [.init(scheduledDate: day, startAt: busyStart, endAt: busyEnd)]
+        })
+        let result = try await tool.call(arguments: .init(scope: "today", durationMinutes: nil, windowStart: "", windowEnd: ""))
+        XCTAssertFalse(result.contains("등록된 일정이 없어서"))
+        XCTAssertEqual(result.components(separatedBy: ",").count, 2)
+    }
+
+    @available(iOS 26, *)
+    func testFindFreeSlotToolWithExplicitDurationStillReturnsOneCandidateSlot() async throws {
+        let tool = FindFreeSlotTool(snapshotProvider: { [] })
+        let result = try await tool.call(arguments: .init(scope: "today", durationMinutes: 60, windowStart: "", windowEnd: ""))
+        XCTAssertFalse(result.contains("등록된 일정이 없어서"))
+        XCTAssertEqual(result.components(separatedBy: ",").count, 1)
+    }
+
     // MARK: - Live schedule-state providers (Epic D-2)
 
     @available(iOS 26, *)

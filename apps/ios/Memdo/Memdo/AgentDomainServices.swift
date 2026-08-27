@@ -6,16 +6,32 @@ struct AgentTimeRange: Sendable, Equatable {
 }
 
 enum FreeSlotService {
+    private static func clippedSortedBusy(
+        _ busy: [AgentTimeRange],
+        windowStart: Date,
+        windowEnd: Date
+    ) -> [AgentTimeRange] {
+        busy
+            .map { AgentTimeRange(start: max($0.start, windowStart), end: min($0.end, windowEnd)) }
+            .filter { $0.end > $0.start }
+            .sorted { $0.start < $1.start }
+    }
+
     /// Same semantics, window-clipping, and service-level input contract as
     /// backend's freeSlotsInWindow -- see that doc comment (windowEnd<=windowStart,
     /// duration<=0, or maxResults<=0 all return []; busy ranges are clipped
     /// to [windowStart, windowEnd) before the gap walk, not just filtered).
     ///
-    /// Returns at most one earliest duration-sized candidate per contiguous
-    /// free gap between `busy` ranges inside [windowStart, windowEnd), capped
-    /// at `maxResults`. Does NOT enumerate every possible slot within a gap
-    /// -- a 3-hour gap with a 30-minute duration returns one 30-minute
-    /// candidate at the gap's start, not six. Sorts `busy` and drops invalid
+    /// This is the duration-constrained candidate-slot contract ("give me a
+    /// slot to book something in") -- returns at most one earliest
+    /// duration-sized candidate per contiguous free gap, capped at
+    /// `maxResults`. Does NOT enumerate every possible slot within a gap --
+    /// a 3-hour gap with a 30-minute duration returns one 30-minute
+    /// candidate at the gap's start, not six. For "how free am I" (no
+    /// duration constraint), use fullFreeExtents(_:) instead -- conflating
+    /// the two here (e.g. via duration=0) was the actual bug behind an
+    /// empty day answering "1 hour free" to a plain availability question
+    /// (found during founder dogfooding). Sorts `busy` and drops invalid
     /// ranges (end <= start) internally; callers don't need to pre-sort or
     /// pre-filter.
     static func freeSlots(
@@ -27,10 +43,7 @@ enum FreeSlotService {
     ) -> [AgentTimeRange] {
         guard windowEnd > windowStart, duration > 0, maxResults > 0 else { return [] }
 
-        let clipped = busy
-            .map { AgentTimeRange(start: max($0.start, windowStart), end: min($0.end, windowEnd)) }
-            .filter { $0.end > $0.start }
-            .sorted { $0.start < $1.start }
+        let clipped = clippedSortedBusy(busy, windowStart: windowStart, windowEnd: windowEnd)
 
         var slots: [AgentTimeRange] = []
         var cursor = windowStart
@@ -47,6 +60,37 @@ enum FreeSlotService {
         }
 
         return Array(slots.prefix(maxResults))
+    }
+
+    /// The availability-query contract ("how free am I") -- every contiguous
+    /// free gap in [windowStart, windowEnd) reported in full, not sliced to
+    /// any duration. An entirely empty window returns one extent spanning
+    /// the whole window, not an arbitrary duration-sized piece of it. Same
+    /// busy-clipping/sorting normalization as freeSlots (shared via
+    /// clippedSortedBusy) so the two contracts never silently drift apart on
+    /// what counts as "busy."
+    static func fullFreeExtents(
+        busy: [AgentTimeRange],
+        windowStart: Date,
+        windowEnd: Date
+    ) -> [AgentTimeRange] {
+        guard windowEnd > windowStart else { return [] }
+
+        let clipped = clippedSortedBusy(busy, windowStart: windowStart, windowEnd: windowEnd)
+
+        var extents: [AgentTimeRange] = []
+        var cursor = windowStart
+        for range in clipped {
+            if range.start > cursor {
+                extents.append(AgentTimeRange(start: cursor, end: range.start))
+            }
+            if range.end > cursor { cursor = range.end }
+        }
+        if windowEnd > cursor {
+            extents.append(AgentTimeRange(start: cursor, end: windowEnd))
+        }
+
+        return extents
     }
 }
 
