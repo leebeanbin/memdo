@@ -15,8 +15,74 @@ struct AgentMessage: Identifiable, Equatable {
     /// handleCoordinatorEvent's .finished fallback for on-device). Never
     /// overwritten once set for a given message.
     var intent: AgentIntent? = nil
+    /// Founder/debug-only per-turn trace (D2) -- cloud turns only for now
+    /// (see AgentDebugTrace's doc comment for why on-device isn't included
+    /// in this slice). Never persisted: lives only as long as this message
+    /// does in memory, discarded on "새 대화"/app relaunch same as the rest
+    /// of the conversation.
+    var debugTrace: AgentDebugTrace? = nil
 
     enum Role: Equatable { case user, assistant }
+}
+
+/// Founder/debug-only per-turn trace (D2) -- combines the cloud backend's
+/// sanitized AgentTurnTraceDTO/dispatchedTools payload with `intent`, which
+/// is a client-side classification concept (AgentIntent.swift) the backend
+/// doesn't compute. Deliberately NOT sourced from agent_audit_log (Epic H's
+/// backend execution observability) -- see AgentTurnTraceDTO's doc comment.
+/// On-device turns don't populate this: the on-device tool-calling loop has
+/// no per-call event to build a comparable trace from today (a real, larger
+/// gap noted separately, not closed by this slice).
+struct AgentDebugTrace: Equatable {
+    struct ToolCall: Equatable {
+        let name: String
+        let argsDescription: String
+        let resultDescription: String
+    }
+
+    let requestedModel: String
+    let resolvedModel: String?
+    let latencyMs: Int
+    let toolCalls: [ToolCall]
+    let intent: AgentIntent?
+
+    init(trace: AgentTurnTraceDTO, dispatchedTools: [AgentTraceToolCallDTO], intent: AgentIntent?) {
+        requestedModel = trace.requestedModel
+        resolvedModel = trace.resolvedModel
+        latencyMs = trace.latencyMs
+        toolCalls = dispatchedTools.map {
+            ToolCall(
+                name: $0.name,
+                argsDescription: $0.args?.debugDescription ?? "–",
+                resultDescription: $0.result?.debugDescription ?? "–"
+            )
+        }
+        self.intent = intent
+    }
+
+    /// Plain-text rendering for the minimal founder debug sheet -- not
+    /// meant to be pretty, just legible enough to answer "why did this
+    /// answer happen."
+    var debugText: String {
+        var lines = [
+            "requested: \(requestedModel)",
+            "resolved: \(resolvedModel ?? "(같음/모름)")",
+            "intent: \(intent.map { String(describing: $0) } ?? "미분류")",
+            "latency: \(latencyMs)ms",
+            "",
+        ]
+        if toolCalls.isEmpty {
+            lines.append("tool calls: 없음")
+        } else {
+            lines.append("tool calls:")
+            for (index, call) in toolCalls.enumerated() {
+                lines.append("\(index + 1). \(call.name)")
+                lines.append("   args: \(call.argsDescription)")
+                lines.append("   result: \(call.resultDescription)")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
 }
 
 // MARK: - Cloud model preference
@@ -546,6 +612,13 @@ struct AgentSheet: View {
         )
         if let index = messages.firstIndex(where: { $0.id == messageID }) {
             messages[index].intent = intent
+            if let trace = result.trace {
+                messages[index].debugTrace = AgentDebugTrace(
+                    trace: trace,
+                    dispatchedTools: result.dispatchedTools,
+                    intent: intent
+                )
+            }
             // The model is expected to stop at request_clarification with no
             // further text (see systemPrompt()'s instruction), but if it
             // streamed nothing, fall back to the question itself so the

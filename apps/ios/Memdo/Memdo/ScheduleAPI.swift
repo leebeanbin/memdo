@@ -212,6 +212,63 @@ struct CloudClarificationRequestDTO: Decodable, Equatable {
     let reason: String?
 }
 
+/// Minimal type-erased JSON value, used only by the founder debug trace
+/// (D2) to decode dispatchedTools' args/result -- their shape is
+/// intentionally per-tool/arbitrary on the backend (Deno's `unknown`), not
+/// worth a fully-typed DTO for a debug-only surface. Not meant to
+/// round-trip; `debugDescription` is display-only.
+enum AgentTraceJSONValue: Decodable {
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+    case object([String: AgentTraceJSONValue])
+    case array([AgentTraceJSONValue])
+    case null
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let value = try? container.decode(Bool.self) { self = .bool(value); return }
+        if let value = try? container.decode(Double.self) { self = .number(value); return }
+        if let value = try? container.decode(String.self) { self = .string(value); return }
+        if let value = try? container.decode([String: AgentTraceJSONValue].self) { self = .object(value); return }
+        if let value = try? container.decode([AgentTraceJSONValue].self) { self = .array(value); return }
+        self = .null
+    }
+
+    var debugDescription: String {
+        switch self {
+        case .string(let s): return "\"\(s)\""
+        case .number(let n): return n.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(n)) : String(n)
+        case .bool(let b): return String(b)
+        case .null: return "null"
+        case .array(let a): return "[" + a.map(\.debugDescription).joined(separator: ", ") + "]"
+        case .object(let o):
+            return "{" + o.sorted { $0.key < $1.key }
+                .map { "\"\($0.key)\": \($0.value.debugDescription)" }
+                .joined(separator: ", ") + "}"
+        }
+    }
+}
+
+/// One dispatched tool call as reported by the founder debug trace (D2) --
+/// mirrors backend's `ToolDispatchState.dispatchedTools` entries
+/// (agent-cloud-contract.ts) after `result` is populated.
+struct AgentTraceToolCallDTO: Decodable {
+    let name: String
+    let args: AgentTraceJSONValue?
+    let result: AgentTraceJSONValue?
+}
+
+/// Mirrors backend's `AgentTurnTrace` (agent-cloud-contract.ts) field for
+/// field -- see that type's doc comment for why this is deliberately
+/// separate from Epic H's agent_audit_log rather than a client-side read
+/// of an audit row.
+struct AgentTurnTraceDTO: Decodable {
+    let requestedModel: String
+    let resolvedModel: String?
+    let latencyMs: Int
+}
+
 /// One line of the newline-delimited stream agent-cloud-chat responds with.
 /// Every line has exactly one of these populated: `delta` while text is
 /// still arriving, or `done`/`proposedSchedule`/`proposedScheduleUpdate`/
@@ -226,6 +283,8 @@ struct AgentStreamLineDTO: Decodable {
     let proposedReviewAction: CloudProposedReviewActionDTO?
     let clarificationRequest: CloudClarificationRequestDTO?
     let toolNames: [String]?
+    let dispatchedTools: [AgentTraceToolCallDTO]?
+    let trace: AgentTurnTraceDTO?
     let error: String?
 }
 
@@ -235,7 +294,10 @@ struct AgentStreamLineDTO: Decodable {
 /// `toolNames` is the full dispatched-tool-name sequence, used by
 /// classifyAgentIntent (AgentIntent.swift) to tell FIND_FREE_SLOTS/
 /// SEARCH_SCHEDULES apart from ANSWER when no proposal/clarification field
-/// is set.
+/// is set. `dispatchedTools`/`trace` back the founder debug trace (D2) --
+/// nil unless the model actually called a tool (a plain-text answer never
+/// populates them, matching dispatchedTools' own always-empty-in-that-case
+/// shape).
 struct AgentCloudChatResult {
     let proposedSchedule: CloudProposedScheduleDTO?
     let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
@@ -243,6 +305,8 @@ struct AgentCloudChatResult {
     let proposedReviewAction: CloudProposedReviewActionDTO?
     let clarificationRequest: CloudClarificationRequestDTO?
     let toolNames: [String]
+    let dispatchedTools: [AgentTraceToolCallDTO]
+    let trace: AgentTurnTraceDTO?
 }
 
 struct TodoListResponseDTO: Decodable {
@@ -788,6 +852,8 @@ actor MemdoAPIClient {
         var proposedReviewAction: CloudProposedReviewActionDTO?
         var clarificationRequest: CloudClarificationRequestDTO?
         var toolNames: [String] = []
+        var dispatchedTools: [AgentTraceToolCallDTO] = []
+        var trace: AgentTurnTraceDTO?
         for try await line in bytes.lines {
             guard let lineData = line.data(using: .utf8),
                   let parsed = try? decoder.decode(AgentStreamLineDTO.self, from: lineData) else { continue }
@@ -802,6 +868,8 @@ actor MemdoAPIClient {
                 proposedReviewAction = parsed.proposedReviewAction
                 clarificationRequest = parsed.clarificationRequest
                 toolNames = parsed.toolNames ?? []
+                dispatchedTools = parsed.dispatchedTools ?? []
+                trace = parsed.trace
             }
         }
         return AgentCloudChatResult(
@@ -810,7 +878,9 @@ actor MemdoAPIClient {
             proposedRoutineUpdate: proposedRoutineUpdate,
             proposedReviewAction: proposedReviewAction,
             clarificationRequest: clarificationRequest,
-            toolNames: toolNames
+            toolNames: toolNames,
+            dispatchedTools: dispatchedTools,
+            trace: trace
         )
     }
 
