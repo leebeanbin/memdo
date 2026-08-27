@@ -71,6 +71,7 @@ enum NotificationScheduler {
         await schedulePlanningPrompt(preferences, center: center)
         await scheduleDailyReview(preferences, center: center)
         let pending = await center.pendingNotificationRequests()
+            .filter { $0.identifier.hasPrefix("memdo.") }
         logger.notice("schedule(for:) finished -- \(pending.count) memdo.* requests now pending")
     }
 
@@ -186,7 +187,11 @@ enum NotificationScheduler {
             from: fireAt
         )
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-        try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+        do {
+            try await center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+        } catch {
+            logger.error("scheduleReminder(\(schedule.id)) failed: \(error.localizedDescription)")
+        }
     }
 
     /// Removes the pending reminder for a specific schedule.
@@ -226,7 +231,11 @@ enum NotificationScheduler {
             from: endAt
         )
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-        try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+        do {
+            try await center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+        } catch {
+            logger.error("scheduleEndNotification(\(schedule.id)) failed: \(error.localizedDescription)")
+        }
     }
 
     /// Removes the pending end notification for a specific schedule.

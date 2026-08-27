@@ -707,7 +707,7 @@ struct AgentComposer: View {
             .accessibilityLabel("요청 보내기")
         }
         .padding(4)
-        .memdoFloatingSurface(cornerRadius: MemdoMetrics.groupRadius)
+        .memdoFloatingSurface(cornerRadius: MemdoMetrics.groupRadius, interactive: false)
     }
 }
 

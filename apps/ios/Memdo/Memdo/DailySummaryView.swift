@@ -452,6 +452,11 @@ private struct SummaryHistoryRow: View {
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Row-level .combine was removed when the toggle/menu became
+            // separately focusable, but that also merged title+subtitle into
+            // one VoiceOver stop -- scope .combine to just this block so
+            // that pairing survives without re-merging the whole row.
+            .accessibilityElement(children: .combine)
             Menu {
                 Button("편집", systemImage: "pencil", action: onEdit)
                 Button("삭제", systemImage: "trash", role: .destructive, action: onDelete)
