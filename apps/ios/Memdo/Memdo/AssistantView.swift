@@ -9,7 +9,10 @@ struct AgentMessage: Identifiable, Equatable {
     var text: String
     var isStreaming: Bool = false
     var isError: Bool = false
-    var toolHint: String? = nil   // shown while a tool is executing and no text yet
+    /// Shown while a tool is executing and no text has streamed in yet.
+    /// Set only from AgentCoordinatorEvent.toolCallStarted (D4) -- a real
+    /// per-tool-call signal from either runtime, never a fabricated state.
+    var toolHint: String? = nil
     /// Canonical classification of this turn (Epic J, AgentIntent.swift) --
     /// nil until classification runs (ingestCloudResult for a cloud turn, or
     /// handleCoordinatorEvent's .finished fallback for on-device). Never
@@ -187,13 +190,6 @@ struct AgentSheet: View {
                 // will need the cloud path, so check the connection now
                 // rather than waiting for the user to type something first.
                 needsCloudConnection = (try? await scheduleStore.agentKeyConnected()) != true
-            }
-        }
-        .onChange(of: proposal.draft) { _, draft in
-            guard draft != nil else { return }
-            if let last = messages.indices.last,
-               messages[last].isStreaming, messages[last].text.isEmpty {
-                messages[last].toolHint = "일정을 제안하는 중..."
             }
         }
         .sheet(isPresented: $needsCloudConnection) {
@@ -382,13 +378,33 @@ struct AgentSheet: View {
         // shouldn't hold the whole (transient) View struct, and every call
         // reads scheduleStore.schedules live rather than whatever existed
         // when this runtime/session was constructed (Epic D-2).
-        OnDeviceAgentRuntime(
+        //
+        // One sink per session (D4), matching the Tools' own lifetime --
+        // both are constructed once here and reused across every send() in
+        // this conversation.
+        let activitySink = AgentToolActivitySink()
+        return OnDeviceAgentRuntime(
             tools: [
-                ProposeScheduleTool(proposal: proposal, existingProvider: { [scheduleStore] in existingItemsSnapshot(scheduleStore) }),
-                FindFreeSlotTool(snapshotProvider: { [scheduleStore] in scheduleIntervalSnapshot(scheduleStore) }),
-                UpdateScheduleTool(proposal: updateProposal, existingProvider: { [scheduleStore] in existingItemsSnapshot(scheduleStore) })
+                ProposeScheduleTool(
+                    proposal: proposal,
+                    existingProvider: { [scheduleStore] in existingItemsSnapshot(scheduleStore) },
+                    onStart: { [activitySink] in activitySink.reportStarted($0) },
+                    onFinish: { [activitySink] in activitySink.reportFinished($0) }
+                ),
+                FindFreeSlotTool(
+                    snapshotProvider: { [scheduleStore] in scheduleIntervalSnapshot(scheduleStore) },
+                    onStart: { [activitySink] in activitySink.reportStarted($0) },
+                    onFinish: { [activitySink] in activitySink.reportFinished($0) }
+                ),
+                UpdateScheduleTool(
+                    proposal: updateProposal,
+                    existingProvider: { [scheduleStore] in existingItemsSnapshot(scheduleStore) },
+                    onStart: { [activitySink] in activitySink.reportStarted($0) },
+                    onFinish: { [activitySink] in activitySink.reportFinished($0) }
+                ),
             ],
-            instructions: agentInstructions()
+            instructions: agentInstructions(),
+            activitySink: activitySink
         )
     }
 
@@ -407,6 +423,26 @@ struct AgentSheet: View {
         case .textSnapshot(let text):
             if let index = messages.firstIndex(where: { $0.id == messageID }) {
                 messages[index].text = text
+            }
+        case .toolCallStarted(let capability):
+            // Same guard the retired proposal.draft-based hint used: only
+            // shown before any text has streamed in, so a hint never
+            // clobbers text the user is already reading.
+            if let index = messages.firstIndex(where: { $0.id == messageID }),
+               messages[index].isStreaming, messages[index].text.isEmpty {
+                messages[index].toolHint = toolHintText(for: capability)
+            }
+        case .toolCallFinished:
+            // Truthfully clears the hint the moment the tool call actually
+            // finishes (D4 second-pass review) -- the gap between this and
+            // the model's next visible token, or another tool's
+            // .toolCallStarted, now truthfully shows nothing rather than a
+            // stale "still executing" hint. Unconditional on messageID
+            // match alone: clearing toolHint never clobbers visible text
+            // the way setting one could, so no isStreaming/text.isEmpty
+            // guard is needed here.
+            if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                messages[index].toolHint = nil
             }
         case .finished:
             isLoading = false
@@ -444,6 +480,18 @@ struct AgentSheet: View {
             isLoading = false
             guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
             messages[index].isStreaming = false
+            // D4 hardening check: a thrown cloud handler (e.g. a bad
+            // tool-call JSON argument, or dispatchToolCall itself throwing)
+            // is already guaranteed to terminate the turn via
+            // agent-cloud-chat/index.ts's outer try/catch (send({error})
+            // + close('error')), which this client turns into exactly this
+            // .failed case -- so a tool call can never be left "started"
+            // with no matching .failed/.finished. This assignment is
+            // already redundant in practice (the text set below makes
+            // toolHint's render condition false regardless), but stated
+            // explicitly rather than left implicit, so a started tool call
+            // never leaves a stale activity state on this path either.
+            messages[index].toolHint = nil
             switch failure {
             case .cloudConnectionRequired:
                 messages[index].text = "이 기기에서 Agent를 쓰려면 클라우드 연결이 필요해요."

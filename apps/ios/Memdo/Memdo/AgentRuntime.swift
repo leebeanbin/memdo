@@ -84,6 +84,25 @@ struct AgentConversationTurn: Equatable, Sendable {
 /// `messages[i].text = text` regardless of which runtime produced it.
 enum AgentRuntimeEvent: Sendable {
     case textSnapshot(String)
+    /// A tool call genuinely just started -- fired the instant execution
+    /// begins, not inferred after the fact from a result (D4). Cloud:
+    /// forwarded from agent-cloud-chat's `toolCallStarted` stream line,
+    /// sent server-side before the (possibly slow) handler runs. On-device:
+    /// forwarded from a Tool's call(arguments:) via AgentToolActivitySink
+    /// (below), as literally its first statement. Both are real signals;
+    /// neither is inferred or guessed.
+    case toolCallStarted(AgentCapability)
+    /// The same tool call genuinely just finished -- fired the instant the
+    /// handler resolves (success or failure), not left implicit (D4
+    /// second-pass review: toolCallStarted alone left a UI hint showing
+    /// "executing" through the whole gap after the handler had already
+    /// finished, until the model's next visible token -- a fake progress
+    /// state in substance even though no such string was ever written).
+    /// Cloud: agent-cloud-chat's `toolCallFinished` stream line, sent
+    /// immediately after dispatchToolCall resolves. On-device: a Tool's
+    /// `defer` block, guaranteeing this fires even if call(arguments:)
+    /// throws.
+    case toolCallFinished(AgentCapability)
 }
 
 extension AgentRuntimeKind {

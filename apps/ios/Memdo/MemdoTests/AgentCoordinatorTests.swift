@@ -129,6 +129,29 @@ final class AgentCoordinatorTests: XCTestCase {
         XCTAssertEqual(collected.withLock { $0 }.last, .failed(.runtimeFailure))
     }
 
+    // D4 hardening check (second-pass review): a tool call that reports
+    // .toolCallStarted and then the runtime throws (mirroring
+    // agent-cloud-chat's dispatchToolCall throwing mid-handler, which its
+    // outer try/catch turns into a stream `error` line -- see
+    // agent-cloud-chat/index.ts) must still reach a terminal .failed event,
+    // never leaving the turn silently stuck "started" with nothing after
+    // it. AssistantView.handleCoordinatorEvent's .failed case is what
+    // actually clears toolHint on this path; this test pins the event
+    // sequence that invariant depends on.
+    func test_toolCallStartedFollowedByThrow_stillReachesFailed() async {
+        struct SomeError: Error {}
+        let cloud = FakeAgentRuntime(kind: .cloud)
+        cloud.eventsToEmit = [.toolCallStarted(.freeSlotSearch)]
+        cloud.errorToThrow = SomeError()
+        let coordinator = AgentCoordinator(onDeviceRuntimeFactory: nil, cloudRuntime: cloud)
+        let collected = OSAllocatedUnfairLock(initialState: [AgentCoordinatorEvent]())
+
+        await awaitTerminal(coordinator, onDeviceAvailable: false, collected: collected)
+
+        let events = collected.withLock { $0 }
+        XCTAssertEqual(events, [.started(.cloud), .toolCallStarted(.freeSlotSearch), .failed(.runtimeFailure)])
+    }
+
     // MARK: - Cancellation is always silent
 
     func test_newSend_cancelsPreviousRun_withoutEmittingFailure() async {

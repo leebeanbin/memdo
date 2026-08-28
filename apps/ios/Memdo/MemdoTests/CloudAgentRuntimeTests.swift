@@ -92,4 +92,21 @@ final class CloudAgentRuntimeTests: XCTestCase {
         XCTAssertEqual(try decode(tier: "validated-free"), .validatedFree)
         XCTAssertEqual(try decode(tier: "experimental"), .experimental)
     }
+
+    // MARK: - AgentStreamLineDTO.toolCallStarted (D4)
+
+    func test_agentStreamLineDTO_decodesToolCallStarted() throws {
+        let json = #"{"toolCallStarted": "find_free_slots"}"#
+        let parsed = try JSONDecoder().decode(AgentStreamLineDTO.self, from: Data(json.utf8))
+        XCTAssertEqual(parsed.toolCallStarted, "find_free_slots")
+        XCTAssertNil(parsed.delta)
+        XCTAssertNil(parsed.done)
+    }
+
+    func test_agentStreamLineDTO_toolCallStartedAbsentOnADeltaLine() throws {
+        let json = #"{"delta": "안녕"}"#
+        let parsed = try JSONDecoder().decode(AgentStreamLineDTO.self, from: Data(json.utf8))
+        XCTAssertNil(parsed.toolCallStarted)
+        XCTAssertEqual(parsed.delta, "안녕")
+    }
 }
