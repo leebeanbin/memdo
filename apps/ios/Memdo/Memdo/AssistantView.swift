@@ -15,6 +15,12 @@ struct AgentMessage: Identifiable, Equatable {
     /// handleCoordinatorEvent's .finished fallback for on-device). Never
     /// overwritten once set for a given message.
     var intent: AgentIntent? = nil
+    /// Founder/debug-only per-turn trace (D2) -- cloud turns only for now
+    /// (see AgentDebugTrace's doc comment for why on-device isn't included
+    /// in this slice). Never persisted: lives only as long as this message
+    /// does in memory, discarded on "새 대화"/app relaunch same as the rest
+    /// of the conversation.
+    var debugTrace: AgentDebugTrace? = nil
 
     enum Role: Equatable { case user, assistant }
 }
@@ -546,6 +552,9 @@ struct AgentSheet: View {
         )
         if let index = messages.firstIndex(where: { $0.id == messageID }) {
             messages[index].intent = intent
+            if let trace = result.debugTrace {
+                messages[index].debugTrace = AgentDebugTrace(trace: trace, intent: intent)
+            }
             // The model is expected to stop at request_clarification with no
             // further text (see systemPrompt()'s instruction), but if it
             // streamed nothing, fall back to the question itself so the

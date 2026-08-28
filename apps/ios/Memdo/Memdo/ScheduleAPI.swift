@@ -54,14 +54,6 @@ struct CategoriesReplaceRequestDTO: Encodable {
     let categories: [ScheduleUserCategory]
 }
 
-struct AgentKeyStatusResponseDTO: Decodable {
-    let connected: Bool
-}
-
-struct AgentKeySaveRequestDTO: Encodable {
-    let apiKey: String
-}
-
 /// Sent to apple-auth-token-exchange right after a successful Sign in with
 /// Apple -- the authorizationCode is single-use/short-lived (~5 minutes),
 /// so this must happen at sign-in time, not lazily later.
@@ -84,41 +76,6 @@ struct AccountDeletionResponseDTO: Decodable {
     let deleted: Bool
 }
 
-struct AgentModelDTO: Decodable, Identifiable, Equatable {
-    let id: String
-    let name: String
-    let promptPricePerM: Double
-    let completionPricePerM: Double
-    let contextLength: Int
-    /// Snapshot from the last human-reviewed `eval:compare` promotion, not
-    /// live telemetry -- nil until that model has been promoted at least
-    /// once. See memdo-backend's model-registry-contract.ts.
-    let latencyClass: String?
-    let costClass: String?
-    /// Pass rate over automatically-graded cases only (manualReview
-    /// fixtures excluded from the denominator) -- NOT "% of the full eval
-    /// corpus." Never present this as a fraction of all fixtures.
-    let evalScore: Double?
-}
-
-struct AgentModelsResponseDTO: Decodable {
-    let models: [AgentModelDTO]
-}
-
-struct AgentUsageItemDTO: Decodable, Identifiable {
-    let model: String
-    let costUsd: Double
-    let createdAt: String
-
-    var id: String { "\(createdAt):\(model)" }
-}
-
-struct AgentUsageResponseDTO: Decodable {
-    let totalRequests: Int
-    let totalCostUsd: Double
-    let recent: [AgentUsageItemDTO]
-}
-
 /// Mirrors reviews/index.ts's reviewDto -- `reflection` can be nil (a row
 /// exists with no reflection text set), distinct from no row existing at
 /// all (review(date:accessToken:) returns nil for that case).
@@ -131,118 +88,6 @@ struct ReviewDTO: Decodable, Equatable {
 
 struct ReviewInputDTO: Encodable {
     let reflection: String
-}
-
-struct AgentChatTurnDTO: Codable {
-    let role: String
-    let content: String
-}
-
-struct AgentChatRequestDTO: Encodable {
-    let message: String
-    let history: [AgentChatTurnDTO]
-    let model: String?
-}
-
-/// Field-for-field the same shape ProposeScheduleTool's Arguments produces
-/// on-device, so both paths feed the exact same proposal/consent UI.
-struct CloudProposedScheduleDTO: Decodable {
-    let title: String
-    let date: String
-    let startTime: String?
-    let endTime: String?
-    let isTask: Bool
-    let note: String?
-    /// Set server-side by agent-cloud-chat's own Reflection check (see
-    /// findConflict in agent-cloud-contract.ts) -- guaranteed, unlike the
-    /// model's own optional search_schedules call.
-    let conflictTitle: String?
-    /// True when the Reflection check itself couldn't run (e.g. the existing-
-    /// schedule fetch failed) -- distinct from conflictTitle being nil, which
-    /// means the check ran and found nothing. Fail-closed: this is never
-    /// silently treated as "no conflict."
-    let conflictCheckFailed: Bool?
-}
-
-/// Mirrors propose_schedule_update's shape (agent-cloud-contract.ts) --
-/// completing, moving, or deleting an EXISTING item. `title`/`version` are
-/// echoed back by the server (the model only ever supplies an `id`), so the
-/// client has what it needs to call the real todos API without a second
-/// round trip.
-struct CloudProposedScheduleUpdateDTO: Decodable {
-    let id: String
-    let action: String  // "complete" | "reschedule" | "delete"
-    let date: String?
-    let startTime: String?
-    let endTime: String?
-    let title: String
-    let version: Int
-    let conflictTitle: String?
-    let conflictCheckFailed: Bool?
-}
-
-/// Mirrors propose_routine_update's shape (agent-cloud-contract.ts) -- every
-/// field optional, since the model only includes the settings it's actually
-/// proposing to change.
-struct CloudProposedRoutineUpdateDTO: Decodable, Equatable {
-    let dailyReviewEnabled: Bool?
-    let dailyReviewTime: String?
-    let newsBriefingEnabled: Bool?
-    let newsBriefingTime: String?
-    let planningPromptTime: String?
-    let notificationsEnabled: Bool?
-}
-
-/// Mirrors propose_review_actions's shape (agent-cloud-contract.ts) -- a
-/// proposed reflection *text* for one day. `date` is the model's raw token
-/// ("today"/"tomorrow"/"yesterday"/yyyy-MM-dd), NOT resolved server-side --
-/// resolving it is this client's job (see AgentDateExpression).
-struct CloudProposedReviewActionDTO: Decodable, Equatable {
-    let date: String
-    let reflection: String
-}
-
-/// Mirrors request_clarification's shape (agent-cloud-contract.ts) -- staged
-/// when the model needs more information instead of guessing. No approval UI
-/// exists for this (see AgentIntent.swift's doc comment): the user's reply
-/// flows into the next normal turn.
-struct CloudClarificationRequestDTO: Decodable, Equatable {
-    let question: String
-    let missingFields: [String]?
-    let reason: String?
-}
-
-/// One line of the newline-delimited stream agent-cloud-chat responds with.
-/// Every line has exactly one of these populated: `delta` while text is
-/// still arriving, or `done`/`proposedSchedule`/`proposedScheduleUpdate`/
-/// `proposedRoutineUpdate`/`proposedReviewAction`/`clarificationRequest` on
-/// the terminal line, or `error` if something failed mid-stream.
-struct AgentStreamLineDTO: Decodable {
-    let delta: String?
-    let done: Bool?
-    let proposedSchedule: CloudProposedScheduleDTO?
-    let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
-    let proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?
-    let proposedReviewAction: CloudProposedReviewActionDTO?
-    let clarificationRequest: CloudClarificationRequestDTO?
-    let toolNames: [String]?
-    let error: String?
-}
-
-/// agentCloudChat's terminal result -- the model calls at most one propose_*
-/// tool per turn, but all four (plus clarificationRequest) are carried
-/// through so the caller doesn't need a sixth enum just to unwrap.
-/// `toolNames` is the full dispatched-tool-name sequence, used by
-/// classifyAgentIntent (AgentIntent.swift) to tell FIND_FREE_SLOTS/
-/// SEARCH_SCHEDULES apart from ANSWER when no proposal/clarification field
-/// is set.
-struct AgentCloudChatResult {
-    let proposedSchedule: CloudProposedScheduleDTO?
-    let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
-    let proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?
-    let proposedReviewAction: CloudProposedReviewActionDTO?
-    let clarificationRequest: CloudClarificationRequestDTO?
-    let toolNames: [String]
 }
 
 struct TodoListResponseDTO: Decodable {
@@ -754,7 +599,9 @@ actor MemdoAPIClient {
         let url = functionsURL.appending(path: "agent-cloud-chat")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.httpBody = try encoder.encode(AgentChatRequestDTO(message: message, history: history, model: model))
+        request.httpBody = try encoder.encode(
+            AgentChatRequestDTO(message: message, history: history, model: model, debug: Self.debugTraceEnabled)
+        )
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue(publishableKey, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -788,6 +635,7 @@ actor MemdoAPIClient {
         var proposedReviewAction: CloudProposedReviewActionDTO?
         var clarificationRequest: CloudClarificationRequestDTO?
         var toolNames: [String] = []
+        var debugTrace: AgentDebugTraceDTO?
         for try await line in bytes.lines {
             guard let lineData = line.data(using: .utf8),
                   let parsed = try? decoder.decode(AgentStreamLineDTO.self, from: lineData) else { continue }
@@ -802,6 +650,7 @@ actor MemdoAPIClient {
                 proposedReviewAction = parsed.proposedReviewAction
                 clarificationRequest = parsed.clarificationRequest
                 toolNames = parsed.toolNames ?? []
+                debugTrace = parsed.debugTrace
             }
         }
         return AgentCloudChatResult(
@@ -810,8 +659,20 @@ actor MemdoAPIClient {
             proposedRoutineUpdate: proposedRoutineUpdate,
             proposedReviewAction: proposedReviewAction,
             clarificationRequest: clarificationRequest,
-            toolNames: toolNames
+            toolNames: toolNames,
+            debugTrace: debugTrace
         )
+    }
+
+    /// DEBUG-build-only, no runtime toggle -- a Release build never sends
+    /// `debug: true`, so it never receives a detailed trace regardless of
+    /// what the backend would otherwise include (D2).
+    private static var debugTraceEnabled: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
     }
 
     func send<Response: Decodable>(

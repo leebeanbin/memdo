@@ -35,4 +35,44 @@ final class CloudAgentRuntimeTests: XCTestCase {
             XCTFail("expected a textSnapshot event")
         }
     }
+
+    // MARK: - AgentSanitizedValue / AgentStreamLineDTO.debugTrace (D2 founder trace)
+
+    func test_agentSanitizedValue_decodesEveryJSONShape() throws {
+        func decode(_ json: String) throws -> AgentSanitizedValue {
+            try JSONDecoder().decode(AgentSanitizedValue.self, from: Data(json.utf8))
+        }
+        XCTAssertEqual(try decode("\"hi\"").debugDescription, "\"hi\"")
+        XCTAssertEqual(try decode("60").debugDescription, "60")
+        XCTAssertEqual(try decode("1.5").debugDescription, "1.5")
+        XCTAssertEqual(try decode("true").debugDescription, "true")
+        XCTAssertEqual(try decode("null").debugDescription, "null")
+        XCTAssertEqual(try decode("[1,2]").debugDescription, "[1, 2]")
+        XCTAssertEqual(try decode(#"{"b":2,"a":1}"#).debugDescription, "{\"a\": 1, \"b\": 2}")
+    }
+
+    func test_agentStreamLineDTO_decodesASanitizedDebugTrace() throws {
+        let json = """
+        {"done": true, "toolNames": ["find_free_slots"], "debugTrace": {
+            "requestedModel": "openrouter/free",
+            "resolvedModel": "nvidia/nemotron-3-super-120b-a12b:free",
+            "latencyMs": 842,
+            "toolCalls": [{"name": "find_free_slots", "args": {"scope": "today"}, "result": {"slotCount": 1}}]
+        }}
+        """
+        let parsed = try JSONDecoder().decode(AgentStreamLineDTO.self, from: Data(json.utf8))
+        let trace = try XCTUnwrap(parsed.debugTrace)
+        XCTAssertEqual(trace.requestedModel, "openrouter/free")
+        XCTAssertEqual(trace.resolvedModel, "nvidia/nemotron-3-super-120b-a12b:free")
+        XCTAssertEqual(trace.latencyMs, 842)
+        XCTAssertEqual(trace.toolCalls.count, 1)
+        XCTAssertEqual(trace.toolCalls[0].name, "find_free_slots")
+        XCTAssertNotNil(trace.toolCalls[0].result)
+    }
+
+    func test_agentStreamLineDTO_debugTraceAbsentWhenNotRequested() throws {
+        let json = #"{"done": true, "toolNames": []}"#
+        let parsed = try JSONDecoder().decode(AgentStreamLineDTO.self, from: Data(json.utf8))
+        XCTAssertNil(parsed.debugTrace)
+    }
 }

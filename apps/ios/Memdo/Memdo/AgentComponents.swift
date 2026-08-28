@@ -176,6 +176,21 @@ struct AgentResponse: View {
                     Label("복사하기", systemImage: "doc.on.doc")
                 }
             }
+            #if DEBUG
+            // Founder/debug-only (D2) -- copies AgentDebugTrace.debugText to
+            // the clipboard rather than a new sheet/view, matching "even a
+            // raw dump is fine for this slice." #if DEBUG so a Release
+            // build never compiles this in, regardless of whether the
+            // backend ever sends a trace. Cloud turns only for now (see
+            // AgentDebugTrace's doc comment).
+            if let trace = message.debugTrace {
+                Button {
+                    UIPasteboard.general.string = trace.debugText
+                } label: {
+                    Label("디버그 추적 복사", systemImage: "ladybug")
+                }
+            }
+            #endif
         }
     }
 }
