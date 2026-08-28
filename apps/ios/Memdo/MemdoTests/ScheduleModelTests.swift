@@ -515,8 +515,26 @@ final class ScheduleModelTests: XCTestCase {
     func testFindFreeSlotToolWithNoDurationOnEmptyDayAnswersAvailabilityNotADurationSlice() async throws {
         let tool = FindFreeSlotTool(snapshotProvider: { [] })
         let result = try await tool.call(arguments: .init(scope: "today", durationMinutes: nil, windowStart: "", windowEnd: ""))
-        XCTAssertTrue(result.contains("등록된 일정이 없어서"))
-        XCTAssertTrue(result.contains("전부 비어 있어요"))
+        // No "등록된 일정이 없어서" causal claim -- busyRanges(_:) only looks
+        // at timed items, so this wording must stay true even when an
+        // untimed task exists (see the dedicated test below).
+        XCTAssertFalse(result.contains("등록된 일정이 없어서"))
+        XCTAssertTrue(result.contains("전체가 비어 있어요"))
+    }
+
+    // D1-2: an untimed task is invisible to busyRanges(_:) (only startAt/
+    // endAt-having items count as busy), so the wording must not claim "no
+    // schedules registered" just because the timed calendar is empty --
+    // this task genuinely IS a registered schedule.
+    @available(iOS 26, *)
+    func testFindFreeSlotToolAvailabilityWordingStaysTruthfulWithAnUntimedTask() async throws {
+        let day = Calendar.current.startOfDay(for: .now)
+        let tool = FindFreeSlotTool(snapshotProvider: {
+            [.init(scheduledDate: day, startAt: nil, endAt: nil)]
+        })
+        let result = try await tool.call(arguments: .init(scope: "today", durationMinutes: nil, windowStart: "", windowEnd: ""))
+        XCTAssertFalse(result.contains("등록된 일정이 없어서"))
+        XCTAssertTrue(result.contains("전체가 비어 있어요"))
     }
 
     @available(iOS 26, *)

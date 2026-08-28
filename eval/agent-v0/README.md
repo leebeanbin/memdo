@@ -1,6 +1,6 @@
 # Agent v0 behavior baseline corpus
 
-39 cases across 6 files, establishing what the current Agent (before Sprint 1's
+40 cases across 6 files, establishing what the current Agent (before Sprint 1's
 validation-boundary work) actually does with a representative set of Korean
 prompts — the reference point for measuring whether later changes (this
 Sprint, or the model swaps in Epic F) are actual improvements.

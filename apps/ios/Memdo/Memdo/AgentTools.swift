@@ -323,7 +323,7 @@ struct FindFreeSlotTool: Tool {
     }
 
     let name        = "findFreeSlots"
-    let description = "Finds available free time in the user's calendar. Two modes based on whether durationMinutes is given: a plain availability question ('언제 비어 있어?') with no named duration returns the full free window; a duration/activity-specific request ('1시간 찾아줘') returns one candidate slot of that length. Call this whenever the user asks about free time, an open slot, or where to fit something — never guess availability from context alone."
+    let description = "Finds available free time in the user's calendar. Two modes based on whether durationMinutes is given: a plain availability question ('언제 비어 있어?') with no explicit numeric duration returns the full free window; a request with an explicit numeric duration ('1시간 찾아줘') returns one candidate slot of that length. An activity name ALONE ('운동할 시간 찾아줘') is NOT a duration -- if the user names an activity but never states how long, ask them in plain text how much time they need instead of guessing or calling this tool with a made-up value. Call this whenever the user asks about free time, an open slot, or where to fit something — never guess availability from context alone."
 
     @Generable
     struct Arguments: Sendable {
@@ -335,8 +335,14 @@ struct FindFreeSlotTool: Tool {
         // founder dogfooding: an empty day answered a plain "when am I
         // free" question with a single arbitrary duration-sized slot
         // instead of the whole open window, because this used to be a
-        // required Int the model had to invent a value for.
-        @Guide(description: "Free-slot length in minutes (e.g. 30, 60, 90), ONLY when the user names a specific duration/activity to fit in (e.g. '1시간 찾아줘', '30분 비는 시간'). Omit entirely for a plain availability question like '언제 비어 있어?' or '내일 시간 돼?' -- omitting returns the full free window, not a guessed duration.")
+        // required Int the model had to invent a value for. A second bug
+        // in the same family (also found during dogfooding): the original
+        // fix's wording still let a bare activity name ("운동", "공부")
+        // count as justification for inventing a number -- it must not.
+        // On-device has no request_clarification tool (a known, separate
+        // gap), so the fallback here is a plain-text question, not a tool
+        // call.
+        @Guide(description: "Free-slot length in minutes (e.g. 30, 60, 90), ONLY when the user states an explicit numeric duration. Omit entirely for a plain availability question -- omitting returns the full free window, never a guessed duration. An activity name by itself (e.g. \"운동\") is NOT evidence for any particular number here -- if a duration is genuinely needed but never stated, ask the user in plain text instead of inventing one.")
         let durationMinutes: Int?
         @Guide(description: "Earliest start time HH:mm, e.g. '09:00'. Empty string = no preference.")
         let windowStart: String
@@ -397,7 +403,12 @@ struct FindFreeSlotTool: Tool {
             let extents = FreeSlotService.fullFreeExtents(busy: busyRanges(busyOnDay), windowStart: start, windowEnd: end)
             guard !extents.isEmpty else { continue }
             if extents.count == 1, extents[0].start == start, extents[0].end == end {
-                lines.append("\(dateLabel(date)): 등록된 일정이 없어서 \(formatInterval(extents[0])) 전부 비어 있어요.")
+                // Deliberately no "등록된 일정이 없어서" causal claim --
+                // busyRanges(_:) (below) only looks at timed items, so an
+                // untimed task can still exist on this date even when the
+                // whole timed window is free. Stating only the computed
+                // fact (the window itself) stays true regardless.
+                lines.append("\(dateLabel(date)): \(formatInterval(extents[0])) 전체가 비어 있어요.")
             } else {
                 lines.append("\(dateLabel(date)): \(extents.map(formatInterval).joined(separator: ", ")) 비어 있어요.")
             }
