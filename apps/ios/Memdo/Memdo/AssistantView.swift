@@ -480,6 +480,18 @@ struct AgentSheet: View {
             isLoading = false
             guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
             messages[index].isStreaming = false
+            // D4 hardening check: a thrown cloud handler (e.g. a bad
+            // tool-call JSON argument, or dispatchToolCall itself throwing)
+            // is already guaranteed to terminate the turn via
+            // agent-cloud-chat/index.ts's outer try/catch (send({error})
+            // + close('error')), which this client turns into exactly this
+            // .failed case -- so a tool call can never be left "started"
+            // with no matching .failed/.finished. This assignment is
+            // already redundant in practice (the text set below makes
+            // toolHint's render condition false regardless), but stated
+            // explicitly rather than left implicit, so a started tool call
+            // never leaves a stale activity state on this path either.
+            messages[index].toolHint = nil
             switch failure {
             case .cloudConnectionRequired:
                 messages[index].text = "이 기기에서 Agent를 쓰려면 클라우드 연결이 필요해요."
