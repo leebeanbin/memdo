@@ -252,7 +252,8 @@ struct AgentStreamLineDTO: Decodable {
 /// classifyAgentIntent (AgentIntent.swift) to tell FIND_FREE_SLOTS/
 /// SEARCH_SCHEDULES apart from ANSWER when no proposal/clarification field
 /// is set. `debugTrace` backs the founder debug trace (D2) -- nil unless
-/// this request opted in via `debug` AND the model actually called a tool.
+/// this request opted in via `debug`. Present whenever that flag was set,
+/// even if the model called no tools (`toolCalls` is simply `[]` then).
 struct AgentCloudChatResult {
     let proposedSchedule: CloudProposedScheduleDTO?
     let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
