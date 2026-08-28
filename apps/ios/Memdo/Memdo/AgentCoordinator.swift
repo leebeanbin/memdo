@@ -2,14 +2,15 @@ import Foundation
 
 /// Normalized outcomes AgentCoordinator emits -- routing, runtime
 /// construction, and cancellation never surface past this boundary.
-/// AssistantView only reacts to these five cases.
+/// AssistantView only reacts to these six cases.
 enum AgentCoordinatorEvent: Equatable, Sendable {
     case started(AgentRuntimeKind)
     case textSnapshot(String)
-    /// Passed through 1:1 from AgentRuntimeEvent.toolCallStarted (D4) --
-    /// AgentCoordinator doesn't interpret it, just forwards the same real
-    /// signal either runtime already produced.
+    /// Passed through 1:1 from AgentRuntimeEvent.toolCallStarted/
+    /// .toolCallFinished (D4) -- AgentCoordinator doesn't interpret them,
+    /// just forwards the same real signals either runtime already produced.
     case toolCallStarted(AgentCapability)
+    case toolCallFinished(AgentCapability)
     case finished
     case failed(AgentExecutionFailure)
 }
@@ -118,6 +119,7 @@ final class AgentCoordinator {
                         switch event {
                         case .textSnapshot(let text): onEvent(.textSnapshot(text))
                         case .toolCallStarted(let capability): onEvent(.toolCallStarted(capability))
+                        case .toolCallFinished(let capability): onEvent(.toolCallFinished(capability))
                         }
                     }
                 )

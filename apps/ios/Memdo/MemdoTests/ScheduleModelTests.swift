@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import os
 @testable import Memdo
 
 final class ScheduleModelTests: XCTestCase {
@@ -556,6 +557,27 @@ final class ScheduleModelTests: XCTestCase {
         let result = try await tool.call(arguments: .init(scope: "today", durationMinutes: 60, windowStart: "", windowEnd: ""))
         XCTAssertFalse(result.contains("등록된 일정이 없어서"))
         XCTAssertEqual(result.components(separatedBy: ",").count, 1)
+    }
+
+    // D4 second-pass review: onFinish is reported via `defer`, specifically
+    // so it fires on every exit path of call(arguments:) -- including an
+    // early `return` from a validation failure -- not just the "happy
+    // path" success return. This pins that guarantee for the bad-scope
+    // early-return branch (the same one exercised above), where a naive
+    // "call onFinish right before each return statement" implementation
+    // would be easy to accidentally miss on one branch.
+    @available(iOS 26, *)
+    func testFindFreeSlotToolReportsFinishEvenOnAnEarlyValidationReturn() async throws {
+        let started = OSAllocatedUnfairLock(initialState: [AgentCapability]())
+        let finished = OSAllocatedUnfairLock(initialState: [AgentCapability]())
+        let tool = FindFreeSlotTool(
+            snapshotProvider: { [] },
+            onStart: { capability in started.withLock { $0.append(capability) } },
+            onFinish: { capability in finished.withLock { $0.append(capability) } }
+        )
+        _ = try await tool.call(arguments: .init(scope: "not-a-real-scope", durationMinutes: 30, windowStart: "", windowEnd: ""))
+        XCTAssertEqual(started.withLock { $0 }.count, 1)
+        XCTAssertEqual(finished.withLock { $0 }.count, 1)
     }
 
     // MARK: - Live schedule-state providers (Epic D-2)

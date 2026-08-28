@@ -1,5 +1,4 @@
 import Foundation
-import os
 
 /// Which execution path an Agent turn runs on. Provider-neutral by design --
 /// no model ID or FoundationModels/OpenRouter-specific type belongs here or
@@ -93,58 +92,17 @@ enum AgentRuntimeEvent: Sendable {
     /// (below), as literally its first statement. Both are real signals;
     /// neither is inferred or guessed.
     case toolCallStarted(AgentCapability)
-}
-
-/// Maps a cloud tool's raw name (agent-cloud-contract.ts's AGENT_TOOL_NAMES)
-/// to the product-vocabulary capability it represents, for the toolHint
-/// pipeline (D4) -- NOT used for AgentIntent classification, which has its
-/// own separate mapping in AgentIntent.swift. Tool name string literals
-/// must match the backend's AGENT_TOOL_NAMES values; there's no shared type
-/// across languages, same as AgentIntent.swift's classifier. An unmapped or
-/// unrecognized name (e.g. request_clarification, whose own response text
-/// IS the user-facing signal -- no separate mid-turn hint makes sense for
-/// it) returns nil rather than guessing, so it simply shows no hint instead
-/// of a wrong one.
-func cloudToolCapability(forRawName name: String) -> AgentCapability? {
-    switch name {
-    case "search_schedules": return .scheduleSearch
-    case "find_free_slots": return .freeSlotSearch
-    case "propose_schedule": return .proposeSchedule
-    case "propose_schedule_update": return .proposeScheduleUpdate
-    case "get_day_context": return .dayContext
-    case "get_routine_preferences": return .routinePreferences
-    case "propose_routine_update": return .proposeRoutineUpdate
-    case "get_review_history": return .reviewHistory
-    case "propose_review_actions": return .proposeReviewActions
-    default: return nil
-    }
-}
-
-/// Bridges an on-device Tool's call-time activity to whichever
-/// AgentRuntimeEvent sink is active for the send() currently in flight
-/// (D4). Tools are constructed once per conversation and reused across many
-/// send() calls (see AssistantView.swift's makeOnDeviceRuntime() doc
-/// comment), but `onEvent` is only valid for whichever send() is currently
-/// running -- so this is a swappable indirection OnDeviceAgentRuntime.send()
-/// sets before streaming and clears after, not a closure captured once at
-/// Tool-construction time. OSAllocatedUnfairLock rather than @MainActor:
-/// Tool.call(arguments:) is not actor-isolated, and report(_:) must be
-/// callable from whatever context FoundationModels invokes a Tool on.
-final class AgentToolActivitySink: @unchecked Sendable {
-    private let handler = OSAllocatedUnfairLock<(@Sendable (AgentCapability) -> Void)?>(initialState: nil)
-
-    func setActive(_ newHandler: (@Sendable (AgentCapability) -> Void)?) {
-        handler.withLock { $0 = newHandler }
-    }
-
-    /// Called directly by a Tool as literally the first statement of its
-    /// call(arguments:) -- a real "this tool call just started" signal, not
-    /// inferred from its result. A no-op if no send() is currently active
-    /// (there always should be one while a Tool is executing, but this
-    /// stays silent rather than crashing if that invariant is ever broken).
-    func report(_ capability: AgentCapability) {
-        handler.withLock { $0 }?(capability)
-    }
+    /// The same tool call genuinely just finished -- fired the instant the
+    /// handler resolves (success or failure), not left implicit (D4
+    /// second-pass review: toolCallStarted alone left a UI hint showing
+    /// "executing" through the whole gap after the handler had already
+    /// finished, until the model's next visible token -- a fake progress
+    /// state in substance even though no such string was ever written).
+    /// Cloud: agent-cloud-chat's `toolCallFinished` stream line, sent
+    /// immediately after dispatchToolCall resolves. On-device: a Tool's
+    /// `defer` block, guaranteeing this fires even if call(arguments:)
+    /// throws.
+    case toolCallFinished(AgentCapability)
 }
 
 extension AgentRuntimeKind {

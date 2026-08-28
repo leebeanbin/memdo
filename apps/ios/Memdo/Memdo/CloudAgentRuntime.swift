@@ -51,6 +51,11 @@ final class CloudAgentRuntime: AgentRuntime, @unchecked Sendable {
                 if let capability = cloudToolCapability(forRawName: rawName) {
                     onEvent(.toolCallStarted(capability))
                 }
+            },
+            onToolCallFinished: { rawName in
+                if let capability = cloudToolCapability(forRawName: rawName) {
+                    onEvent(.toolCallFinished(capability))
+                }
             }
         )
         if let onResult {

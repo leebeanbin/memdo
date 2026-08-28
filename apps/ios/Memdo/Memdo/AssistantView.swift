@@ -388,16 +388,19 @@ struct AgentSheet: View {
                 ProposeScheduleTool(
                     proposal: proposal,
                     existingProvider: { [scheduleStore] in existingItemsSnapshot(scheduleStore) },
-                    onStart: { [activitySink] in activitySink.report($0) }
+                    onStart: { [activitySink] in activitySink.reportStarted($0) },
+                    onFinish: { [activitySink] in activitySink.reportFinished($0) }
                 ),
                 FindFreeSlotTool(
                     snapshotProvider: { [scheduleStore] in scheduleIntervalSnapshot(scheduleStore) },
-                    onStart: { [activitySink] in activitySink.report($0) }
+                    onStart: { [activitySink] in activitySink.reportStarted($0) },
+                    onFinish: { [activitySink] in activitySink.reportFinished($0) }
                 ),
                 UpdateScheduleTool(
                     proposal: updateProposal,
                     existingProvider: { [scheduleStore] in existingItemsSnapshot(scheduleStore) },
-                    onStart: { [activitySink] in activitySink.report($0) }
+                    onStart: { [activitySink] in activitySink.reportStarted($0) },
+                    onFinish: { [activitySink] in activitySink.reportFinished($0) }
                 ),
             ],
             instructions: agentInstructions(),
@@ -427,7 +430,19 @@ struct AgentSheet: View {
             // clobbers text the user is already reading.
             if let index = messages.firstIndex(where: { $0.id == messageID }),
                messages[index].isStreaming, messages[index].text.isEmpty {
-                messages[index].toolHint = Self.toolHintText(for: capability)
+                messages[index].toolHint = toolHintText(for: capability)
+            }
+        case .toolCallFinished:
+            // Truthfully clears the hint the moment the tool call actually
+            // finishes (D4 second-pass review) -- the gap between this and
+            // the model's next visible token, or another tool's
+            // .toolCallStarted, now truthfully shows nothing rather than a
+            // stale "still executing" hint. Unconditional on messageID
+            // match alone: clearing toolHint never clobbers visible text
+            // the way setting one could, so no isStreaming/text.isEmpty
+            // guard is needed here.
+            if let index = messages.firstIndex(where: { $0.id == messageID }) {
+                messages[index].toolHint = nil
             }
         case .finished:
             isLoading = false
@@ -476,26 +491,6 @@ struct AgentSheet: View {
                 messages[index].text = "오류가 발생했어요. 다시 시도해주세요."
                 messages[index].isError = true
             }
-        }
-    }
-
-    /// D4: one truthful wording per capability GROUP, not per raw tool
-    /// name -- read-only context lookups (get_day_context/
-    /// get_routine_preferences/get_review_history) don't need 3 separate
-    /// phrasings the user has no way to tell apart in practice, and all 4
-    /// propose_* tools genuinely are "preparing a change" from the user's
-    /// point of view. Every wording here corresponds to a real
-    /// .toolCallStarted event; nothing here is shown speculatively.
-    private static func toolHintText(for capability: AgentCapability) -> String {
-        switch capability {
-        case .scheduleSearch:
-            "기존 일정 찾는 중..."
-        case .freeSlotSearch:
-            "빈 시간 계산하는 중..."
-        case .dayContext, .routinePreferences, .reviewHistory:
-            "일정 확인하는 중..."
-        case .proposeSchedule, .proposeScheduleUpdate, .proposeRoutineUpdate, .proposeReviewActions:
-            "변경안 준비하는 중..."
         }
     }
 

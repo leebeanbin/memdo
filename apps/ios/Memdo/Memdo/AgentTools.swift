@@ -288,13 +288,16 @@ struct ProposeScheduleTool: Tool {
     /// first created (Epic D-2; Epic C's confirm-time revalidation remains
     /// the actual safety net regardless).
     let existingProvider: @MainActor @Sendable () -> [ConflictService.ExistingItem]
-    /// Reports this call's start to AgentToolActivitySink for the toolHint
-    /// pipeline (D4) -- see that type's doc comment. Defaults to a no-op so
-    /// existing construction sites (tests) don't need updating.
+    /// Reports this call's start/finish to AgentToolActivitySink for the
+    /// toolHint pipeline (D4) -- see that type's doc comment. Both default
+    /// to a no-op so existing construction sites (tests) don't need
+    /// updating.
     var onStart: @Sendable (AgentCapability) -> Void = { _ in }
+    var onFinish: @Sendable (AgentCapability) -> Void = { _ in }
 
     func call(arguments: Arguments) async throws -> String {
         onStart(.proposeSchedule)
+        defer { onFinish(.proposeSchedule) }
         let result = stageScheduleProposal(
             title: arguments.title,
             date: arguments.date,
@@ -358,8 +361,9 @@ struct FindFreeSlotTool: Tool {
     /// Read at call time, not captured once at Tool construction -- see
     /// ProposeScheduleTool.existingProvider's doc comment.
     let snapshotProvider: @MainActor @Sendable () -> [ScheduleInterval]
-    /// See ProposeScheduleTool.onStart's doc comment.
+    /// See ProposeScheduleTool.onStart/onFinish's doc comment.
     var onStart: @Sendable (AgentCapability) -> Void = { _ in }
+    var onFinish: @Sendable (AgentCapability) -> Void = { _ in }
 
     /// Same 15...480 minute bound the backend's findFreeSlotsArgsSchema
     /// enforces (Issue A-04/B-04) -- clamping a model-supplied value that's
@@ -369,6 +373,7 @@ struct FindFreeSlotTool: Tool {
 
     func call(arguments: Arguments) async throws -> String {
         onStart(.freeSlotSearch)
+        defer { onFinish(.freeSlotSearch) }
         guard let dates = validScopeDates(arguments.scope) else {
             return "요청한 기간을 이해하지 못했어요."
         }
@@ -511,11 +516,13 @@ struct UpdateScheduleTool: Tool {
     /// Read at call time, not captured once at Tool construction -- see
     /// ProposeScheduleTool.existingProvider's doc comment.
     let existingProvider: @MainActor @Sendable () -> [ConflictService.ExistingItem]
-    /// See ProposeScheduleTool.onStart's doc comment.
+    /// See ProposeScheduleTool.onStart/onFinish's doc comment.
     var onStart: @Sendable (AgentCapability) -> Void = { _ in }
+    var onFinish: @Sendable (AgentCapability) -> Void = { _ in }
 
     func call(arguments: Arguments) async throws -> String {
         onStart(.proposeScheduleUpdate)
+        defer { onFinish(.proposeScheduleUpdate) }
         guard let action = AgentUpdateAction(rawValue: arguments.action) else {
             return "요청하신 작업을 이해하지 못했어요."
         }

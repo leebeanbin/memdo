@@ -40,7 +40,7 @@ final class OnDeviceAgentRuntime: AgentRuntime, @unchecked Sendable {
         _ request: AgentRuntimeRequest,
         onEvent: @escaping @Sendable (AgentRuntimeEvent) -> Void
     ) async throws {
-        activitySink.setActive { capability in onEvent(.toolCallStarted(capability)) }
+        activitySink.setActive(onEvent)
         defer { activitySink.setActive(nil) }
         let stream = session.streamResponse(to: request.prompt)
         for try await snapshot in stream {
