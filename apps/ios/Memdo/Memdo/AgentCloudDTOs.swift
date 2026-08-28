@@ -18,12 +18,25 @@ struct AgentKeySaveRequestDTO: Encodable {
     let apiKey: String
 }
 
+/// Mirrors backend's ModelTier (model-registry-contract.ts) field for
+/// field -- see that type's doc comment for the meaning of each case.
+/// `.experimental` is gated behind a developer-only surface in the picker
+/// (CloudAgentSettings.swift) rather than shown to every user: "selectable
+/// for developer testing" is not the same as "recommended."
+enum AgentModelTier: String, Decodable, Hashable {
+    case recommended
+    case freeAuto = "free-auto"
+    case validatedFree = "validated-free"
+    case experimental
+}
+
 struct AgentModelDTO: Decodable, Identifiable, Equatable {
     let id: String
     let name: String
     let promptPricePerM: Double
     let completionPricePerM: Double
     let contextLength: Int
+    let tier: AgentModelTier
     /// Snapshot from the last human-reviewed `eval:compare` promotion, not
     /// live telemetry -- nil until that model has been promoted at least
     /// once. See memdo-backend's model-registry-contract.ts.
@@ -31,7 +44,9 @@ struct AgentModelDTO: Decodable, Identifiable, Equatable {
     let costClass: String?
     /// Pass rate over automatically-graded cases only (manualReview
     /// fixtures excluded from the denominator) -- NOT "% of the full eval
-    /// corpus." Never present this as a fraction of all fixtures.
+    /// corpus." Never present this as a fraction of all fixtures. Always
+    /// nil for tier .freeAuto -- the backend never promotes a score for a
+    /// non-deterministic router (see ModelTier's doc comment).
     let evalScore: Double?
 }
 
