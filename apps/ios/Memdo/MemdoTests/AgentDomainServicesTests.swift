@@ -97,6 +97,60 @@ final class AgentDomainServicesTests: XCTestCase {
         XCTAssertTrue(slots.isEmpty)
     }
 
+    // MARK: - fullFreeExtents/* (availability-query contract, "how free am
+    // I" -- as opposed to freeSlots' duration-constrained candidate-slot
+    // contract above. Found during founder dogfooding: an empty day used to
+    // answer a plain availability question with a single arbitrary
+    // duration-sized slot instead of the whole open window.)
+
+    func test_fullFreeExtents_emptyDayReturnsWholeWindow() {
+        let extents = FreeSlotService.fullFreeExtents(busy: [], windowStart: at("08:00"), windowEnd: at("22:00"))
+        assertSlots(extents, [("08:00", "22:00")])
+    }
+
+    func test_fullFreeExtents_oneEventSplitsTheDay() {
+        let extents = FreeSlotService.fullFreeExtents(busy: [range("12:00", "13:00")], windowStart: at("08:00"), windowEnd: at("22:00"))
+        assertSlots(extents, [("08:00", "12:00"), ("13:00", "22:00")])
+    }
+
+    func test_fullFreeExtents_multipleEvents() {
+        let busy = [range("09:00", "10:00"), range("13:00", "14:00"), range("17:00", "18:00")]
+        let extents = FreeSlotService.fullFreeExtents(busy: busy, windowStart: at("08:00"), windowEnd: at("22:00"))
+        assertSlots(extents, [("08:00", "09:00"), ("10:00", "13:00"), ("14:00", "17:00"), ("18:00", "22:00")])
+    }
+
+    func test_fullFreeExtents_adjacentEventsProduceNoGapBetweenThem() {
+        let busy = [range("09:00", "12:00"), range("12:00", "15:00")]
+        let extents = FreeSlotService.fullFreeExtents(busy: busy, windowStart: at("08:00"), windowEnd: at("18:00"))
+        assertSlots(extents, [("08:00", "09:00"), ("15:00", "18:00")])
+    }
+
+    func test_fullFreeExtents_overlappingEventsMergeIntoOneBusyBlock() {
+        let busy = [range("09:00", "12:00"), range("11:00", "14:00")]
+        let extents = FreeSlotService.fullFreeExtents(busy: busy, windowStart: at("08:00"), windowEnd: at("18:00"))
+        assertSlots(extents, [("08:00", "09:00"), ("14:00", "18:00")])
+    }
+
+    func test_fullFreeExtents_fullyBookedWindowReturnsEmpty() {
+        let extents = FreeSlotService.fullFreeExtents(busy: [range("08:00", "22:00")], windowStart: at("08:00"), windowEnd: at("22:00"))
+        XCTAssertTrue(extents.isEmpty)
+    }
+
+    func test_fullFreeExtents_invalidWindowReturnsEmpty() {
+        let extents = FreeSlotService.fullFreeExtents(busy: [], windowStart: at("18:00"), windowEnd: at("09:00"))
+        XCTAssertTrue(extents.isEmpty)
+    }
+
+    func test_fullFreeExtents_busyOutsideWindowIsClippedAway() {
+        let extents = FreeSlotService.fullFreeExtents(busy: [range("12:00", "13:00")], windowStart: at("08:00"), windowEnd: at("10:00"))
+        assertSlots(extents, [("08:00", "10:00")])
+    }
+
+    func test_fullFreeExtents_busyStraddlingWindowEdgeIsTrimmed() {
+        let extents = FreeSlotService.fullFreeExtents(busy: [range("07:00", "09:00")], windowStart: at("08:00"), windowEnd: at("12:00"))
+        assertSlots(extents, [("09:00", "12:00")])
+    }
+
     // MARK: - conflict/*
 
     private func candidate(_ id: String, _ title: String, _ startHHmm: String, _ endHHmm: String) -> ConflictService.ExistingItem {

@@ -323,14 +323,27 @@ struct FindFreeSlotTool: Tool {
     }
 
     let name        = "findFreeSlots"
-    let description = "Finds available free time blocks in the user's calendar. Call this when the user asks to find free time, an open slot, or where to fit a new event."
+    let description = "Finds available free time in the user's calendar. Two modes based on whether durationMinutes is given: a plain availability question ('언제 비어 있어?') with no explicit numeric duration returns the full free window; a request with an explicit numeric duration ('1시간 찾아줘') returns one candidate slot of that length. An activity name ALONE ('운동할 시간 찾아줘') is NOT a duration -- if the user names an activity but never states how long, ask them in plain text how much time they need instead of guessing or calling this tool with a made-up value. Call this whenever the user asks about free time, an open slot, or where to fit something — never guess availability from context alone."
 
     @Generable
     struct Arguments: Sendable {
         @Guide(description: "Date scope — one of: 'today', 'tomorrow', 'this_week', or a specific yyyy-MM-dd")
         let scope: String
-        @Guide(description: "Required free-slot length in minutes, e.g. 30, 60, 90")
-        let durationMinutes: Int
+        // Optional, not defaulted to 30/60 anywhere -- absence has its own
+        // precise meaning (availability query), not "duration unspecified,
+        // guess one." See call(arguments:)'s branch below. Found during
+        // founder dogfooding: an empty day answered a plain "when am I
+        // free" question with a single arbitrary duration-sized slot
+        // instead of the whole open window, because this used to be a
+        // required Int the model had to invent a value for. A second bug
+        // in the same family (also found during dogfooding): the original
+        // fix's wording still let a bare activity name ("운동", "공부")
+        // count as justification for inventing a number -- it must not.
+        // On-device has no request_clarification tool (a known, separate
+        // gap), so the fallback here is a plain-text question, not a tool
+        // call.
+        @Guide(description: "Free-slot length in minutes (e.g. 30, 60, 90), ONLY when the user states an explicit numeric duration. Omit entirely for a plain availability question -- omitting returns the full free window, never a guessed duration. An activity name by itself (e.g. \"운동\") is NOT evidence for any particular number here -- if a duration is genuinely needed but never stated, ask the user in plain text instead of inventing one.")
+        let durationMinutes: Int?
         @Guide(description: "Earliest start time HH:mm, e.g. '09:00'. Empty string = no preference.")
         let windowStart: String
         @Guide(description: "Latest end time HH:mm, e.g. '21:00'. Empty string = no preference.")
@@ -351,22 +364,57 @@ struct FindFreeSlotTool: Tool {
         guard let dates = validScopeDates(arguments.scope) else {
             return "요청한 기간을 이해하지 못했어요."
         }
-        guard Self.allowedDurationMinutes.contains(arguments.durationMinutes) else {
+
+        guard let durationMinutes = arguments.durationMinutes else {
+            return await availabilityAnswer(dates: dates, windowStart: arguments.windowStart, windowEnd: arguments.windowEnd)
+        }
+        guard Self.allowedDurationMinutes.contains(durationMinutes) else {
             return "요청한 시간이 너무 짧거나 길어요. 15분에서 8시간(480분) 사이로 다시 말씀해 주세요."
         }
-        let duration = TimeInterval(arguments.durationMinutes * 60)
+        let duration = TimeInterval(durationMinutes * 60)
         let snapshot = await snapshotProvider()
 
         var lines: [String] = []
         for date in dates {
             let busyOnDay = snapshot.filter { Calendar.current.isDate($0.scheduledDate, inSameDayAs: date) }
-            let slots = freeSlots(on: date, busy: busyOnDay, duration: duration,
-                                  wStart: arguments.windowStart, wEnd: arguments.windowEnd)
+            let (start, end) = window(on: date, wStart: arguments.windowStart, wEnd: arguments.windowEnd)
+            let slots = FreeSlotService.freeSlots(
+                busy: busyRanges(busyOnDay), windowStart: start, windowEnd: end, duration: duration
+            )
             guard !slots.isEmpty else { continue }
             lines.append("\(dateLabel(date)): \(slots.map(formatInterval).joined(separator: ", "))")
         }
 
         return lines.isEmpty ? "요청한 조건에 맞는 빈 시간을 찾지 못했어요." : lines.joined(separator: "\n")
+    }
+
+    /// Absence of durationMinutes means "how free am I", not "duration
+    /// unspecified, guess one" -- reports the full free extent of the
+    /// window, not a duration-sized slice of it. Found during founder
+    /// dogfooding: this is the actual fix for an empty day answering
+    /// "1 hour free" to a plain availability question.
+    private func availabilityAnswer(dates: [Date], windowStart wStart: String, windowEnd wEnd: String) async -> String {
+        let snapshot = await snapshotProvider()
+
+        var lines: [String] = []
+        for date in dates {
+            let busyOnDay = snapshot.filter { Calendar.current.isDate($0.scheduledDate, inSameDayAs: date) }
+            let (start, end) = window(on: date, wStart: wStart, wEnd: wEnd)
+            let extents = FreeSlotService.fullFreeExtents(busy: busyRanges(busyOnDay), windowStart: start, windowEnd: end)
+            guard !extents.isEmpty else { continue }
+            if extents.count == 1, extents[0].start == start, extents[0].end == end {
+                // Deliberately no "등록된 일정이 없어서" causal claim --
+                // busyRanges(_:) (below) only looks at timed items, so an
+                // untimed task can still exist on this date even when the
+                // whole timed window is free. Stating only the computed
+                // fact (the window itself) stays true regardless.
+                lines.append("\(dateLabel(date)): \(formatInterval(extents[0])) 전체가 비어 있어요.")
+            } else {
+                lines.append("\(dateLabel(date)): \(extents.map(formatInterval).joined(separator: ", ")) 비어 있어요.")
+            }
+        }
+
+        return lines.isEmpty ? "요청한 기간에는 비어 있는 시간이 없어요." : lines.joined(separator: "\n")
     }
 
     /// nil means the model produced a scope this tool doesn't understand --
@@ -384,18 +432,22 @@ struct FindFreeSlotTool: Tool {
         }
     }
 
-    private func freeSlots(on date: Date, busy: [ScheduleInterval],
-                           duration: TimeInterval, wStart: String, wEnd: String) -> [AgentTimeRange] {
+    /// The product-defined default planning window (08:00-22:00) when the
+    /// model didn't supply an explicit windowStart/windowEnd -- shared by
+    /// both the duration-candidate path and the availability path so they
+    /// never silently disagree on what "the whole day" means.
+    private func window(on date: Date, wStart: String, wEnd: String) -> (Date, Date) {
         let cal   = Calendar.current
         let start = timeFrom(wStart, on: date) ?? cal.date(bySettingHour: 8,  minute: 0, second: 0, of: date)!
         let end   = timeFrom(wEnd,   on: date) ?? cal.date(bySettingHour: 22, minute: 0, second: 0, of: date)!
+        return (start, end)
+    }
 
-        let busyRanges: [AgentTimeRange] = busy.compactMap { s in
+    private func busyRanges(_ busy: [ScheduleInterval]) -> [AgentTimeRange] {
+        busy.compactMap { s in
             guard let s1 = s.startAt, let e1 = s.endAt else { return nil }
             return AgentTimeRange(start: s1, end: e1)
         }
-
-        return FreeSlotService.freeSlots(busy: busyRanges, windowStart: start, windowEnd: end, duration: duration)
     }
 
     private func timeFrom(_ hhmm: String, on date: Date) -> Date? {
