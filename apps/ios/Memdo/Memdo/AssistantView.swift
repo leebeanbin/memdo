@@ -710,6 +710,15 @@ struct AgentSheet: View {
                 messages.append(AgentMessage(role: .assistant, text: "'\(title)'을(를) 찾을 수 없어요.", isError: true))
             }
         case .reschedule:
+            // Same existence check as .complete above -- ScheduleModel.move(id:)
+            // silently no-ops when `id` isn't in the local `schedules` array
+            // (e.g. stale/never-synced), and this call site used to trust its
+            // own hardcoded success message regardless, showing "옮겼어요 ✓"
+            // even when nothing actually moved (founder-dogfooding fix).
+            guard scheduleStore.schedules.contains(where: { $0.id == id }) else {
+                messages.append(AgentMessage(role: .assistant, text: "'\(title)'을(를) 찾을 수 없어요.", isError: true))
+                break
+            }
             guard let dateString = updateProposal.dateString,
                   let expr = AgentDateExpression(token: dateString) else {
                 messages.append(AgentMessage(role: .assistant, text: "옮길 날짜를 처리하지 못했어요.", isError: true))
@@ -748,6 +757,13 @@ struct AgentSheet: View {
             scheduleStore.move(id: id, to: day, startAt: startAt, endAt: endAt)
             messages.append(AgentMessage(role: .assistant, text: "'\(title)' 일정을 옮겼어요 ✓"))
         case .delete:
+            // Same existence check as .complete/.reschedule above --
+            // ScheduleModel.delete(id:) silently no-ops on an id that isn't
+            // in the local `schedules` array.
+            guard scheduleStore.schedules.contains(where: { $0.id == id }) else {
+                messages.append(AgentMessage(role: .assistant, text: "'\(title)'을(를) 찾을 수 없어요.", isError: true))
+                break
+            }
             scheduleStore.delete(id: id)
             messages.append(AgentMessage(role: .assistant, text: "'\(title)' 일정을 삭제했어요 ✓"))
         }
