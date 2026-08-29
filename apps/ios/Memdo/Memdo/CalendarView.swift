@@ -397,7 +397,7 @@ private struct CalendarMonthCard: View {
                     .lineLimit(1)
             }
             .font(MemdoTypography.captionEmphasis)
-            .foregroundStyle(filter == .all ? MemdoTheme.secondaryInk : MemdoTheme.brand)
+            .foregroundStyle(filter == .all ? MemdoTheme.secondaryInk : MemdoTheme.brandInk)
             .padding(.horizontal, 10)
             .frame(minHeight: MemdoMetrics.touchTarget)
             .background(filter == .all ? Color.clear : MemdoTheme.brandSoft, in: Capsule())
@@ -510,7 +510,7 @@ private struct CalendarAgendaSection: View {
                     title: "등록된 일정이 없어요",
                     systemImage: "calendar.badge.plus",
                     detail: "위의 + 또는 날짜 길게 누르기로 시작해 보세요.",
-                    tint: MemdoTheme.brand
+                    tint: MemdoTheme.brandInk
                 )
             } else {
                 VStack(spacing: 0) {
@@ -799,7 +799,7 @@ private struct DayTimelineView: View {
                             ? (item.isDone ? "checkmark.circle.fill" : "circle")
                             : "calendar")
                             .font(MemdoTypography.footnote)
-                            .foregroundStyle(item.isDone ? MemdoTheme.brand : MemdoTheme.secondaryInk)
+                            .foregroundStyle(item.isDone ? MemdoTheme.brandInk : MemdoTheme.secondaryInk)
                             .frame(width: 18)
                         Text(item.title)
                             .font(MemdoTypography.subtitle)
@@ -857,21 +857,31 @@ private struct TimelineEventBlock: View {
     }
 
     // Match ScheduleRow: blocks carry the schedule's category color so the same
-    // event looks consistent between the list and the timeline.
+    // event looks consistent between the list and the timeline. Uses the
+    // *soft* variant + ink text, not the full-saturation color + white text --
+    // white-on-category-color measured well under 4.5:1 for several colors
+    // (amber ~2.0:1, sage/sky ~3.0-3.2:1) in light mode. Same soft+ink
+    // pairing ScheduleSourceIcon/BriefingCategoryBadge already use
+    // (founder-dogfooding fix, fd6). The no-category fallback (MemdoTheme.accent,
+    // = .label, already dark) keeps onAccent (white) text, which is fine on it.
     private var blockColor: Color {
-        event.color?.swiftUIColor ?? MemdoTheme.accent
+        event.color?.softSwiftUIColor ?? MemdoTheme.accent
+    }
+
+    private var blockTextColor: Color {
+        event.color != nil ? MemdoTheme.ink : MemdoTheme.onAccent
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(event.title)
                 .font(MemdoTypography.captionEmphasis)
-                .foregroundStyle(MemdoTheme.onAccent)
+                .foregroundStyle(blockTextColor)
                 .lineLimit(blockHeight > 48 ? 2 : 1)
             if blockHeight > 36 {
                 Text(timeLabel)
                     .font(.system(size: 10))
-                    .foregroundStyle(MemdoTheme.onAccent.opacity(0.75))
+                    .foregroundStyle(blockTextColor.opacity(0.75))
             }
         }
         .padding(.horizontal, 7)

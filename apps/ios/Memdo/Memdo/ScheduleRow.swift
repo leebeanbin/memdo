@@ -43,7 +43,7 @@ struct ScheduleRow: View {
     @ViewBuilder
     private var leadingMarker: some View {
         if schedule.kind == .task {
-            let activeColor = schedule.color?.swiftUIColor ?? MemdoTheme.brand
+            let activeColor = schedule.color?.swiftUIColor ?? MemdoTheme.brandInk
             if let onToggleDone {
                 Button(action: onToggleDone) {
                     Image(systemName: schedule.isDone ? "checkmark.circle.fill" : "circle")
@@ -93,7 +93,7 @@ struct ScheduleRow: View {
                     if let provider = schedule.meetingProvider {
                         Image(systemName: provider.systemImage)
                             .font(MemdoTypography.caption2)
-                            .foregroundStyle(MemdoTheme.brand)
+                            .foregroundStyle(MemdoTheme.brandInk)
                             .accessibilityLabel("\(provider.label) 회의")
                     }
                     if schedule.scheduleRuleId != nil {
@@ -191,7 +191,7 @@ struct ScheduleSourceIcon: View {
 
     private var iconColor: Color {
         if let c = schedule.color { return c.swiftUIColor }
-        return schedule.kind == .task ? MemdoTheme.brand : MemdoTheme.secondaryInk
+        return schedule.kind == .task ? MemdoTheme.brandInk : MemdoTheme.secondaryInk
     }
 
     private var iconBackground: Color {

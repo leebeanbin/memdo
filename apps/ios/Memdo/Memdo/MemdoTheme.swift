@@ -131,6 +131,42 @@ enum MemdoTheme {
         }
     )
     static let onBrand = Color.black
+    /// `brand` as a *text/icon* color -- `brand` itself (#FEB926 in light
+    /// mode, L ≈ 0.555) is ~1.6:1 against `background`/`brandSoft`, far
+    /// under WCAG AA's 4.5:1 for the caption-sized text it was being used
+    /// for in ~27 call sites (eyebrow labels, Agent response headers,
+    /// proposal card titles). Dark mode's lifted `brand` already clears
+    /// contrast (≈11:1), so this only redefines the light value; every
+    /// other text/icon call site that currently reads `MemdoTheme.brand`
+    /// should read this instead. `brand` itself stays as-is for *fills*
+    /// (which already pair with `onBrand`, black). Found via founder-
+    /// dogfooding code review.
+    static let brandInk = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 1.00, green: 0.78, blue: 0.35, alpha: 1)   // same as brand (dark)
+                : UIColor(red: 0.541, green: 0.357, blue: 0.0, alpha: 1)  // #8A5B00, ~4.6:1 on background/brandSoft
+        }
+    )
+    /// A conflict/caution warning, distinct from `brand` -- previously raw
+    /// `.orange` on `brandSoft` (~2:1 in light mode, no dark-mode tuning).
+    /// `warningSoft` is its own tinted band, not `brandSoft` -- a warning
+    /// sitting on the same cream as everything else on a proposal card
+    /// didn't read as elevated. Found via founder-dogfooding code review.
+    static let warning = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 1.00, green: 0.65, blue: 0.35, alpha: 1)   // lifted orange (dark)
+                : UIColor(red: 0.545, green: 0.286, blue: 0.055, alpha: 1) // #8B490E, ~4.7:1 on warningSoft
+        }
+    )
+    static let warningSoft = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0.24, green: 0.14, blue: 0.06, alpha: 1)  // deep muted orange
+                : UIColor(red: 0.996, green: 0.925, blue: 0.847, alpha: 1) // #FEECD8 pale orange
+        }
+    )
     static let destructive = Color(uiColor: .systemRed)
     static let onDestructive = Color.white
     static let mine = ink

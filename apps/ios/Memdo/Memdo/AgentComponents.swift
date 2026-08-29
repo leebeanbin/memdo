@@ -1,5 +1,21 @@
 import SwiftUI
 
+extension View {
+    /// A conflict/caution warning's own tinted band (MemdoTheme.warning on
+    /// warningSoft), rather than inheriting whatever cream/plain background
+    /// the surrounding proposal card already has -- plain `.orange` on
+    /// `brandSoft` measured at ~2:1 contrast, and a warning that reads the
+    /// same as everything else on the card doesn't read as elevated. Found
+    /// via founder-dogfooding code review (fd2). Only the proposal-card
+    /// conflict/caution labels below use this.
+    fileprivate func memdoWarningBand() -> some View {
+        foregroundStyle(MemdoTheme.warning)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(MemdoTheme.warningSoft, in: RoundedRectangle(cornerRadius: MemdoMetrics.iconRadius, style: .continuous))
+    }
+}
+
 struct AgentSheetHeader: View {
     let context: AgentContext
     var hasStarted: Bool = false
@@ -8,7 +24,7 @@ struct AgentSheetHeader: View {
         VStack(alignment: .leading, spacing: 4) {
             Label("\(context.displayTitle) 문맥 사용 중", systemImage: "sparkles")
                 .font(MemdoTypography.captionEmphasis)
-                .foregroundStyle(MemdoTheme.brand)
+                .foregroundStyle(MemdoTheme.brandInk)
             if !hasStarted {
                 Text("무엇을 정리할까요?")
                     .font(MemdoTypography.detailTitle)
@@ -55,7 +71,7 @@ struct AgentQuickActions: View {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.up.right")
                                 .font(MemdoTypography.captionEmphasis)
-                                .foregroundStyle(MemdoTheme.brand)
+                                .foregroundStyle(MemdoTheme.brandInk)
                                 .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(item.0)
@@ -89,7 +105,7 @@ struct AgentResponse: View {
     var onRetry: (() -> Void)? = nil
 
     private var accentColor: Color {
-        message.isError ? .red : MemdoTheme.brand
+        message.isError ? .red : MemdoTheme.brandInk
     }
 
     private var isToolPhase: Bool {
@@ -114,7 +130,7 @@ struct AgentResponse: View {
                 if isToolPhase {
                     Image(systemName: "gearshape.fill")
                         .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.brand)
+                        .foregroundStyle(MemdoTheme.brandInk)
                         .symbolEffect(.pulse)
                 } else if message.isStreaming && message.text.isEmpty {
                     TypingDotsView()
@@ -125,11 +141,11 @@ struct AgentResponse: View {
                 } else if message.intent == .clarificationRequired {
                     Image(systemName: "questionmark.circle")
                         .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.brand)
+                        .foregroundStyle(MemdoTheme.brandInk)
                 } else {
                     Image(systemName: "sparkle")
                         .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.brand)
+                        .foregroundStyle(MemdoTheme.brandInk)
                 }
                 Text(headerLabel)
                     .font(MemdoTypography.captionEmphasis)
@@ -156,7 +172,7 @@ struct AgentResponse: View {
                 Button(action: onRetry) {
                     Label("다시 시도", systemImage: "arrow.clockwise")
                         .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.brand)
+                        .foregroundStyle(MemdoTheme.brandInk)
                 }
                 .buttonStyle(.plain)
             }
@@ -296,7 +312,7 @@ struct ProposedScheduleCard: View {
             // Agent sheet."
             Label("Agent 일정 제안", systemImage: "calendar.badge.plus")
                 .font(MemdoTypography.captionEmphasis)
-                .foregroundStyle(MemdoTheme.brand)
+                .foregroundStyle(MemdoTheme.brandInk)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(draft.title)
@@ -325,12 +341,12 @@ struct ProposedScheduleCard: View {
                 if let conflictTitle {
                     Label("같은 시간에 '\(conflictTitle)' 일정이 있어요", systemImage: "exclamationmark.triangle.fill")
                         .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(.orange)
+                        .memdoWarningBand()
                         .lineLimit(2)
                 } else if conflictCheckFailed {
                     Label("기존 일정을 확인하지 못했어요 — 저장 전 직접 확인해주세요", systemImage: "questionmark.circle.fill")
                         .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(.orange)
+                        .memdoWarningBand()
                         .lineLimit(2)
                 }
             }
@@ -411,7 +427,7 @@ struct ProposedScheduleUpdateCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Agent \(proposal.displayActionLabel) 제안", systemImage: icon)
                 .font(MemdoTypography.captionEmphasis)
-                .foregroundStyle(MemdoTheme.brand)
+                .foregroundStyle(MemdoTheme.brandInk)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(proposal.title ?? "일정")
@@ -435,12 +451,12 @@ struct ProposedScheduleUpdateCard: View {
                 if let conflictTitle = proposal.conflict?.title {
                     Label("같은 시간에 '\(conflictTitle)' 일정이 있어요", systemImage: "exclamationmark.triangle.fill")
                         .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(.orange)
+                        .memdoWarningBand()
                         .lineLimit(2)
                 } else if proposal.conflictCheckFailed {
                     Label("기존 일정을 확인하지 못했어요 — 적용 전 직접 확인해주세요", systemImage: "questionmark.circle.fill")
                         .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(.orange)
+                        .memdoWarningBand()
                         .lineLimit(2)
                 }
             }
@@ -525,7 +541,7 @@ struct ProposedRoutineUpdateCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Agent 루틴 설정 변경 제안", systemImage: "gearshape.badge.checkmark")
                 .font(MemdoTypography.captionEmphasis)
-                .foregroundStyle(MemdoTheme.brand)
+                .foregroundStyle(MemdoTheme.brandInk)
 
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(rows, id: \.self) { row in
@@ -614,7 +630,7 @@ struct ProposedReviewActionCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Agent 회고 제안", systemImage: "text.book.closed")
                 .font(MemdoTypography.captionEmphasis)
-                .foregroundStyle(MemdoTheme.brand)
+                .foregroundStyle(MemdoTheme.brandInk)
 
             VStack(alignment: .leading, spacing: 6) {
                 if let displayDate {
@@ -624,7 +640,7 @@ struct ProposedReviewActionCard: View {
                 } else {
                     Label("날짜를 확인할 수 없어요", systemImage: "exclamationmark.triangle.fill")
                         .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(.orange)
+                        .memdoWarningBand()
                 }
 
                 Text(draft.reflection)
@@ -635,7 +651,7 @@ struct ProposedReviewActionCard: View {
                     Label("이 날짜에 이미 회고가 있어요: \"\(existingReflectionText)\" 덮어쓸까요?",
                           systemImage: "exclamationmark.triangle.fill")
                         .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(.orange)
+                        .memdoWarningBand()
                         .lineLimit(3)
                 }
             }
@@ -734,7 +750,7 @@ struct AgentComposer: View {
                 } else {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(isEmpty ? MemdoTheme.secondaryInk : MemdoTheme.brand)
+                        .foregroundStyle(isEmpty ? MemdoTheme.secondaryInk : MemdoTheme.brandInk)
                         .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
                         .contentShape(Circle())
                 }

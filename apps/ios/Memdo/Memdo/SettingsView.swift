@@ -367,7 +367,7 @@ private struct ConnectionMark: View {
             case .system(let name):
                 Image(systemName: name)
                     .font(MemdoTypography.action)
-                    .foregroundStyle(MemdoTheme.brand)
+                    .foregroundStyle(MemdoTheme.brandInk)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(MemdoTheme.brandSoft)
             }
@@ -447,7 +447,7 @@ private struct ConnectionBadge: View {
             .font(MemdoTypography.caption2Emphasis)
             .dynamicTypeSize(.small ... .large)
             .tracking(0.4)
-            .foregroundStyle(MemdoTheme.brand)
+            .foregroundStyle(MemdoTheme.brandInk)
             .padding(.horizontal, 8)
             .frame(height: 20)
             .background(MemdoTheme.brandSoft, in: Capsule())

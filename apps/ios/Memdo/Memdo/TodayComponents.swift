@@ -50,7 +50,7 @@ struct TodayHeader: View {
         VStack(alignment: .leading, spacing: 4) {
                 Text(eyebrow)
                     .font(MemdoTypography.captionEmphasis)
-                    .foregroundStyle(MemdoTheme.brand)
+                    .foregroundStyle(MemdoTheme.brandInk)
                 Text(title)
                     .font(.system(.title2, design: .rounded, weight: .bold))
                     .foregroundStyle(MemdoTheme.ink)
@@ -166,7 +166,7 @@ struct TodayIntentionPrompt: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("오늘의 방향", systemImage: "sparkle")
                         .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.brand)
+                        .foregroundStyle(MemdoTheme.brandInk)
                     Text(isToday ? "오늘은 어떤 하루를 보내고 싶나요?" : "이날에는 어떤 시간을 보내고 싶나요?")
                         .font(MemdoTypography.sectionTitle)
                         .foregroundStyle(MemdoTheme.ink)
@@ -179,7 +179,7 @@ struct TodayIntentionPrompt: View {
                 if !dynamicTypeSize.isAccessibilitySize {
                     Image(systemName: "plus")
                         .font(MemdoTypography.action)
-                        .foregroundStyle(MemdoTheme.brand)
+                        .foregroundStyle(MemdoTheme.brandInk)
                         .frame(width: 36, height: 36)
                         .background(MemdoTheme.brandSoft, in: Circle())
                 }
@@ -379,7 +379,7 @@ private struct BriefingPreview: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("오늘 꼭 알아둘 변화")
                         .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.brand)
+                        .foregroundStyle(MemdoTheme.brandInk)
                     Text(previewText)
                         .font(MemdoTypography.sectionTitle)
                         .foregroundStyle(MemdoTheme.ink)
@@ -783,7 +783,7 @@ private struct BriefingStoryDetail: View {
                                     }
                                 }
                                 .font(MemdoTypography.captionEmphasis)
-                                .foregroundStyle(MemdoTheme.brand)
+                                .foregroundStyle(MemdoTheme.brandInk)
                                 .disabled(isCleaningUp)
                                 .accessibilityLabel("AI 요약으로 다시 정리하기")
                                 .transition(.opacity)
