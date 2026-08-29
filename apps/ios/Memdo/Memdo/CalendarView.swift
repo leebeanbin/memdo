@@ -118,9 +118,9 @@ struct CalendarView: View {
             case .day(let date):
                 DayAgendaSheet(date: date)
             case .add(let date, let kind):
-                AddScheduleSheet(date: date, defaultKind: kind, onSave: scheduleStore.save)
+                AddScheduleSheet(date: date, defaultKind: kind, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
             case .detail(let schedule):
-                ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
+                ScheduleDetailSheet(schedule: schedule, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
             }
         }
         .sheet(item: $selectedWorkout) { workout in
@@ -620,9 +620,9 @@ private struct DayAgendaSheet: View {
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
             case .add:
-                AddScheduleSheet(date: date, onSave: scheduleStore.save)
+                AddScheduleSheet(date: date, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
             case .detail(let schedule):
-                ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
+                ScheduleDetailSheet(schedule: schedule, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
             }
         }
         .sheet(item: $selectedWorkout) { workout in

@@ -170,11 +170,11 @@ struct TodayView: View {
             .sheet(item: $presentedSheet) { destination in
                 switch destination {
                 case .addTask(let date):
-                    AddScheduleSheet(date: date, onSave: scheduleStore.save)
+                    AddScheduleSheet(date: date, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
                 case .dailySummary(let date):
                     DailySummaryView(date: date)
                 case .detail(let schedule):
-                    ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
+                    ScheduleDetailSheet(schedule: schedule, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
                 }
             }
             .sheet(item: $selectedWorkout) { workout in
@@ -235,7 +235,7 @@ struct TodayView: View {
     }
 
     private func toggleDone(_ schedule: ScheduleDetail) {
-        scheduleStore.toggleDone(id: schedule.id)
+        Task { try? await scheduleStore.toggleDone(id: schedule.id) }
     }
 
     private func toggleSchedules() {

@@ -282,6 +282,9 @@ struct ProposedScheduleCard: View {
     let draft: ProposedScheduleDraft
     var conflictTitle: String? = nil
     var conflictCheckFailed: Bool = false
+    /// True while the confirm tap's Store mutation is actually in flight --
+    /// disables the button so a rapid double-tap can't fire two requests.
+    var isApplying: Bool = false
     let onConfirm: () -> Void
     let onDecline: () -> Void
 
@@ -334,14 +337,21 @@ struct ProposedScheduleCard: View {
 
             HStack(spacing: 8) {
                 Button(action: onConfirm) {
-                    Label("저장하기", systemImage: "checkmark")
-                        .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.onAccent)
-                        .frame(maxWidth: .infinity, minHeight: 34)
-                        .background(MemdoTheme.accent,
-                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    HStack(spacing: 6) {
+                        if isApplying {
+                            ProgressView().tint(MemdoTheme.onAccent)
+                        } else {
+                            Label("저장하기", systemImage: "checkmark")
+                        }
+                    }
+                    .font(MemdoTypography.captionEmphasis)
+                    .foregroundStyle(MemdoTheme.onAccent)
+                    .frame(maxWidth: .infinity, minHeight: 34)
+                    .background(MemdoTheme.accent,
+                                in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .disabled(isApplying)
 
                 Button(action: onDecline) {
                     Text("취소")
@@ -356,6 +366,7 @@ struct ProposedScheduleCard: View {
                         }
                 }
                 .buttonStyle(.plain)
+                .disabled(isApplying)
             }
         }
         .padding(14)
@@ -377,6 +388,9 @@ struct ProposedScheduleCard: View {
 /// (on-device), since both funnel into the same AgentScheduleUpdateProposal.
 struct ProposedScheduleUpdateCard: View {
     let proposal: AgentScheduleUpdateProposal
+    /// True while the confirm tap's Store mutation is actually in flight --
+    /// disables the button so a rapid double-tap can't fire two requests.
+    var isApplying: Bool = false
     let onConfirm: () -> Void
     let onDecline: () -> Void
 
@@ -433,14 +447,21 @@ struct ProposedScheduleUpdateCard: View {
 
             HStack(spacing: 8) {
                 Button(action: onConfirm) {
-                    Label(confirmLabel, systemImage: "checkmark")
-                        .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.onAccent)
-                        .frame(maxWidth: .infinity, minHeight: 34)
-                        .background(MemdoTheme.accent,
-                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    HStack(spacing: 6) {
+                        if isApplying {
+                            ProgressView().tint(MemdoTheme.onAccent)
+                        } else {
+                            Label(confirmLabel, systemImage: "checkmark")
+                        }
+                    }
+                    .font(MemdoTypography.captionEmphasis)
+                    .foregroundStyle(MemdoTheme.onAccent)
+                    .frame(maxWidth: .infinity, minHeight: 34)
+                    .background(MemdoTheme.accent,
+                                in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .disabled(isApplying)
 
                 Button(action: onDecline) {
                     Text("취소")
@@ -455,6 +476,7 @@ struct ProposedScheduleUpdateCard: View {
                         }
                 }
                 .buttonStyle(.plain)
+                .disabled(isApplying)
             }
         }
         .padding(14)

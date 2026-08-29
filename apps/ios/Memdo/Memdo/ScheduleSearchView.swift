@@ -79,7 +79,7 @@ struct ScheduleSearchView: View {
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
             case .detail(let schedule):
-                ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
+                ScheduleDetailSheet(schedule: schedule, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
             case .filters:
                 SearchFilterSheet(status: $status, period: $period)
             }

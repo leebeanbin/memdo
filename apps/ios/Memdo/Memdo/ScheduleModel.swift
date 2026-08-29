@@ -442,6 +442,126 @@ enum ScheduleStoreState: Equatable {
     case failed(String)
 }
 
+/// What a Store mutation actually achieved -- distinct from "didn't throw."
+/// `.committed` is the only case that reflects a real, server-confirmed
+/// write; the Agent confirm flow (AssistantView) must never show a "✓"
+/// success message for anything else. `.createdStatusQueuedOffline` is
+/// narrower than `.queuedOffline`: it means the *row itself* is real and
+/// server-confirmed (a virtual occurrence's materializing create
+/// succeeded), but the caller's actually-desired status (e.g. completing
+/// it) is what's queued -- worth its own case so the UI can say
+/// "만들어졌고, 완료 표시만 대기 중" instead of either "✓ 완료" or the
+/// generic queued message.
+enum ScheduleWriteOutcome {
+    case committed
+    case queuedOffline
+    case createdStatusQueuedOffline
+}
+
+/// Distinguishes exactly the failure shapes this Store's mutation methods
+/// need to give the caller an honest, non-generic message -- not a general
+/// error-wrapping abstraction, just the specific cases found while fixing
+/// the false-"✓" bug (see docs/dogfood-log or this session's PR history).
+enum ScheduleWriteError: Error, LocalizedError {
+    /// Another write is already in flight for this same id (from any
+    /// caller, Agent or otherwise) -- the guard used to return silently,
+    /// which a caller could misread as success.
+    case busy
+    /// The id doesn't exist in `schedules` at all.
+    case notFound
+    /// A defensive, should-basically-never-happen calendar computation
+    /// failed (e.g. constructing a new start time from components).
+    case invalidInput
+    /// A virtual occurrence's create succeeded (the row is real) but the
+    /// follow-up status PATCH failed for a real (non-offline) reason --
+    /// the row stays in `schedules`, but this is not a full commit.
+    case partialFailure(underlying: Error)
+    /// The backend rejected a PATCH/DELETE with VERSION_CONFLICT.
+    case staleVersion(StaleVersionResolution)
+
+    var errorDescription: String? {
+        switch self {
+        case .busy:
+            "다른 작업이 진행 중이에요. 잠시 후 다시 시도해 주세요."
+        case .notFound:
+            "해당 일정을 찾을 수 없어요."
+        case .invalidInput:
+            "요청하신 날짜/시간을 처리하지 못했어요."
+        case .partialFailure(let underlying):
+            "일부만 반영됐어요: \(underlying.localizedDescription)"
+        case .staleVersion(let resolution):
+            switch resolution {
+            case .refreshedAndFound:
+                "일정이 다른 곳에서 변경되어 최신 정보로 갱신했어요. 다시 확인해 주세요."
+            case .refreshedAndRemoved:
+                "이 일정이 다른 곳에서 이미 삭제된 것 같아요. 목록을 다시 확인해 주세요."
+            case .inconclusive:
+                "변경 충돌을 감지했어요. 일정을 새로고침한 뒤 다시 확인해 주세요."
+            }
+        }
+    }
+}
+
+/// How trustworthy a post-VERSION_CONFLICT `load()` refresh is for
+/// one specific item -- `load()` swallows its own errors internally, so
+/// "it didn't throw" alone can't be read as "this item's state is now
+/// known." See `classifyStaleVersionResolution` for the pure decision
+/// logic (unit-testable without a live repository).
+enum StaleVersionResolution: Equatable {
+    /// The refresh ran, covered this item's original date, and the item
+    /// is present in the fresh results.
+    case refreshedAndFound
+    /// The refresh ran, covered this item's original date, and the item
+    /// is genuinely absent -- a legitimate "deleted elsewhere" outcome,
+    /// not an error.
+    case refreshedAndRemoved
+    /// The refresh was skipped (a load was already in flight), failed, or
+    /// didn't cover this item's original date -- nothing conclusive.
+    case inconclusive
+}
+
+/// Pure classification of a thrown write error into what this Store's
+/// mutation methods branch on. Separated out so it's unit-testable without
+/// a live repository (no repository mock exists or is being added for this
+/// fix -- see PR description). 409 is NOT exclusively VERSION_CONFLICT
+/// (memdo-backend also uses it for IDEMPOTENCY_CONFLICT on create/
+/// reschedule), so this matches on the error `code`, never bare `status`.
+enum ScheduleWriteFailureKind: Equatable {
+    case offline
+    case versionConflict
+    case other
+}
+
+func classifyScheduleWriteFailure(_ error: Error) -> ScheduleWriteFailureKind {
+    if case ScheduleAPIError.offline = error { return .offline }
+    if case ScheduleAPIError.server(_, let code, _, _) = error, code == "VERSION_CONFLICT" {
+        return .versionConflict
+    }
+    return .other
+}
+
+/// Pure decision logic for `StaleVersionResolution` -- see its doc comment.
+/// `loadWasSkipped`: true if a `load()` call was skipped because one
+/// was already in flight (its own top-of-function guard would have made it
+/// a no-op). `loadFailed`: true if `state` was `.failed` after the load
+/// attempt. `targetDate`: the item's *original* `scheduledDate` (before
+/// whatever edit triggered the conflict) -- what must fall inside
+/// `loadedFrom...loadedTo` for the refresh to say anything about this item.
+func classifyStaleVersionResolution(
+    loadWasSkipped: Bool,
+    loadFailed: Bool,
+    targetDate: Date,
+    loadedFrom: Date?,
+    loadedTo: Date?,
+    idFoundAfterRefresh: Bool
+) -> StaleVersionResolution {
+    if loadWasSkipped || loadFailed { return .inconclusive }
+    guard let loadedFrom, let loadedTo, targetDate >= loadedFrom, targetDate <= loadedTo else {
+        return .inconclusive
+    }
+    return idFoundAfterRefresh ? .refreshedAndFound : .refreshedAndRemoved
+}
+
 @MainActor
 @Observable
 final class ScheduleStore {
@@ -455,9 +575,11 @@ final class ScheduleStore {
     private let repository: ScheduleRepository
     private var lastWidgetDays: [MemdoWidgetDay]?
     private var lastSyncCursor: String?
-    /// IDs with a create/update/delete/reschedule in flight. Re-entrant calls for the
-    /// same id (e.g. a double-tapped completion toggle) are dropped rather than firing
-    /// a second request that's guaranteed to lose the optimistic-lock race.
+    /// IDs with a create/update/delete/reschedule in flight. A re-entrant call for
+    /// the same id (e.g. a double-tapped completion toggle, or a different action
+    /// racing in from another entry point) throws `ScheduleWriteError.busy` rather
+    /// than firing a second request that's guaranteed to lose the optimistic-lock
+    /// race -- it used to return silently, which a caller could misread as success.
     private var pendingWriteIDs: Set<UUID> = []
     private var loadedFrom: Date?
     private var loadedTo: Date?
@@ -858,13 +980,24 @@ final class ScheduleStore {
         }
     }
 
-    func save(_ schedule: ScheduleDetail) {
-        // Always reschedule the reminder, even when a concurrent write is already
-        // in-flight. The guard below deduplicates network writes only.
-        Task { await NotificationScheduler.scheduleReminder(for: schedule) }
-        Task { await NotificationScheduler.scheduleEndNotification(for: schedule) }
-        guard !pendingWriteIDs.contains(schedule.id) else { return }
+    /// Awaits the real backend result before returning -- callers that need
+    /// a "✓ success" signal (the Agent confirm flow) must not show one
+    /// until this actually returns `.committed`. Optimistic local update
+    /// still happens synchronously (unchanged) so the UI reflects the edit
+    /// immediately; only the async network write and its outcome moved to
+    /// being awaited instead of fired into a background `Task`.
+    func save(_ schedule: ScheduleDetail) async throws -> ScheduleWriteOutcome {
+        guard !pendingWriteIDs.contains(schedule.id) else { throw ScheduleWriteError.busy }
         pendingWriteIDs.insert(schedule.id)
+        defer { pendingWriteIDs.remove(schedule.id) }
+        return try await performSave(schedule)
+    }
+
+    /// The guard-free body of `save(_:)` -- factored out so `move()`'s
+    /// non-reschedulable fallback can call it directly without re-taking
+    /// `pendingWriteIDs` for an id it already holds the guard for (that
+    /// would incorrectly throw `.busy` on its own delegation).
+    private func performSave(_ schedule: ScheduleDetail) async throws -> ScheduleWriteOutcome {
         // A virtual occurrence (event-mode rule, computed but never written to the
         // DB) has no real row to PATCH -- regardless of whether it's already in
         // `schedules` locally (it got there via the same GET that computed it).
@@ -875,27 +1008,17 @@ final class ScheduleStore {
                 schedules.append(schedule)
             }
             updateWidgetSnapshot()
-            Task {
-                await create(schedule)
-                pendingWriteIDs.remove(schedule.id)
-            }
-            return
+            return try await create(schedule)
         }
         if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
             let previous = schedules[index]
             schedules[index] = schedule
             updateWidgetSnapshot()
-            Task {
-                await update(schedule, replacing: previous)
-                pendingWriteIDs.remove(schedule.id)
-            }
+            return try await update(schedule, replacing: previous)
         } else {
             schedules.append(schedule)
             updateWidgetSnapshot()
-            Task {
-                await create(schedule, notifyOnSuccess: true)
-                pendingWriteIDs.remove(schedule.id)
-            }
+            return try await create(schedule, notifyOnSuccess: true)
         }
     }
 
@@ -903,15 +1026,25 @@ final class ScheduleStore {
     /// schedule (see save(_:)) -- create() is also the materialize step for
     /// touching a virtual recurring occurrence, which isn't "a new schedule"
     /// from the user's perspective and shouldn't announce itself as one.
-    private func create(_ schedule: ScheduleDetail, notifyOnSuccess: Bool = false) async {
+    ///
+    /// Notification scheduling (per founder-dogfooding review) never fires
+    /// before the backend result is known -- only inside the branch that
+    /// matches what `schedules` actually ends up holding, so a rollback
+    /// never leaves a stale optimistic notification behind.
+    private func create(_ schedule: ScheduleDetail, notifyOnSuccess: Bool = false) async throws -> ScheduleWriteOutcome {
         let saved: ScheduleDetail
         do {
             saved = try await repository.create(schedule)
         } catch ScheduleAPIError.offline {
             // Keep the optimistic row as-is (it's already in `schedules`) and
-            // queue the create for replay -- no rollback, no error shown.
+            // queue the create for replay -- no rollback. Notifications stay
+            // untouched: they were never scheduled for this yet, and the
+            // optimistic `schedule` value is what's actually showing, so
+            // scheduling against it here keeps the UI and the reminder in sync.
             await outbox.enqueue(.create(schedule), scheduleID: schedule.id)
-            return
+            await NotificationScheduler.scheduleReminder(for: schedule)
+            await NotificationScheduler.scheduleEndNotification(for: schedule)
+            return .queuedOffline
         } catch {
             if schedule.isVirtual {
                 // This wasn't a net-new item -- it's a computed occurrence that
@@ -930,7 +1063,10 @@ final class ScheduleStore {
             }
             updateWidgetSnapshot()
             lastWriteError = error.localizedDescription
-            return
+            // No notification was ever scheduled for this attempt (create()
+            // only schedules on a real commit/offline-queue below), so
+            // there's nothing to undo here.
+            throw error
         }
         // The row is real now regardless of what happens below -- keep it that
         // way even if the follow-up fails, so a retry goes through update()'s
@@ -942,6 +1078,8 @@ final class ScheduleStore {
             schedules.append(saved)
         }
         updateWidgetSnapshot()
+        await NotificationScheduler.scheduleReminder(for: saved)
+        await NotificationScheduler.scheduleEndNotification(for: saved)
         // Fires only now that the row is confirmed persisted -- not
         // optimistically at the start of save(), which could announce a
         // schedule that then fails validation or a conflict and never exists.
@@ -951,11 +1089,14 @@ final class ScheduleStore {
         // POST /todos (create) doesn't accept a status -- new rows always start
         // "planned" server-side. If the caller's intent was e.g. completing a
         // virtual occurrence in one action, follow up with the real row's status
-        // now that it has a real version to optimistically-lock against.
-        guard saved.status != schedule.status else { return }
+        // now that it has a real version to optimistically-lock against. `saved`
+        // (the real "planned" row, notification already scheduled for it above)
+        // stays in `schedules` regardless of what happens to this follow-up --
+        // it's genuinely real server-side now, unlike the create step above.
+        guard saved.status != schedule.status else { return .committed }
+        var desired = saved
+        desired.status = schedule.status
         do {
-            var desired = saved
-            desired.status = schedule.status
             let updated = try await repository.update(desired)
             if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
                 schedules[index] = updated
@@ -963,32 +1104,88 @@ final class ScheduleStore {
                 schedules.append(updated)
             }
             updateWidgetSnapshot()
+            await NotificationScheduler.scheduleReminder(for: updated)
+            await NotificationScheduler.scheduleEndNotification(for: updated)
+            if updated.isDone && !saved.isDone {
+                await SlackNotifier.notify(schedule: updated, event: .completed)
+            }
+            return .committed
+        } catch ScheduleAPIError.offline {
+            // The row itself is committed (saved, notification already set
+            // above); only the desired-status half is queued. `schedules`
+            // still shows `saved` (not `desired`) -- nothing further to
+            // schedule, the existing notification for `saved` is already
+            // consistent with what's actually stored locally.
+            await outbox.enqueue(.update(desired), scheduleID: schedule.id)
+            return .createdStatusQueuedOffline
         } catch {
+            // Real failure on just the status half -- `saved` stays as-is in
+            // `schedules` (correct, it's real), and its notification (set
+            // above) is already consistent with that -- nothing to undo.
             lastWriteError = error.localizedDescription
+            throw ScheduleWriteError.partialFailure(underlying: error)
         }
     }
 
-    private func update(_ schedule: ScheduleDetail, replacing previous: ScheduleDetail) async {
+    private func update(_ schedule: ScheduleDetail, replacing previous: ScheduleDetail) async throws -> ScheduleWriteOutcome {
         do {
-            replace(schedule.id, with: try await repository.update(schedule))
+            let updated = try await repository.update(schedule)
+            replace(schedule.id, with: updated)
+            updateWidgetSnapshot()
+            await NotificationScheduler.scheduleReminder(for: updated)
+            await NotificationScheduler.scheduleEndNotification(for: updated)
+            // Fires only now that the completion is confirmed persisted -- not
+            // optimistically when the toggle was tapped, which could announce a
+            // completion that a validation/conflict error then rolls back.
+            if schedule.isDone && !previous.isDone {
+                await SlackNotifier.notify(schedule: updated, event: .completed)
+            }
+            return .committed
         } catch ScheduleAPIError.offline {
             // Optimistic value in `schedules` already reflects the edit --
-            // leave it and queue the PATCH for replay.
+            // leave it and queue the PATCH for replay. Notification matches
+            // the optimistic (edited) value, same reasoning as create()'s
+            // offline branch.
             await outbox.enqueue(.update(schedule), scheduleID: schedule.id)
-            return
+            await NotificationScheduler.scheduleReminder(for: schedule)
+            await NotificationScheduler.scheduleEndNotification(for: schedule)
+            return .queuedOffline
         } catch {
             replace(schedule.id, with: previous)
-            lastWriteError = error.localizedDescription
             updateWidgetSnapshot()
-            return
+            lastWriteError = error.localizedDescription
+            // No notification was scheduled for the edited value before this
+            // request (see create()/update() -- scheduling only ever happens
+            // inside a commit/offline branch), so nothing needs restoring
+            // here; whatever was scheduled for `previous` is already correct.
+            if classifyScheduleWriteFailure(error) == .versionConflict {
+                try await resolveStaleVersion(idBeingWritten: schedule.id, originalScheduledDate: previous.scheduledDate)
+            }
+            throw error
         }
-        updateWidgetSnapshot()
-        // Fires only now that the completion is confirmed persisted -- not
-        // optimistically when the toggle was tapped, which could announce a
-        // completion that a validation/conflict error then rolls back.
-        if schedule.isDone && !previous.isDone {
-            await SlackNotifier.notify(schedule: schedule, event: .completed)
+    }
+
+    /// Refreshes and throws a `ScheduleWriteError.staleVersion` describing
+    /// how trustworthy that refresh was for `idBeingWritten` -- see
+    /// `classifyStaleVersionResolution`'s doc comment. Always throws (never
+    /// returns normally), used from every PATCH/DELETE mutation's
+    /// VERSION_CONFLICT branch.
+    private func resolveStaleVersion(idBeingWritten: UUID, originalScheduledDate: Date) async throws -> Never {
+        let wasAlreadyLoading = state == .loading
+        if !wasAlreadyLoading {
+            await load()
         }
+        let loadFailed: Bool
+        if case .failed = state { loadFailed = true } else { loadFailed = false }
+        let resolution = classifyStaleVersionResolution(
+            loadWasSkipped: wasAlreadyLoading,
+            loadFailed: loadFailed,
+            targetDate: originalScheduledDate,
+            loadedFrom: loadedFrom,
+            loadedTo: loadedTo,
+            idFoundAfterRefresh: schedules.contains(where: { $0.id == idBeingWritten })
+        )
+        throw ScheduleWriteError.staleVersion(resolution)
     }
 
     /// Public entry point for triggers besides load() itself -- app
@@ -1020,28 +1217,42 @@ final class ScheduleStore {
         schedules[index] = schedule
     }
 
-    func toggleDone(id: UUID) {
-        // No kind restriction here (was `kind == .task` -- silently blocked
-        // completion toggling for events, with no save() call at all, so no
-        // DB write was ever attempted). The summary screen's existing
-        // "complete" action already lets any kind become done via save()
-        // directly with no such guard, so this only closed the undo side of
-        // that asymmetry. Found during founder dogfooding.
-        guard let index = schedules.firstIndex(where: { $0.id == id }) else { return }
-        // Update local state immediately so the ring reflects the change even
-        // when save() returns early due to a concurrent in-flight write.
-        schedules[index].isDone.toggle()
-        updateWidgetSnapshot()
-        save(schedules[index])
+    /// Builds a copy and delegates entirely to `save(_:)`, which owns the
+    /// one `pendingWriteIDs` guard for this id -- `toggleDone()` itself
+    /// takes no guard (see the guard-ownership rule in `move()`'s doc
+    /// comment). Building a copy rather than mutating `schedules[index]`
+    /// in place (as this used to do) matters: `save()`'s own rollback
+    /// captures `let previous = schedules[index]` -- if this function had
+    /// already toggled that stored value before calling save(), "previous"
+    /// would already be the *post*-toggle value and rollback on failure
+    /// would be a no-op. Founder-dogfooding review found exactly that bug.
+    func toggleDone(id: UUID) async throws -> ScheduleWriteOutcome {
+        guard let index = schedules.firstIndex(where: { $0.id == id }) else {
+            throw ScheduleWriteError.notFound
+        }
+        var updated = schedules[index]
+        updated.isDone.toggle()
+        return try await save(updated)
     }
 
     /// `startAt`/`endAt` override the moved time explicitly (e.g. an Agent
     /// propose_schedule_update reschedule with a new time, not just a new
     /// day) -- when both are nil, the original time-of-day is preserved on
     /// the new date, same as a plain drag-to-a-different-day move.
-    func move(id: UUID, to date: Date, startAt: Date? = nil, endAt: Date? = nil) {
-        guard !pendingWriteIDs.contains(id) else { return }
-        guard let index = schedules.firstIndex(where: { $0.id == id }) else { return }
+    ///
+    /// Guard-ownership rule (applied consistently across every public
+    /// mutation entry point): only the function doing the operation's own
+    /// real work takes `pendingWriteIDs` for an id; a function that's pure
+    /// delegation to another guarded entry point does not. `move()` does
+    /// real work in its main (reschedulable) path, so it owns the guard --
+    /// and for its non-reschedulable fallback it calls the private,
+    /// guard-free `performSave(_:)` (not public `save(_:)`), so that
+    /// fallback doesn't re-take a guard this function already holds.
+    func move(id: UUID, to date: Date, startAt: Date? = nil, endAt: Date? = nil) async throws -> ScheduleWriteOutcome {
+        guard !pendingWriteIDs.contains(id) else { throw ScheduleWriteError.busy }
+        guard let index = schedules.firstIndex(where: { $0.id == id }) else {
+            throw ScheduleWriteError.notFound
+        }
         let original = schedules[index]
         var moved = original
         let calendar = Calendar.current
@@ -1059,7 +1270,7 @@ final class ScheduleStore {
                 minute: time.minute ?? 0,
                 second: time.second ?? 0,
                 of: date
-            ) else { return }
+            ) else { throw ScheduleWriteError.invalidInput }
             moved.startAt = newStart
             moved.endAt = newStart.addingTimeInterval(duration)
         }
@@ -1075,22 +1286,20 @@ final class ScheduleStore {
         }
         assert(calendar.isDate(moved.scheduledDate, inSameDayAs: date))
 
+        pendingWriteIDs.insert(id)
+        defer { pendingWriteIDs.remove(id) }
+
         // The backend only reschedules live entries (preserving the original as
         // history); completed/cancelled ones fall back to a plain in-place update.
         guard original.isReschedulable else {
-            save(moved)
-            return
+            return try await performSave(moved)
         }
         schedules[index] = moved
         updateWidgetSnapshot()
-        pendingWriteIDs.insert(id)
-        Task {
-            await reschedule(original: original, moved: moved)
-            pendingWriteIDs.remove(id)
-        }
+        return try await reschedule(original: original, moved: moved)
     }
 
-    private func reschedule(original: ScheduleDetail, moved: ScheduleDetail) async {
+    private func reschedule(original: ScheduleDetail, moved: ScheduleDetail) async throws -> ScheduleWriteOutcome {
         // `moved` keeps `original`'s id, so materializing first (same pattern as
         // delete()) then rescheduling with the real version works transparently.
         // Tracked separately so a later failure can roll back to the now-real
@@ -1117,6 +1326,7 @@ final class ScheduleStore {
             NotificationScheduler.cancelEndNotification(for: original.id)
             await NotificationScheduler.scheduleReminder(for: result.replacement)
             await NotificationScheduler.scheduleEndNotification(for: result.replacement)
+            return .committed
         } catch ScheduleAPIError.offline {
             // `schedules` already shows `moved` optimistically -- leave it and
             // queue replay. If materialize landed before the drop, replay just
@@ -1129,31 +1339,44 @@ final class ScheduleStore {
             } else {
                 await outbox.enqueue(.materializeThenReschedule(original: original, moved: moved), scheduleID: original.id)
             }
-            return
+            // Notification matches the optimistic `moved` state -- cancel the
+            // old time's, schedule the new one's, same as the committed path
+            // but against the optimistic value rather than a server result.
+            NotificationScheduler.cancelReminder(for: original.id)
+            NotificationScheduler.cancelEndNotification(for: original.id)
+            await NotificationScheduler.scheduleReminder(for: moved)
+            await NotificationScheduler.scheduleEndNotification(for: moved)
+            return .queuedOffline
         } catch {
             if let index = schedules.firstIndex(where: { $0.id == original.id }) {
                 schedules[index] = materialized ?? original
             }
             updateWidgetSnapshot()
             lastWriteError = error.localizedDescription
+            // Notifications were never touched before this request (only the
+            // success/offline branches above schedule anything), so nothing
+            // needs restoring -- whatever was scheduled for `original` before
+            // this call is still correct.
+            if classifyScheduleWriteFailure(error) == .versionConflict {
+                try await resolveStaleVersion(idBeingWritten: original.id, originalScheduledDate: original.scheduledDate)
+            }
+            throw error
         }
     }
 
-    func delete(id: UUID) {
-        guard !pendingWriteIDs.contains(id) else { return }
-        guard let index = schedules.firstIndex(where: { $0.id == id }) else { return }
+    func delete(id: UUID) async throws -> ScheduleWriteOutcome {
+        guard !pendingWriteIDs.contains(id) else { throw ScheduleWriteError.busy }
+        guard let index = schedules.firstIndex(where: { $0.id == id }) else {
+            throw ScheduleWriteError.notFound
+        }
         let schedule = schedules.remove(at: index)
         updateWidgetSnapshot()
-        NotificationScheduler.cancelReminder(for: id)
-        NotificationScheduler.cancelEndNotification(for: id)
         pendingWriteIDs.insert(id)
-        Task {
-            await delete(schedule)
-            pendingWriteIDs.remove(id)
-        }
+        defer { pendingWriteIDs.remove(id) }
+        return try await performDelete(schedule)
     }
 
-    private func delete(_ schedule: ScheduleDetail) async {
+    private func performDelete(_ schedule: ScheduleDetail) async throws -> ScheduleWriteOutcome {
         // Tracked separately so a later failure restores the now-real row
         // instead of the stale virtual one -- retrying delete against a virtual
         // value would re-POST and 409 on the id it already owns.
@@ -1168,9 +1391,14 @@ final class ScheduleStore {
             } else {
                 try await repository.delete(schedule)
             }
+            NotificationScheduler.cancelReminder(for: schedule.id)
+            NotificationScheduler.cancelEndNotification(for: schedule.id)
+            return .committed
         } catch ScheduleAPIError.offline {
             // Optimistic removal from `schedules` already happened in
-            // delete(id:) -- leave it removed and queue replay.
+            // delete(id:) -- leave it removed and queue replay. The
+            // optimistic state is "deleted", so cancelling here (not
+            // before the request) keeps notification and data in sync.
             if let materialized {
                 await outbox.enqueue(
                     .delete(id: materialized.id, version: materialized.version),
@@ -1179,7 +1407,9 @@ final class ScheduleStore {
             } else {
                 await outbox.enqueue(.materializeThenDelete(schedule), scheduleID: schedule.id)
             }
-            return
+            NotificationScheduler.cancelReminder(for: schedule.id)
+            NotificationScheduler.cancelEndNotification(for: schedule.id)
+            return .queuedOffline
         } catch {
             // Restore by identity, not a stale index — other optimistic edits may
             // have shifted positions. Lists re-sort by timeSortKey on read.
@@ -1188,6 +1418,14 @@ final class ScheduleStore {
             }
             updateWidgetSnapshot()
             lastWriteError = error.localizedDescription
+            // Notifications were never cancelled before this request (see
+            // above -- only commit/offline cancel), so nothing needs
+            // rescheduling here; the restored row's notification was never
+            // touched and is already correct.
+            if classifyScheduleWriteFailure(error) == .versionConflict {
+                try await resolveStaleVersion(idBeingWritten: schedule.id, originalScheduledDate: schedule.scheduledDate)
+            }
+            throw error
         }
     }
 

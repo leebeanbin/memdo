@@ -104,6 +104,13 @@ struct AgentSheet: View {
     @State private var showsResetConfirmation = false
     @State private var proposal = AgentScheduleProposal()
     @State private var updateProposal = AgentScheduleUpdateProposal()
+    /// True while the create/update-proposal confirm button's Store mutation
+    /// is actually in flight -- disables the button so a rapid double-tap
+    /// can't fire two requests (a UI-layer guard on top of ScheduleStore's
+    /// own `pendingWriteIDs`/`.busy`, which separately catches a *different*
+    /// action racing in on the same id from elsewhere, e.g. TodayView).
+    @State private var isApplyingProposal = false
+    @State private var isApplyingUpdateProposal = false
     @State private var routineProposal = AgentRoutineUpdateProposal()
     @State private var reviewProposal = AgentReviewActionProposal()
     /// Snapshot of proposal.revision/updateProposal.revision taken at the
@@ -215,16 +222,17 @@ struct AgentSheet: View {
                 ProposedScheduleCard(
                     draft: draft,
                     conflictTitle: proposal.conflict?.title,
-                    conflictCheckFailed: proposal.conflictCheckFailed
+                    conflictCheckFailed: proposal.conflictCheckFailed,
+                    isApplying: isApplyingProposal
                 ) {
-                    confirmProposal(draft)
+                    Task { await confirmProposal(draft) }
                 } onDecline: {
                     withAnimation(.easeOut(duration: 0.2)) { proposal.clear() }
                 }
             }
             if updateProposal.isPending {
-                ProposedScheduleUpdateCard(proposal: updateProposal) {
-                    confirmScheduleUpdateProposal()
+                ProposedScheduleUpdateCard(proposal: updateProposal, isApplying: isApplyingUpdateProposal) {
+                    Task { await confirmScheduleUpdateProposal() }
                 } onDecline: {
                     declineScheduleUpdateProposal()
                 }
@@ -644,7 +652,23 @@ struct AgentSheet: View {
         reviewProposal.clear()
     }
 
-    private func confirmProposal(_ draft: ProposedScheduleDraft) {
+    /// Turns a Store mutation's real outcome into the one chat message that
+    /// actually matches what happened -- `.committed` is the only case that
+    /// gets `committedText` ("✓"); everything else says so honestly. Never
+    /// called on a thrown error -- that's a separate, always-`isError` path
+    /// at each call site below.
+    private func writeOutcomeMessage(_ outcome: ScheduleWriteOutcome, committedText: String) -> AgentMessage {
+        switch outcome {
+        case .committed:
+            AgentMessage(role: .assistant, text: committedText)
+        case .queuedOffline:
+            AgentMessage(role: .assistant, text: "오프라인이라 변경을 저장 대기 중이에요. 연결되면 동기화할게요.")
+        case .createdStatusQueuedOffline:
+            AgentMessage(role: .assistant, text: "일정은 만들어졌고, 완료 표시는 오프라인이라 동기화 대기 중이에요.")
+        }
+    }
+
+    private func confirmProposal(_ draft: ProposedScheduleDraft) async {
         // Revalidate against the current local schedule before mutating
         // (Issue C-04) -- `proposal.conflict` may have been captured a while
         // ago at staging time (on-device: whenever the Tool/session was
@@ -669,13 +693,23 @@ struct AgentSheet: View {
             break
         }
 
-        let cal = scheduleStore.calendars.first(where: { $0.provider == .memdo })
-                  ?? scheduleStore.calendars.first
-        if let cal {
-            scheduleStore.save(draft.toScheduleDetail(calendar: cal))
-            messages.append(AgentMessage(role: .assistant, text: "'\(draft.title)' 일정을 저장했어요 ✓"))
+        guard let cal = scheduleStore.calendars.first(where: { $0.provider == .memdo })
+                ?? scheduleStore.calendars.first else { return }
+
+        isApplyingProposal = true
+        defer { isApplyingProposal = false }
+        do {
+            let outcome = try await scheduleStore.save(draft.toScheduleDetail(calendar: cal))
+            messages.append(writeOutcomeMessage(outcome, committedText: "'\(draft.title)' 일정을 저장했어요 ✓"))
+            withAnimation(.easeOut(duration: 0.2)) { proposal.clear() }
+        } catch {
+            messages.append(AgentMessage(
+                role: .assistant,
+                text: "'\(draft.title)' 일정을 저장하지 못했어요: \(error.localizedDescription)",
+                isError: true
+            ))
+            // No clear() -- the card stays pending so the user can retry or decline.
         }
-        withAnimation(.easeOut(duration: 0.2)) { proposal.clear() }
     }
 
     /// Applies an approved propose_schedule_update by dispatching to the
@@ -683,7 +717,15 @@ struct AgentSheet: View {
     /// move/delete) -- this never talks to the network directly, so it picks
     /// up the exact same offline-outbox/optimistic-rollback/version-conflict
     /// handling those already have, instead of a second, divergent path.
-    private func confirmScheduleUpdateProposal() {
+    ///
+    /// Every mutation attempt below awaits the Store's real result before
+    /// appending any message -- founder-dogfooding found this call site
+    /// previously showed a hardcoded "✓" immediately after firing a
+    /// fire-and-forget background write, regardless of whether it actually
+    /// committed. A thrown error never clears `updateProposal` (the card
+    /// stays pending for retry/decline); only a not-found/precondition
+    /// failure or an actual `try await` result (committed or queued) does.
+    private func confirmScheduleUpdateProposal() async {
         guard let idString = updateProposal.id, let id = UUID(uuidString: idString) else { return }
         let title = updateProposal.title ?? "일정"
 
@@ -703,12 +745,25 @@ struct AgentSheet: View {
             // toggleDone no longer restricts by kind (founder-dogfooding fix
             // to ScheduleModel.swift) -- this guard used to mirror that
             // restriction but now just needs the schedule to exist at all.
-            if scheduleStore.schedules.contains(where: { $0.id == id }) {
-                scheduleStore.toggleDone(id: id)
-                messages.append(AgentMessage(role: .assistant, text: "'\(title)' 완료 처리했어요 ✓"))
-            } else {
+            guard scheduleStore.schedules.contains(where: { $0.id == id }) else {
                 messages.append(AgentMessage(role: .assistant, text: "'\(title)'을(를) 찾을 수 없어요.", isError: true))
+                withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
+                return
             }
+            isApplyingUpdateProposal = true
+            defer { isApplyingUpdateProposal = false }
+            do {
+                let outcome = try await scheduleStore.toggleDone(id: id)
+                messages.append(writeOutcomeMessage(outcome, committedText: "'\(title)' 완료 처리했어요 ✓"))
+                withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
+            } catch {
+                messages.append(AgentMessage(
+                    role: .assistant,
+                    text: "'\(title)' 완료 처리에 실패했어요: \(error.localizedDescription)",
+                    isError: true
+                ))
+            }
+
         case .reschedule:
             // Same existence check as .complete above -- ScheduleModel.move(id:)
             // silently no-ops when `id` isn't in the local `schedules` array
@@ -717,12 +772,14 @@ struct AgentSheet: View {
             // even when nothing actually moved (founder-dogfooding fix).
             guard scheduleStore.schedules.contains(where: { $0.id == id }) else {
                 messages.append(AgentMessage(role: .assistant, text: "'\(title)'을(를) 찾을 수 없어요.", isError: true))
-                break
+                withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
+                return
             }
             guard let dateString = updateProposal.dateString,
                   let expr = AgentDateExpression(token: dateString) else {
                 messages.append(AgentMessage(role: .assistant, text: "옮길 날짜를 처리하지 못했어요.", isError: true))
-                break
+                withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
+                return
             }
             let day = expr.resolvedDate()
             var startAt: Date?
@@ -754,20 +811,43 @@ struct AgentSheet: View {
                 break
             }
 
-            scheduleStore.move(id: id, to: day, startAt: startAt, endAt: endAt)
-            messages.append(AgentMessage(role: .assistant, text: "'\(title)' 일정을 옮겼어요 ✓"))
+            isApplyingUpdateProposal = true
+            defer { isApplyingUpdateProposal = false }
+            do {
+                let outcome = try await scheduleStore.move(id: id, to: day, startAt: startAt, endAt: endAt)
+                messages.append(writeOutcomeMessage(outcome, committedText: "'\(title)' 일정을 옮겼어요 ✓"))
+                withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
+            } catch {
+                messages.append(AgentMessage(
+                    role: .assistant,
+                    text: "'\(title)' 일정을 옮기지 못했어요: \(error.localizedDescription)",
+                    isError: true
+                ))
+            }
+
         case .delete:
             // Same existence check as .complete/.reschedule above --
             // ScheduleModel.delete(id:) silently no-ops on an id that isn't
             // in the local `schedules` array.
             guard scheduleStore.schedules.contains(where: { $0.id == id }) else {
                 messages.append(AgentMessage(role: .assistant, text: "'\(title)'을(를) 찾을 수 없어요.", isError: true))
-                break
+                withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
+                return
             }
-            scheduleStore.delete(id: id)
-            messages.append(AgentMessage(role: .assistant, text: "'\(title)' 일정을 삭제했어요 ✓"))
+            isApplyingUpdateProposal = true
+            defer { isApplyingUpdateProposal = false }
+            do {
+                let outcome = try await scheduleStore.delete(id: id)
+                messages.append(writeOutcomeMessage(outcome, committedText: "'\(title)' 일정을 삭제했어요 ✓"))
+                withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
+            } catch {
+                messages.append(AgentMessage(
+                    role: .assistant,
+                    text: "'\(title)' 일정을 삭제하지 못했어요: \(error.localizedDescription)",
+                    isError: true
+                ))
+            }
         }
-        withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
     }
 
     private func declineScheduleUpdateProposal() {

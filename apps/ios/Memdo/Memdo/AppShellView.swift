@@ -219,7 +219,9 @@ struct AppShellView: View {
         .sensoryFeedback(.selection, trigger: selectedTab)
         .onOpenURL(perform: openDeepLink)
         .sheet(item: $scheduleSheet) { schedule in
-            ScheduleDetailSheet(schedule: schedule) { scheduleStore.save($0) }
+            ScheduleDetailSheet(schedule: schedule) { edited in
+                Task { try? await scheduleStore.save(edited) }
+            }
         }
     }
 
@@ -257,7 +259,7 @@ struct AppShellView: View {
                !schedule.isDone {
                 var completed = schedule
                 completed.isDone = true
-                scheduleStore.save(completed)
+                Task { try? await scheduleStore.save(completed) }
             }
         case "schedule":
             // memdo://schedule/{uuid} — tap on a per-schedule reminder
@@ -303,7 +305,7 @@ struct AppShellView: View {
             )
             schedule.memo = event.notes
             if let url = event.meetingURL { schedule.meetingURLString = url.absoluteString }
-            scheduleStore.save(schedule)
+            try? await scheduleStore.save(schedule)
         }
     }
 

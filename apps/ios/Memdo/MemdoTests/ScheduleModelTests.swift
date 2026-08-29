@@ -609,4 +609,121 @@ final class ScheduleModelTests: XCTestCase {
         _ = try await tool.call(arguments: .init(title: "새 일정", action: "complete", date: "", startTime: "", endTime: ""))
         XCTAssertEqual(proposal.id, "id-2", "the same Tool instance's second call should see the newly-added item")
     }
+
+    // MARK: - ScheduleWriteOutcome/ScheduleWriteError pure decision logic
+    //
+    // Founder-dogfooding review: no ScheduleRepository mock exists or is
+    // being added for the Store-mutation-await fix (would be a much larger
+    // refactor -- ScheduleStore actually calls ~25 repository methods, not
+    // just the 5 involved here). These are exactly the two decisions that
+    // *are* pure and testable without one: classifying a thrown error, and
+    // judging how trustworthy a post-VERSION_CONFLICT refresh is. The
+    // mutation methods themselves (rollback/commit/notification placement)
+    // stay covered by manual verification -- see the PR description.
+
+    func testClassifyScheduleWriteFailure_offline() {
+        let error = ScheduleAPIError.offline(URLError(.notConnectedToInternet))
+        XCTAssertEqual(classifyScheduleWriteFailure(error), .offline)
+    }
+
+    func testClassifyScheduleWriteFailure_versionConflict() {
+        let error = ScheduleAPIError.server(status: 409, code: "VERSION_CONFLICT", message: "stale", requestID: nil)
+        XCTAssertEqual(classifyScheduleWriteFailure(error), .versionConflict)
+    }
+
+    func testClassifyScheduleWriteFailure_409IsNotAlwaysVersionConflict() {
+        // memdo-backend also returns 409 for IDEMPOTENCY_CONFLICT on
+        // create/reschedule -- this must fall into `.other`, not be
+        // mistaken for a stale-version case just because status == 409.
+        let error = ScheduleAPIError.server(status: 409, code: "IDEMPOTENCY_CONFLICT", message: "dup", requestID: nil)
+        XCTAssertEqual(classifyScheduleWriteFailure(error), .other)
+    }
+
+    func testClassifyScheduleWriteFailure_otherServerError() {
+        let error = ScheduleAPIError.server(status: 500, code: "INTERNAL_ERROR", message: "oops", requestID: nil)
+        XCTAssertEqual(classifyScheduleWriteFailure(error), .other)
+    }
+
+    func testClassifyScheduleWriteFailure_nonAPIError() {
+        struct SomeOtherError: Error {}
+        XCTAssertEqual(classifyScheduleWriteFailure(SomeOtherError()), .other)
+    }
+
+    func testClassifyStaleVersionResolution_loadSkipped_isInconclusive() {
+        let result = classifyStaleVersionResolution(
+            loadWasSkipped: true,
+            loadFailed: false,
+            targetDate: .now,
+            loadedFrom: .now.addingTimeInterval(-86_400),
+            loadedTo: .now.addingTimeInterval(86_400),
+            idFoundAfterRefresh: true
+        )
+        XCTAssertEqual(result, .inconclusive)
+    }
+
+    func testClassifyStaleVersionResolution_loadFailed_isInconclusive() {
+        let result = classifyStaleVersionResolution(
+            loadWasSkipped: false,
+            loadFailed: true,
+            targetDate: .now,
+            loadedFrom: .now.addingTimeInterval(-86_400),
+            loadedTo: .now.addingTimeInterval(86_400),
+            idFoundAfterRefresh: true
+        )
+        XCTAssertEqual(result, .inconclusive)
+    }
+
+    func testClassifyStaleVersionResolution_targetOutsideLoadedWindow_isInconclusive() {
+        let now = Date.now
+        let result = classifyStaleVersionResolution(
+            loadWasSkipped: false,
+            loadFailed: false,
+            targetDate: now.addingTimeInterval(200 * 86_400), // ~200 days out
+            loadedFrom: now.addingTimeInterval(-30 * 86_400),
+            loadedTo: now.addingTimeInterval(60 * 86_400),
+            idFoundAfterRefresh: false
+        )
+        XCTAssertEqual(result, .inconclusive)
+    }
+
+    func testClassifyStaleVersionResolution_noLoadedWindowAtAll_isInconclusive() {
+        let result = classifyStaleVersionResolution(
+            loadWasSkipped: false,
+            loadFailed: false,
+            targetDate: .now,
+            loadedFrom: nil,
+            loadedTo: nil,
+            idFoundAfterRefresh: true
+        )
+        XCTAssertEqual(result, .inconclusive)
+    }
+
+    func testClassifyStaleVersionResolution_withinWindowAndFound_isRefreshedAndFound() {
+        let now = Date.now
+        let result = classifyStaleVersionResolution(
+            loadWasSkipped: false,
+            loadFailed: false,
+            targetDate: now,
+            loadedFrom: now.addingTimeInterval(-30 * 86_400),
+            loadedTo: now.addingTimeInterval(60 * 86_400),
+            idFoundAfterRefresh: true
+        )
+        XCTAssertEqual(result, .refreshedAndFound)
+    }
+
+    func testClassifyStaleVersionResolution_withinWindowAndAbsent_isRefreshedAndRemoved() {
+        // A genuinely absent id inside the trusted window is a legitimate
+        // "deleted elsewhere" outcome, not an error -- must not collapse
+        // into `.inconclusive`.
+        let now = Date.now
+        let result = classifyStaleVersionResolution(
+            loadWasSkipped: false,
+            loadFailed: false,
+            targetDate: now,
+            loadedFrom: now.addingTimeInterval(-30 * 86_400),
+            loadedTo: now.addingTimeInterval(60 * 86_400),
+            idFoundAfterRefresh: false
+        )
+        XCTAssertEqual(result, .refreshedAndRemoved)
+    }
 }
