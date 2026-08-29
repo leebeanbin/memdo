@@ -47,7 +47,7 @@ enum WorkoutActivityType: String, CaseIterable, Identifiable, Codable {
         case .yoga:             .teal
         case .hiit:             .red
         case .walking:          .mint
-        case .other:            MemdoTheme.brand
+        case .other:            MemdoTheme.brandInk
         }
     }
 

@@ -266,7 +266,7 @@ struct AgentSheet: View {
                 showSessionGapNotice = false
             }
             .font(MemdoTypography.captionEmphasis)
-            .foregroundStyle(MemdoTheme.brand)
+            .foregroundStyle(MemdoTheme.brandInk)
         }
         .foregroundStyle(MemdoTheme.secondaryInk)
         .padding(.horizontal, 12)

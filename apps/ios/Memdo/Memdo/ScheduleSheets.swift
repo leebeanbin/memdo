@@ -366,7 +366,7 @@ struct ScheduleEditorFields: View {
                 HStack(spacing: 8) {
                     if let url = schedule.linkURL {
                         Image(systemName: MeetingProvider.recognized(url) != nil ? "video.fill" : "link")
-                            .foregroundStyle(MemdoTheme.brand)
+                            .foregroundStyle(MemdoTheme.brandInk)
                             .frame(width: 20)
                     }
                     TextField("링크 (Zoom, Meet, Docs 등)", text: meetingLinkBinding)
@@ -1059,7 +1059,7 @@ private struct LocationPickerView: View {
                         name: currentLocation.displayText,
                         address: nil,
                         icon: "mappin.circle.fill",
-                        tint: MemdoTheme.brand,
+                        tint: MemdoTheme.brandInk,
                         isSelected: false
                     ) {
                         onSelect(currentLocation)
@@ -1096,7 +1096,7 @@ private struct LocationPickerView: View {
                             name: item.name ?? "이름 없는 장소",
                             address: item.placemark.title,
                             icon: "mappin.circle.fill",
-                            tint: index == selectedIndex ? MemdoTheme.brand : Color.secondary,
+                            tint: index == selectedIndex ? MemdoTheme.brandInk : Color.secondary,
                             isSelected: index == selectedIndex
                         ) {
                             select(at: index)
@@ -1190,7 +1190,7 @@ private struct LocationPickerView: View {
                 if isSelected {
                     Image(systemName: "checkmark")
                         .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.brand)
+                        .foregroundStyle(MemdoTheme.brandInk)
                 }
             }
             .contentShape(Rectangle())
