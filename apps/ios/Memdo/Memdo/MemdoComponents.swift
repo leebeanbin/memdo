@@ -121,7 +121,7 @@ struct MemdoPageHeader: View {
             if !eyebrow.isEmpty {
                 Text(eyebrow)
                     .font(MemdoTypography.captionEmphasis)
-                    .foregroundStyle(MemdoTheme.brand)
+                    .foregroundStyle(MemdoTheme.brandInk)
             }
             Text(title)
                 .font(.system(.title2, design: .rounded, weight: .bold))
