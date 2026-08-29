@@ -175,6 +175,43 @@
      DB에 무기한 누적되는 별도의 데이터 위생 문제. 백엔드 정리 정책(예: 일정 기간 미접속
      익명 계정 자동 삭제) 결정이 필요.
 
+### 2026-08-28 22:58 — [AGENT_QUALITY]
+- 맥락: 유료 모델(`qwen/qwen3.7-flash`)로 Agent 채팅 중 "그러면 내 빈 일정이 언제 있고,
+  독서실 내일 오후 9시부터 11시까지 있을거야"라고 입력 — 빈 시간 질문과 새 일정 언급이
+  한 메시지에 섞인 복합 요청.
+- 기대 동작: `find_free_slots`로 실제 빈 시간을 확인하고, "독서실"은 존재 여부가 확인되지
+  않았으므로 추가할지 물어보거나 `propose_schedule`을 제안해야 함.
+- 실제 동작: `search_schedules({from: "2026-08-29", to: "2026-08-29"})`만 호출했고 결과는
+  `{"count": 0}`(해당 날짜 일정 없음)이었는데도, 최종 답변은 "내일(8/29)은 오후 9시부터
+  11시까지 독서실 일정이 잡혀 있습니다"라고 답함 — 자기 tool 결과와 정반대되는 내용을
+  지어냄(hallucination). `find_free_slots`는 끝내 호출되지 않음.
+- 원인: `agent-cloud-contract.ts`의 `systemPrompt()`에 (1) tool 결과에 없는 항목의 존재를
+  단정하지 말라는 grounding 규칙이 없었고, (2) 한 메시지에 여러 요청이 섞였을 때 각각을
+  독립적으로 처리하라는 지시가 없었음. Founder debug trace(D2, 앱 내 "디버그 추적 복사")로
+  실제 tool 호출/결과를 직접 확인해 재현·근거를 확보함.
+- 심각도: P1(function-calling 배관 자체는 정상이지만, 답변이 자기가 방금 받은 데이터를
+  무시하고 반대로 말함 — Agent 신뢰성 핵심 문제)
+- 재현 가능: yes
+- 참고(스크린샷/로그): 디버그 추적 — `requested/resolved: qwen/qwen3.7-flash,
+  intent: searchSchedules, tool calls: [search_schedules({from:"2026-08-29",
+  to:"2026-08-29"}) -> {"count":0}]`
+- 조치: `memdo-backend`의 `systemPrompt()`에 두 directive 추가 — (a) grounding: 현재 turn의
+  *성공한* authoritative tool 결과만 근거로 인정하고(대화 기록/사용자 발화/실패 결과는
+  근거 아님), `propose_schedule`/`propose_schedule_update`의 성공 결과도 "생성/변경
+  확정"의 근거가 아니라 승인 대기 staging일 뿐임을 명시. (b) compound-message: 한 부분이
+  `request_clarification`이 필요해도 나머지 실행 가능한 부분(예: `find_free_slots`)은
+  그대로 처리. `memdo-backend` PR #22 (`fix/agent-grounding-directive`, 커밋 `4b50c4d` +
+  리뷰 보완 `7fecfd0`), merge 완료(`main` `8377dc9`), 배포(`deploy-supabase.yml`) 성공 확인.
+- 남은 검증: 배포된 상태로 Simulator에서 동일 메시지 + 동일 모델로 재현, 다음 세 기준을
+  독립적으로 확인 예정(아직 미완료) — Routing(`find_free_slots` 실제 호출 여부),
+  Grounding(허위 존재 주장 재발 여부), Compound handling(두 intent 중 하나도 조용히
+  누락되지 않는지).
+- 후속(이번 라운드 범위 밖으로 명시적으로 미룸): identity를 `personal schedule assistant`
+  에서 `personal planning assistant`로 일반화, `intended → proposed → confirmed` 상태
+  경계 명문화, Schedule/Task 분류 기준, clarification을 필수 정보에만 쓰도록 제한, 모든
+  create 전 `search_schedules` 강제 규칙 재검토, Reminder/Plan용 authoritative
+  read/propose/update capability 추가.
+
 ---
 
 ## Weekly Review
