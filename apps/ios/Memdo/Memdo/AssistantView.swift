@@ -483,6 +483,11 @@ struct AgentSheet: View {
                         messages[index].intent = .answer
                     }
                 }
+                // VoiceOver doesn't auto-announce a new/updated message
+                // appearing off-screen the way a sighted user just sees it --
+                // without this, a blind user has no signal a response
+                // finished at all (founder-dogfooding fix, fd3).
+                AccessibilityNotification.Announcement("Agent 응답이 도착했어요").post()
             }
         case .failed(let failure):
             isLoading = false
@@ -511,6 +516,10 @@ struct AgentSheet: View {
                 messages[index].text = "오류가 발생했어요. 다시 시도해주세요."
                 messages[index].isError = true
             }
+            // Same reasoning as the .finished announcement above -- a
+            // VoiceOver user needs to know a turn failed (and why), not just
+            // silently see nothing more happen.
+            AccessibilityNotification.Announcement(messages[index].text).post()
         }
     }
 

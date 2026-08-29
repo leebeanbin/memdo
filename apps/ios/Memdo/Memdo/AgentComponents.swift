@@ -31,6 +31,13 @@ struct AgentUserBubble: View {
             .padding(.vertical, 10)
             .background(MemdoTheme.accent, in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
             .frame(maxWidth: .infinity, alignment: .trailing)
+            // Without a speaker prefix, VoiceOver reads the whole
+            // conversation as one undifferentiated run of text -- trailing
+            // alignment and the accent fill are the only speaker cues, and
+            // neither is exposed to accessibility (founder-dogfooding
+            // fix, fd3).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("나: \(text)")
     }
 }
 
@@ -135,6 +142,12 @@ struct AgentResponse: View {
                     .font(MemdoTypography.captionEmphasis)
                     .foregroundStyle(accentColor)
             }
+            // Combines the icon + label into one "Agent"/"오류"/"실행 중" VoiceOver
+            // announcement rather than two separate swipes to identify the
+            // speaker -- the content text and retry button right below stay
+            // independently accessible, unaffected by this (founder-
+            // dogfooding fix, fd3).
+            .accessibilityElement(children: .combine)
 
             // Tool hint
             if let hint = message.toolHint, message.text.isEmpty {
@@ -346,18 +359,23 @@ struct ProposedScheduleCard: View {
                     }
                     .font(MemdoTypography.captionEmphasis)
                     .foregroundStyle(MemdoTheme.onAccent)
-                    .frame(maxWidth: .infinity, minHeight: 34)
+                    .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
                     .background(MemdoTheme.accent,
                                 in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .disabled(isApplying)
+                // Bare "저장하기" doesn't say what's being saved -- with more
+                // than one proposal card pending, VoiceOver users got several
+                // identically-labeled buttons with no way to tell them apart
+                // (founder-dogfooding fix, fd3).
+                .accessibilityLabel(isApplying ? "저장하는 중" : "'\(draft.title)' 저장하기")
 
                 Button(action: onDecline) {
                     Text("취소")
                         .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.secondaryInk)
-                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
                         .background(MemdoTheme.surface,
                                     in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         .overlay {
@@ -367,6 +385,7 @@ struct ProposedScheduleCard: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isApplying)
+                .accessibilityLabel("'\(draft.title)' 제안 취소")
             }
         }
         .padding(14)
@@ -380,6 +399,14 @@ struct ProposedScheduleCard: View {
             insertion: .opacity.combined(with: .move(edge: .bottom)),
             removal: .opacity
         ))
+        // Groups the whole card as one navigable region named after the
+        // proposal, rather than a VoiceOver user having to piece together
+        // title/date/time/conflict warning from separate swipes with no
+        // shared context (founder-dogfooding fix, fd3). children: .contain
+        // (not .combine) -- the confirm/decline buttons above must stay
+        // independently reachable and tappable, not merged into one element.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Agent 일정 제안: '\(draft.title)', \(draft.displayDate) \(draft.displayTime)")
     }
 }
 
@@ -456,18 +483,19 @@ struct ProposedScheduleUpdateCard: View {
                     }
                     .font(MemdoTypography.captionEmphasis)
                     .foregroundStyle(MemdoTheme.onAccent)
-                    .frame(maxWidth: .infinity, minHeight: 34)
+                    .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
                     .background(MemdoTheme.accent,
                                 in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .disabled(isApplying)
+                .accessibilityLabel(isApplying ? "적용하는 중" : "'\(proposal.title ?? "일정")' \(confirmLabel)")
 
                 Button(action: onDecline) {
                     Text("취소")
                         .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.secondaryInk)
-                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
                         .background(MemdoTheme.surface,
                                     in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         .overlay {
@@ -477,6 +505,7 @@ struct ProposedScheduleUpdateCard: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isApplying)
+                .accessibilityLabel("'\(proposal.title ?? "일정")' 제안 취소")
             }
         }
         .padding(14)
@@ -490,6 +519,9 @@ struct ProposedScheduleUpdateCard: View {
             insertion: .opacity.combined(with: .move(edge: .bottom)),
             removal: .opacity
         ))
+        // Same reasoning as ProposedScheduleCard above (fd3).
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Agent \(proposal.displayActionLabel) 제안: '\(proposal.title ?? "일정")'")
     }
 }
 
@@ -540,17 +572,18 @@ struct ProposedRoutineUpdateCard: View {
                     Label("적용하기", systemImage: "checkmark")
                         .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.onAccent)
-                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
                         .background(MemdoTheme.accent,
                                     in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("루틴 설정 적용하기")
 
                 Button(action: onDecline) {
                     Text("취소")
                         .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.secondaryInk)
-                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
                         .background(MemdoTheme.surface,
                                     in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         .overlay {
@@ -559,6 +592,7 @@ struct ProposedRoutineUpdateCard: View {
                         }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("루틴 설정 제안 취소")
             }
         }
         .padding(14)
@@ -572,6 +606,9 @@ struct ProposedRoutineUpdateCard: View {
             insertion: .opacity.combined(with: .move(edge: .bottom)),
             removal: .opacity
         ))
+        // Same reasoning as ProposedScheduleCard above (fd3).
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Agent 루틴 설정 변경 제안: \(rows.joined(separator: ", "))")
     }
 }
 
@@ -646,7 +683,7 @@ struct ProposedReviewActionCard: View {
                         Label("저장하기", systemImage: "checkmark")
                             .font(MemdoTypography.captionEmphasis)
                             .foregroundStyle(MemdoTheme.onAccent)
-                            .frame(maxWidth: .infinity, minHeight: 34)
+                            .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
                             .background(MemdoTheme.accent,
                                         in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
@@ -656,13 +693,14 @@ struct ProposedReviewActionCard: View {
                     // the user can't approve before the warning (if any)
                     // has had a chance to render.
                     .disabled(isCheckingExistingReview)
+                    .accessibilityLabel("\(displayDate ?? "") 회고 저장하기")
                 }
 
                 Button(action: onDecline) {
                     Text("취소")
                         .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.secondaryInk)
-                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
                         .background(MemdoTheme.surface,
                                     in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         .overlay {
@@ -671,6 +709,7 @@ struct ProposedReviewActionCard: View {
                         }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("회고 제안 취소")
             }
         }
         .padding(14)
@@ -684,6 +723,9 @@ struct ProposedReviewActionCard: View {
             insertion: .opacity.combined(with: .move(edge: .bottom)),
             removal: .opacity
         ))
+        // Same reasoning as ProposedScheduleCard above (fd3).
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Agent 회고 제안: \(displayDate ?? "날짜 미확인")")
         .task(id: draft.date) {
             // Reset together at the start of every new date's check -- a
             // warning from a previous proposal's date must never remain
