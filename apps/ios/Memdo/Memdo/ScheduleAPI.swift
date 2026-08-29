@@ -228,6 +228,27 @@ struct TodoRescheduleRequestDTO: Encodable {
         dueAt = schedule.kind == .task ? schedule.dueAt.map(APIDate.instant) : nil
         timeBucket = schedule.timeBucket.rawValue
     }
+
+    // `todoRescheduleSchema`'s startAt/endAt/dueAt are `.nullable()` WITHOUT
+    // `.optional()` -- the key must be present, even as `null`. The compiler-
+    // synthesized Encodable conformance uses encodeIfPresent for Optional
+    // properties, which omits a nil key entirely instead of writing `null`,
+    // so every reschedule of a non-task item (dueAt always nil above) failed
+    // server validation with "dueAt: expected string, received undefined"
+    // (confirmed via live device request/response logging).
+    private enum CodingKeys: String, CodingKey {
+        case baseVersion, targetDate, startAt, endAt, dueAt, timeBucket
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(baseVersion, forKey: .baseVersion)
+        try container.encode(targetDate, forKey: .targetDate)
+        try container.encode(startAt, forKey: .startAt)
+        try container.encode(endAt, forKey: .endAt)
+        try container.encode(dueAt, forKey: .dueAt)
+        try container.encode(timeBucket, forKey: .timeBucket)
+    }
 }
 
 private struct TodoRescheduleResponseDTO: Decodable {

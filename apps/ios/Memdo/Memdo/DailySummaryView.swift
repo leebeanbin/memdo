@@ -116,10 +116,10 @@ struct DailySummaryView: View {
                 )
             case .move(let schedule):
                 MoveScheduleSheet(schedule: schedule) { newDate in
-                    scheduleStore.move(id: schedule.id, to: newDate)
+                    Task { try? await scheduleStore.move(id: schedule.id, to: newDate) }
                 }
             case .edit(let schedule):
-                ScheduleDetailSheet(schedule: schedule, onSave: scheduleStore.save)
+                ScheduleDetailSheet(schedule: schedule, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
             }
         }
         .confirmationDialog(
@@ -131,7 +131,9 @@ struct DailySummaryView: View {
             titleVisibility: .visible
         ) {
             Button("삭제", role: .destructive) {
-                if let pendingDeletion { scheduleStore.delete(id: pendingDeletion.id) }
+                if let pendingDeletion {
+                    Task { try? await scheduleStore.delete(id: pendingDeletion.id) }
+                }
                 pendingDeletion = nil
             }
             Button("취소", role: .cancel) {}
@@ -143,16 +145,16 @@ struct DailySummaryView: View {
     private func complete(_ schedule: ScheduleDetail) {
         var completed = schedule
         completed.isDone = true
-        scheduleStore.save(completed)
+        Task { try? await scheduleStore.save(completed) }
     }
 
     private func toggleDone(_ schedule: ScheduleDetail) {
-        scheduleStore.toggleDone(id: schedule.id)
+        Task { try? await scheduleStore.toggleDone(id: schedule.id) }
     }
 
     private func moveToTomorrow(_ schedule: ScheduleDetail) {
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date
-        scheduleStore.move(id: schedule.id, to: tomorrow)
+        Task { try? await scheduleStore.move(id: schedule.id, to: tomorrow) }
     }
 }
 

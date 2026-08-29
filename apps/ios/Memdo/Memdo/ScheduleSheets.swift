@@ -166,7 +166,7 @@ struct ScheduleDetailSheet: View {
             titleVisibility: .visible
         ) {
             Button(draft.scheduleRuleId == nil ? "삭제" : "이 일정만 삭제", role: .destructive) {
-                scheduleStore.delete(id: draft.id)
+                Task { try? await scheduleStore.delete(id: draft.id) }
                 dismiss()
             }
             if let ruleId = draft.scheduleRuleId {
