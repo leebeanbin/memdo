@@ -125,7 +125,7 @@ final class MemdoSession {
                     // under their anonymous user_id and migrates if they link a social
                     // identity later (Supabase anonymous→permanent promotion).
                     if activeUserID != session.user.id {
-                        scheduleStore?.reset()
+                        await scheduleStore?.reset()
                         preferencesStore?.reset()
                         workoutStore.reset()
                     }
@@ -136,7 +136,7 @@ final class MemdoSession {
                     continue
                 }
                 if activeUserID != session.user.id {
-                    scheduleStore?.reset()
+                    await scheduleStore?.reset()
                     preferencesStore?.reset()
                     workoutStore.reset()
                 }
@@ -151,7 +151,7 @@ final class MemdoSession {
             activeUserID = nil
             accountLabel = ""
             providerLabel = ""
-            scheduleStore?.reset()
+            await scheduleStore?.reset()
             preferencesStore?.reset()
             workoutStore.reset()
 
