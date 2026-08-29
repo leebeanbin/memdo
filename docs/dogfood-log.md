@@ -212,6 +212,55 @@
   create 전 `search_schedules` 강제 규칙 재검토, Reminder/Plan용 authoritative
   read/propose/update capability 추가.
 
+### 2026-08-29 — [BUG] [DATA_INTEGRITY]
+- 맥락: "move도 안돼"(옮기기 실패) 신고에서 시작해 하루 종일 이어진 조사. Plan Mode 4라운드
+  리뷰를 거쳐 구조적 원인부터 고쳤고, 그 수정이 실제 backend 오류를 있는 그대로 드러내면서
+  연쇄적으로 세 개의 독립된 근본 원인을 추가로 찾아 각각 고침. 총 4개 PR, 2개 저장소.
+- 기대 동작: Agent가 "옮겼어요/삭제했어요 ✓"라고 답하면 실제로 그 상태가 backend에 반영돼
+  있어야 하고, Agent가 검색해서 "일정이 있다"고 답하면 캘린더에도 실제로 보여야 함.
+- 실제 동작 / 원인 (발견 순서대로):
+  1. **Optimistic-then-fire-and-forget mutation**: `ScheduleModel.save/toggleDone/move/delete`가
+     낙관적 UI 갱신 후 백그라운드 `Task`로 실제 네트워크 요청을 던지기만 하고 결과를 기다리지
+     않아서, Agent 확인 플로우가 진짜 backend 결과를 알기도 전에 "✓"를 보여줌 — 재예약이
+     실제로는 실패해도 성공한 것처럼 보임. `ScheduleWriteOutcome`(committed/queuedOffline/
+     createdStatusQueuedOffline) / `ScheduleWriteError`로 전면 재설계, 성공 메시지는 오직
+     `.committed`에서만, 실패 시 proposal card는 지우지 않고 재시도/취소 가능하게 유지.
+     `memdo` PR #51(`fix/agent-mutation-await-real-result`, `fe5485a`). (부분 수정은 먼저
+     PR #50 `441ce8d`로 병합됨 — reschedule/delete 확인 시 존재하지 않는 id도 "✓" 뜨던 것.)
+  2. **`TodoRescheduleRequestDTO`가 nil을 키 생략으로 인코딩**: 위 수정 후 재예약이 이제는
+     정직하게 실패를 보여줬는데, 실제 에러가 `INVALID_REQUEST: 재예약 시간을 확인해 주세요`
+     (`todos/index.ts:171`)였음. Swift의 synthesized `Encodable`이 Optional 프로퍼티에
+     `encodeIfPresent`를 써서 `dueAt`(non-task 항목은 항상 nil)이 JSON에서 아예 빠지는데,
+     backend `todoRescheduleSchema`는 그 키가 `null`로라도 존재하길 요구(`.nullable()`이지
+     `.optional()`이 아님) — 그래서 task가 아닌 모든 항목의 재예약이 100% 실패하고 있었음.
+     기기에 임시 디버그 로그를 붙여 실제 request/response body를 직접 확인 후 확정. 커스텀
+     `encode(to:)`로 명시적 `null` 인코딩하도록 수정, `memdo` PR #51에 포함.
+  3. **`propose_schedule`/`propose_schedule_update`가 한 turn에 2번 호출되면 조용히
+     덮어씀**: "이번주 주말부터 다음주까지 있는 독서실 일정 다 지워" 요청에서 Agent가 삭제
+     대상 2개를 각각 tool 호출했는데, `ToolDispatchState.proposedScheduleUpdate`가 단일
+     슬롯이라 두 번째 호출이 첫 번째를 그대로 덮어씀 — 둘 다 tool 결과는 `{ok:true}`라
+     Agent 텍스트는 "둘 다 지웠다"고 말했지만 실제로 confirm 가능한 카드는 마지막 한 개뿐
+     이었음. 두 번째 호출을 에러로 fail closed시켜 grounding 규칙("실패한 tool 결과는
+     근거 아님")이 작동하게 함 + tool 설명에 "turn당 하나만" 명시. `memdo-backend` PR #23
+     (`fix/propose-schedule-update-batch-overwrite`, `b095d3e`).
+  4. **Agent 조회 쿼리가 죽은 status row를 걸러내지 않음**: 위 3번 삭제 시나리오 이후
+     "그런데 실질적으로 캘린더에는 없어" — `search_schedules`가 여전히 count:1을 반환.
+     `ScheduleDetail.isActive`(클라이언트)는 `rescheduled`/`cancelled`/`skipped` status를
+     캘린더에서 숨기는데(`rescheduled`는 `deleted_at`이 안 찍히고 status만 바뀜), Agent가
+     쓰는 `fetchSchedules`/`fetchScheduleById`(`search_schedules`, `find_free_slots`,
+     conflict 체크, `propose_schedule_update` 대상 조회 전부 공유)는 `deleted_at`만 걸러서
+     캘린더엔 안 보이는 죽은 row를 Agent는 여전히 실재하는 일정으로 봄. 두 쿼리 모두
+     동일한 status 제외 필터 추가. `memdo-backend` PR #24
+     (`fix/agent-tools-exclude-dead-status-rows`, `0c3eb64`).
+- 심각도: P0(1, 3은 실제 상태 변경이 조용히 누락되는데 성공으로 보임 — 데이터 신뢰 문제.
+  2는 핵심 기능인 재예약이 100% 실패. 4는 P1 — 데이터 유실은 아니지만 Agent가 사실과
+  반대되는 답을 함)
+- 재현 가능: yes(넷 다 코드 레벨로 근본 원인 확정, 1/2/3은 실제 기기 재테스트로도 확인)
+- 조치: 넷 다 수정 완료·병합·배포 확인. `eval/prompt-lab.ts`(OpenRouter 직접 호출하는 로컬
+  멀티턴 테스트 하네스, 이번 조사 중 신설, 아직 미커밋)로 유사 패턴(delete가 가끔 tool 호출
+  자체를 스킵, 반복 일정 생성 요청이 실제로는 1개만 제안됐는데 "매주 반복 생성됨"이라고
+  답하는 hallucination)을 추가로 발견했으나 이번 라운드 범위 밖으로 미룸 — 다음 조사 대상.
+
 ---
 
 ## Weekly Review
