@@ -79,7 +79,7 @@ struct TodayWorkoutSection: View {
                         Text("추가")
                     }
                     .font(MemdoTypography.metric)
-                    .foregroundStyle(MemdoTheme.brand)
+                    .foregroundStyle(MemdoTheme.brandInk)
                 }
             }
             .padding(.horizontal, MemdoMetrics.pagePadding)
@@ -95,7 +95,7 @@ struct TodayWorkoutSection: View {
                                 .frame(width: 36, height: 36)
                             Image(systemName: "figure.run.circle")
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(MemdoTheme.brand)
+                                .foregroundStyle(MemdoTheme.brandInk)
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text("운동 기록 추가")
@@ -685,7 +685,7 @@ struct HealthKitImportSheet: View {
                                 Image(systemName: selected.contains(workout.id)
                                       ? "checkmark.circle.fill" : "circle")
                                     .foregroundStyle(selected.contains(workout.id)
-                                                     ? MemdoTheme.brand : MemdoTheme.secondaryInk)
+                                                     ? MemdoTheme.brandInk : MemdoTheme.secondaryInk)
                                     .font(MemdoTypography.title3)
                             }
                             .contentShape(Rectangle())

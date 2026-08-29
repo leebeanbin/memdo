@@ -399,7 +399,7 @@ struct MemdoSignInView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 40))
-                        .foregroundStyle(MemdoTheme.brand)
+                        .foregroundStyle(MemdoTheme.brandInk)
                     Text(gateTitle)
                         .font(MemdoTypography.detailTitle)
                     if let gateSubtitle {

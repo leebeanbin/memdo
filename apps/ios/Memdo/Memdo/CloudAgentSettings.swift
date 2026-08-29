@@ -248,7 +248,7 @@ struct CloudAgentConnectionSheet: View {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: selectedModel == model.id ? "checkmark.circle.fill" : "circle")
                     .font(MemdoTypography.title3)
-                    .foregroundStyle(selectedModel == model.id ? MemdoTheme.brand : MemdoTheme.secondaryInk)
+                    .foregroundStyle(selectedModel == model.id ? MemdoTheme.brandInk : MemdoTheme.secondaryInk)
                     .frame(width: 24, height: MemdoMetrics.touchTarget)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {

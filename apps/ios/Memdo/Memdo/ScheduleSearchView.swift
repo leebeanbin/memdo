@@ -159,7 +159,7 @@ private struct SearchResultsSection: View {
                     title: "검색을 완료하지 못했어요",
                     systemImage: "exclamationmark.triangle",
                     detail: searchError,
-                    tint: MemdoTheme.brand
+                    tint: MemdoTheme.brandInk
                 )
             } else if schedules.isEmpty {
                 MemdoStatusRow(

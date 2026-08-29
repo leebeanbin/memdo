@@ -291,7 +291,7 @@ private struct SummaryAgentDigest: View {
         VStack(alignment: .leading, spacing: 8) {
             Label("일정 분석", systemImage: "chart.bar.fill")
                 .font(MemdoTypography.captionEmphasis)
-                .foregroundStyle(MemdoTheme.brand)
+                .foregroundStyle(MemdoTheme.brandInk)
             Text(headline)
                 .font(MemdoTypography.sectionTitle)
                 .foregroundStyle(MemdoTheme.ink)
@@ -304,7 +304,7 @@ private struct SummaryAgentDigest: View {
                     .font(MemdoTypography.action)
             }
             .buttonStyle(.bordered)
-            .tint(MemdoTheme.brand)
+            .tint(MemdoTheme.brandInk)
             .frame(maxWidth: .infinity, alignment: .trailing)
             .padding(.top, 2)
             .overlay(alignment: .top) { Divider() }
@@ -440,7 +440,7 @@ private struct SummaryHistoryRow: View {
             Button(action: onToggleDone) {
                 Image(systemName: schedule.isDone ? "checkmark.circle.fill" : "circle")
                     .font(MemdoTypography.title3)
-                    .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : MemdoTheme.brand)
+                    .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : MemdoTheme.brandInk)
                     .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
             }
             .buttonStyle(.plain)
@@ -566,7 +566,7 @@ private struct SummaryReviewRow: View {
         Button(action: onComplete) {
             Image(systemName: "circle")
                 .font(MemdoTypography.title3)
-                .foregroundStyle(MemdoTheme.brand)
+                .foregroundStyle(MemdoTheme.brandInk)
                 .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
         }
         .buttonStyle(.plain)
