@@ -41,6 +41,7 @@
 		4CE9071DE9A5E1E5F3D45F0A /* AppShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4D119A0D929FA9AE7D47773 /* AppShellView.swift */; };
 		55306D301F120767611231F5 /* MemdoWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AE1B6FFACC369DADAFC99ADB /* MemdoWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		567B8523F98FA34B84994096 /* AgentPrompts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CCEC3682202DC527390D6C3 /* AgentPrompts.swift */; };
+		59E81453640A406C24736379 /* OutboxQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21413C9C4783D0ED219C2D06 /* OutboxQueueTests.swift */; };
 		5AFEEBA9CD4F0FEBBA50F09B /* ScheduleModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B46ABED061C6BD316DB8F3 /* ScheduleModel.swift */; };
 		5C8DB08635A4922DF0808F7B /* TodayComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E81203EAFA09124BA54F8AE7 /* TodayComponents.swift */; };
 		62BC23ACF0CA3B113A800BB4 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A6F0561D5973698B66DB4119 /* PrivacyInfo.xcprivacy */; };
@@ -144,6 +145,7 @@
 		1A687B41FD8CDA929BCB463B /* MemdoTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MemdoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1F8C4864695656352FE70BA3 /* ScheduleSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleSheets.swift; sourceTree = "<group>"; };
 		1FC52CA73A8785841A1E45A0 /* OutboxQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxQueue.swift; sourceTree = "<group>"; };
+		21413C9C4783D0ED219C2D06 /* OutboxQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxQueueTests.swift; sourceTree = "<group>"; };
 		257B3BF059A0E5D9A80D8E50 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		25993FA0A6C348E04CC8573E /* AppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShortcuts.swift; sourceTree = "<group>"; };
 		2779812E7FB556A785234A2F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -281,6 +283,7 @@
 				27D626BB1584385C72608775 /* DailySummaryViewTests.swift */,
 				AA8E9E99B2955B5F2A3FABD6 /* FakeAgentRuntime.swift */,
 				96F566C420B634E1C8FE4B5C /* NotificationSchedulerTests.swift */,
+				21413C9C4783D0ED219C2D06 /* OutboxQueueTests.swift */,
 				E3F01099D4577BD460F6C20F /* ScheduleModelTests.swift */,
 			);
 			path = MemdoTests;
@@ -564,6 +567,7 @@
 				46C4AF8230A9E34403A557BF /* DailySummaryViewTests.swift in Sources */,
 				C058A05E23195B992D283DC5 /* FakeAgentRuntime.swift in Sources */,
 				7457DB90063BE2771605A5AA /* NotificationSchedulerTests.swift in Sources */,
+				59E81453640A406C24736379 /* OutboxQueueTests.swift in Sources */,
 				CA69FB6F6D5B184690B56D4A /* ScheduleModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

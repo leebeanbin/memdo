@@ -1198,7 +1198,7 @@ final class ScheduleStore {
         await NotificationScheduler.reconcileScheduleNotifications(schedules: schedules)
     }
 
-    func reset() {
+    func reset() async {
         schedules = []
         calendars = []
         state = .idle
@@ -1209,6 +1209,11 @@ final class ScheduleStore {
         // over to whichever account signs in next on this device.
         UserDefaults(suiteName: MemdoWidgetStorage.suiteName)?
             .removeObject(forKey: MemdoWidgetStorage.hideContentKey)
+        // The outbox has no user scoping of its own -- without this, a
+        // different user signing in on this device would have the previous
+        // user's queued offline writes replayed under their access token
+        // (founder-dogfooding fix).
+        await outbox.removeAll()
         updateWidgetSnapshot()
     }
 
@@ -1230,8 +1235,25 @@ final class ScheduleStore {
         guard let index = schedules.firstIndex(where: { $0.id == id }) else {
             throw ScheduleWriteError.notFound
         }
+        return try await setDone(id: id, to: !schedules[index].isDone)
+    }
+
+    /// Sets `isDone` to an explicit target value, unlike `toggleDone` which
+    /// flips whatever it currently is -- needed by the Agent's "complete"
+    /// confirm (AssistantView.swift), which must not un-complete an item
+    /// that was already completed by the time the proposal was confirmed
+    /// (raced by another device, or the model proposing to complete an
+    /// already-done item). A no-op when already at the target value returns
+    /// `.committed` without a network round-trip -- there is nothing to
+    /// write, and it would be wrong to report anything other than success
+    /// for "already in the state you asked for."
+    func setDone(id: UUID, to done: Bool) async throws -> ScheduleWriteOutcome {
+        guard let index = schedules.firstIndex(where: { $0.id == id }) else {
+            throw ScheduleWriteError.notFound
+        }
+        guard schedules[index].isDone != done else { return .committed }
         var updated = schedules[index]
-        updated.isDone.toggle()
+        updated.isDone = done
         return try await save(updated)
     }
 

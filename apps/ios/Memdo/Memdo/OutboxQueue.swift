@@ -59,15 +59,57 @@ actor OutboxStore {
         try? data.write(to: fileURL, options: .atomic)
     }
 
+    /// A blind overwrite here is only correct when the *kind* of the pending
+    /// operation doesn't change (update-over-update, delete-over-update,
+    /// etc. -- the case this type's own doc comment above describes). It is
+    /// wrong when a `.create` is still pending: that row was never actually
+    /// materialized server-side, so replacing it with `.update`/`.reschedule`
+    /// (which target an existing row by id) 404s on replay and the item is
+    /// silently dropped, and replacing it with `.delete` would try to delete
+    /// something that was never created. Founder-dogfooding fix -- this is
+    /// what let an offline-created, then offline-edited-again schedule
+    /// vanish on reconnect.
     func enqueue(_ operation: OutboxOperation, scheduleID: UUID) {
         ensureLoaded()
-        entries[scheduleID] = OutboxEntry(scheduleID: scheduleID, operation: operation, enqueuedAt: .now)
+        if case .create = entries[scheduleID]?.operation {
+            switch operation {
+            case .update(let detail):
+                entries[scheduleID] = OutboxEntry(scheduleID: scheduleID, operation: .create(detail), enqueuedAt: .now)
+            case .reschedule(_, let moved, _):
+                entries[scheduleID] = OutboxEntry(scheduleID: scheduleID, operation: .create(moved), enqueuedAt: .now)
+            case .delete:
+                // Nothing was ever created server-side -- cancel the
+                // pending create rather than queuing a delete for a row
+                // that doesn't exist.
+                entries.removeValue(forKey: scheduleID)
+            case .create, .materializeThenDelete, .materializeThenReschedule:
+                // A second .create for the same id, or a virtual-occurrence
+                // operation, shouldn't arise while a plain .create is
+                // already pending -- fall back to today's overwrite rather
+                // than guessing.
+                entries[scheduleID] = OutboxEntry(scheduleID: scheduleID, operation: operation, enqueuedAt: .now)
+            }
+        } else {
+            entries[scheduleID] = OutboxEntry(scheduleID: scheduleID, operation: operation, enqueuedAt: .now)
+        }
         persist()
     }
 
     func remove(_ scheduleID: UUID) {
         ensureLoaded()
         guard entries.removeValue(forKey: scheduleID) != nil else { return }
+        persist()
+    }
+
+    /// Called on sign-out/account switch (`ScheduleStore.reset()`) -- this
+    /// store has no user scoping of its own, so without this a different
+    /// user signing in on the same device would have the previous user's
+    /// queued writes replayed under their access token (founder-dogfooding
+    /// fix: cross-account data leak/loss).
+    func removeAll() {
+        ensureLoaded()
+        guard !entries.isEmpty else { return }
+        entries.removeAll()
         persist()
     }
 

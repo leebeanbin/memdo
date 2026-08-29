@@ -742,9 +742,12 @@ struct AgentSheet: View {
 
         switch action {
         case .complete:
-            // toggleDone no longer restricts by kind (founder-dogfooding fix
-            // to ScheduleModel.swift) -- this guard used to mirror that
-            // restriction but now just needs the schedule to exist at all.
+            // setDone(id:to:true), not toggleDone -- toggleDone flips
+            // whatever the current value is, so confirming a stale proposal
+            // against an item that's already completed (raced by another
+            // device, or the model proposing to complete an already-done
+            // item) would un-complete it while this branch still reports
+            // "완료 처리했어요 ✓" (founder-dogfooding fix).
             guard scheduleStore.schedules.contains(where: { $0.id == id }) else {
                 messages.append(AgentMessage(role: .assistant, text: "'\(title)'을(를) 찾을 수 없어요.", isError: true))
                 withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
@@ -753,7 +756,7 @@ struct AgentSheet: View {
             isApplyingUpdateProposal = true
             defer { isApplyingUpdateProposal = false }
             do {
-                let outcome = try await scheduleStore.toggleDone(id: id)
+                let outcome = try await scheduleStore.setDone(id: id, to: true)
                 messages.append(writeOutcomeMessage(outcome, committedText: "'\(title)' 완료 처리했어요 ✓"))
                 withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
             } catch {
