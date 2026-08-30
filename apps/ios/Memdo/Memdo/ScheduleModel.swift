@@ -793,25 +793,38 @@ final class ScheduleStore {
         let calendar = Calendar.current
         let padding = 30
 
+        // Only widen the loaded window on a real fetch success -- fetchRange
+        // used to swallow its own error into lastWriteError and return
+        // normally, so a single transient failure widened the window
+        // anyway. The store then believed it had data for a range it never
+        // actually fetched: every later visit to those days rendered an
+        // empty day indistinguishable from a genuinely empty one, and
+        // ensureLoaded never retried for the rest of the session (founder-
+        // dogfooding fix, fe4).
         if date < loadedFrom {
             let newFrom = calendar.date(byAdding: .day, value: -padding, to: date) ?? date
-            await fetchRange(from: newFrom, to: loadedFrom)
-            self.loadedFrom = newFrom
+            if await fetchRange(from: newFrom, to: loadedFrom) {
+                self.loadedFrom = newFrom
+            }
         } else if date > loadedTo {
             let newTo = calendar.date(byAdding: .day, value: padding, to: date) ?? date
-            await fetchRange(from: loadedTo, to: newTo)
-            self.loadedTo = newTo
+            if await fetchRange(from: loadedTo, to: newTo) {
+                self.loadedTo = newTo
+            }
         }
     }
 
-    private func fetchRange(from: Date, to: Date) async {
+    @discardableResult
+    private func fetchRange(from: Date, to: Date) async -> Bool {
         isLoadingRange = true
         defer { isLoadingRange = false }
         do {
             let fetched = try await repository.loadRange(from: from, to: to)
             merge(fetched)
+            return true
         } catch {
             lastWriteError = error.localizedDescription
+            return false
         }
     }
 
@@ -882,6 +895,14 @@ final class ScheduleStore {
         defer { isDraining = false }
 
         for entry in await outbox.all() {
+            // NetworkMonitor's path handler can trigger a drain at any
+            // moment, including while a user-initiated save()/move()/etc.
+            // still holds the guard for this same id -- replaying here too
+            // would PATCH the same row twice against the same stale base
+            // version. Leave it queued; the next drain (or the guarded
+            // write's own outbox.enqueue on failure) picks it up (founder-
+            // dogfooding fix, fe8).
+            guard !pendingWriteIDs.contains(entry.scheduleID) else { continue }
             do {
                 switch entry.operation {
                 case .create(let schedule):
@@ -909,6 +930,19 @@ final class ScheduleStore {
                 await outbox.remove(entry.scheduleID)
             } catch ScheduleAPIError.offline {
                 break
+            } catch let error as ScheduleAPIError {
+                // A transient 5xx is retryable -- drop only a genuine 4xx
+                // (version conflict, not found, etc, none of which will
+                // succeed on blind retry). The old unconditional drop
+                // discarded the user's queued offline work irrecoverably on
+                // *any* non-offline failure, including ones that would have
+                // succeeded a moment later (founder-dogfooding fix, fe8).
+                if case .server(let status, _, _, _) = error, status >= 500 {
+                    lastWriteError = error.localizedDescription
+                    continue
+                }
+                await outbox.remove(entry.scheduleID)
+                lastWriteError = error.localizedDescription
             } catch {
                 await outbox.remove(entry.scheduleID)
                 lastWriteError = error.localizedDescription
@@ -1214,6 +1248,12 @@ final class ScheduleStore {
         // user's queued offline writes replayed under their access token
         // (founder-dogfooding fix).
         await outbox.removeAll()
+        // Same reasoning, different store: the Slack webhook URL (Keychain,
+        // SlackNotifier.swift) is also device-global with no user scoping.
+        // Without this, user A's connected Slack channel keeps receiving
+        // notifications for user B's schedule after an account switch on
+        // the same device (founder-dogfooding fix, fe7).
+        SlackNotifier.webhookURL = ""
         updateWidgetSnapshot()
     }
 
@@ -1295,6 +1335,15 @@ final class ScheduleStore {
             ) else { throw ScheduleWriteError.invalidInput }
             moved.startAt = newStart
             moved.endAt = newStart.addingTimeInterval(duration)
+        }
+
+        // Every other site that sets a start time derives timeBucket from it
+        // (ScheduleSheets.swift, AppShellView.swift, AgentTools.swift) --
+        // move() was the one place that left it untouched, so a rescheduled
+        // item could carry a stale bucket (e.g. "morning") to the server
+        // alongside its real new time (founder-dogfooding fix, fe5).
+        if let newStart = moved.startAt {
+            moved.timeBucket = .inferred(from: newStart)
         }
 
         if let dueAt = moved.dueAt, calendar.isDate(dueAt, inSameDayAs: oldDate) {
