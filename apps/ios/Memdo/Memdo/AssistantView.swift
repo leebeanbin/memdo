@@ -111,6 +111,10 @@ struct AgentSheet: View {
     /// action racing in on the same id from elsewhere, e.g. TodayView).
     @State private var isApplyingProposal = false
     @State private var isApplyingUpdateProposal = false
+    // fd11: same in-flight guard/feedback as isApplyingProposal above,
+    // previously missing entirely for these two proposal kinds.
+    @State private var isApplyingRoutineProposal = false
+    @State private var isApplyingReviewProposal = false
     @State private var routineProposal = AgentRoutineUpdateProposal()
     @State private var reviewProposal = AgentReviewActionProposal()
     /// Snapshot of proposal.revision/updateProposal.revision taken at the
@@ -238,14 +242,14 @@ struct AgentSheet: View {
                 }
             }
             if let routineDraft = routineProposal.draft {
-                ProposedRoutineUpdateCard(draft: routineDraft) {
+                ProposedRoutineUpdateCard(draft: routineDraft, isApplying: isApplyingRoutineProposal) {
                     confirmRoutineUpdateProposal()
                 } onDecline: {
                     withAnimation(.easeOut(duration: 0.2)) { routineProposal.clear() }
                 }
             }
             if let reviewDraft = reviewProposal.draft {
-                ProposedReviewActionCard(scheduleStore: scheduleStore, draft: reviewDraft) {
+                ProposedReviewActionCard(scheduleStore: scheduleStore, draft: reviewDraft, isApplying: isApplyingReviewProposal) {
                     confirmReviewActionProposal()
                 } onDecline: {
                     withAnimation(.easeOut(duration: 0.2)) { reviewProposal.clear() }
@@ -877,7 +881,9 @@ struct AgentSheet: View {
     /// actually applied.
     private func confirmRoutineUpdateProposal() {
         guard let draft = routineProposal.draft else { return }
+        isApplyingRoutineProposal = true
         Task {
+            defer { isApplyingRoutineProposal = false }
             let succeeded = await session.preferencesStore?.update { prefs in
                 prefs = applyRoutineUpdate(draft, to: prefs)
             } ?? false
@@ -907,7 +913,9 @@ struct AgentSheet: View {
             return
         }
         let dateString = DateFormatting.posix("yyyy-MM-dd").string(from: expression.resolvedDate())
+        isApplyingReviewProposal = true
         Task {
+            defer { isApplyingReviewProposal = false }
             do {
                 _ = try await scheduleStore.putReview(on: dateString, reflection: draft.reflection)
                 messages.append(AgentMessage(role: .assistant, text: "회고를 저장했어요 ✓"))
