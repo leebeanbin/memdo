@@ -732,6 +732,17 @@ private struct DayTimelineView: View {
                                     labelWidth: labelWidth
                                 )
                                 .onTapGesture { onOpenSchedule(event) }
+                                // .onTapGesture alone is invisible to
+                                // VoiceOver -- no Button/isButton trait, no
+                                // label, no accessibility action -- so the
+                                // day timeline (the primary way to open an
+                                // event from this screen) read as inert
+                                // decorative text. Founder-dogfooding fix,
+                                // fd5.
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel("\(event.title), \(event.displayTime)")
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityAction { onOpenSchedule(event) }
                             }
                             if Calendar.current.isDateInToday(date) {
                                 TimelineNowLine(
