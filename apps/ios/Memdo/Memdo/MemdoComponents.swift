@@ -124,7 +124,12 @@ struct MemdoPageHeader: View {
                     .foregroundStyle(MemdoTheme.brandInk)
             }
             Text(title)
-                .font(.system(.title2, design: .rounded, weight: .bold))
+                // fd13: design: .rounded was already a no-op for Korean --
+                // SF Rounded has no Hangul glyphs, so this silently fell
+                // back to the system default anyway. MemdoTypography.
+                // detailTitle is this app's real page-title token (same
+                // size/weight) instead of a raw one-off font literal.
+                .font(MemdoTypography.detailTitle)
                 .foregroundStyle(MemdoTheme.ink)
             if !subtitle.isEmpty {
                 Text(subtitle)
@@ -356,7 +361,14 @@ struct MemdoChoiceButton: View {
                 .padding(.horizontal, 12)
                 .frame(height: 36)
                 .background(isSelected ? MemdoTheme.accent : MemdoTheme.accentSoft, in: Capsule())
-                .padding(.vertical, 4)
+                // fd14: guarantees the full 44pt tap target explicitly
+                // (MemdoMetrics.touchTarget, the value every other
+                // interactive control in this app targets) instead of
+                // relying on outer padding arithmetic happening to sum to
+                // it -- contentShape stays the outermost modifier so this
+                // guaranteed frame, not just the visible 36pt capsule, is
+                // what's actually hit-tested.
+                .frame(minHeight: MemdoMetrics.touchTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
