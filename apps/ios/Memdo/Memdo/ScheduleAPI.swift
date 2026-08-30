@@ -286,7 +286,12 @@ struct ScheduleRuleRequestDTO: Encodable {
     let frequency: String
     let interval: Int
     let anchorDate: String
-    let timezoneOffsetMinutes: Int
+    // bd16: was a raw minute offset (TimeZone.current.secondsFromGMT), frozen
+    // at rule-creation time and reused unchanged for every future occurrence
+    // -- wrong at a DST transition for any timezone that observes one. The
+    // backend now stores this IANA identifier and computes each occurrence's
+    // own offset from it at materialization time instead.
+    let timezone: String
 
     init(schedule: ScheduleDetail) {
         calendarId = schedule.calendar.id
@@ -301,7 +306,7 @@ struct ScheduleRuleRequestDTO: Encodable {
         frequency = schedule.repeatRule.rawValue
         interval = 1
         anchorDate = APIDate.day(schedule.scheduledDate)
-        timezoneOffsetMinutes = TimeZone.current.secondsFromGMT(for: schedule.scheduledDate) / 60
+        timezone = TimeZone.current.identifier
     }
 
     private static func clock(_ date: Date) -> String {
