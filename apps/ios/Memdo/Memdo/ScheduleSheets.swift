@@ -429,21 +429,12 @@ struct ScheduleEditorFields: View {
                         .multilineTextAlignment(.center)
                         .font(MemdoTypography.title3)
                     Spacer()
-                    HStack(spacing: 8) {
+                    HStack(spacing: 0) {
                         ForEach(ScheduleColor.allCases) { c in
                             let selected = schedule.color == c
-                            Circle()
-                                .fill(c.swiftUIColor)
-                                .frame(width: 22, height: 22)
-                                .overlay(
-                                    Circle().stroke(.primary, lineWidth: selected ? 2 : 0)
-                                        .padding(2)
-                                )
-                                .scaleEffect(selected ? 1.12 : 1, anchor: .center)
-                                .animation(.easeInOut(duration: 0.15), value: selected)
-                                .onTapGesture { schedule.color = selected ? nil : c }
-                                .accessibilityLabel(c.label)
-                                .accessibilityAddTraits(selected ? .isSelected : [])
+                            MemdoColorSwatch(color: c, isSelected: selected, swatchSize: 22) {
+                                schedule.color = selected ? nil : c
+                            }
                         }
                     }
                 }
@@ -747,19 +738,13 @@ struct AddScheduleSheet: View {
                             Text("색상")
                                 .foregroundStyle(MemdoTheme.ink)
                             Spacer()
-                            ForEach(ScheduleColor.allCases) { c in
-                                let isSelected = draft.color == c
-                                ZStack {
-                                    Circle().fill(c.swiftUIColor)
-                                    Circle().fill(MemdoTheme.background).padding(isSelected ? 3 : 26)
-                                    Circle().fill(c.swiftUIColor).padding(isSelected ? 6 : 0)
+                            HStack(spacing: 0) {
+                                ForEach(ScheduleColor.allCases) { c in
+                                    let isSelected = draft.color == c
+                                    MemdoColorSwatch(color: c, isSelected: isSelected) {
+                                        draft.color = isSelected ? nil : c
+                                    }
                                 }
-                                .frame(width: 26, height: 26)
-                                .clipShape(Circle())
-                                .animation(.easeInOut(duration: 0.15), value: isSelected)
-                                .onTapGesture { draft.color = isSelected ? nil : c }
-                                .accessibilityLabel(c.label)
-                                .accessibilityAddTraits(isSelected ? .isSelected : [])
                             }
                         }
                         .padding(.vertical, 4)
@@ -973,20 +958,12 @@ private struct AddCategorySheet: View {
                     }
                 }
                 Section("색상") {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 0) {
                         ForEach(ScheduleColor.allCases) { c in
                             let isSelected = color == c
-                            ZStack {
-                                Circle().fill(c.swiftUIColor)
-                                Circle().fill(MemdoTheme.background).padding(isSelected ? 3 : 30)
-                                Circle().fill(c.swiftUIColor).padding(isSelected ? 6 : 0)
+                            MemdoColorSwatch(color: c, isSelected: isSelected, swatchSize: 30) {
+                                color = c
                             }
-                            .frame(width: 30, height: 30)
-                            .clipShape(Circle())
-                            .animation(.easeInOut(duration: 0.15), value: isSelected)
-                            .onTapGesture { color = c }
-                            .accessibilityLabel(c.label)
-                            .accessibilityAddTraits(isSelected ? .isSelected : [])
                         }
                     }
                     .padding(.vertical, 4)
