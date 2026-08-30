@@ -169,6 +169,16 @@ enum MemdoTheme {
     )
     static let destructive = Color(uiColor: .systemRed)
     static let onDestructive = Color.white
+    /// Success/complete state (WorkoutDetailSheet's "운동 완료" button) --
+    /// plain SwiftUI `.green` paired with white text measured at ~2.3:1
+    /// contrast, well under WCAG AA's 4.5:1 minimum for normal text. This
+    /// darker green stays ~5.5:1 against white regardless of appearance --
+    /// not trait-dependent, since a solid-fill button's own internal
+    /// contrast doesn't need to track the surrounding page's light/dark
+    /// mode the way a translucent/soft token does. Found via founder-
+    /// dogfooding code review (fd15).
+    static let activityAccent = Color(red: 0.09, green: 0.48, blue: 0.23)
+    static let onActivityAccent = Color.white
     static let mine = ink
     static let mineSoft = Color(uiColor: .secondarySystemFill)
     static let google = secondaryInk
