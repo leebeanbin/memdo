@@ -596,6 +596,18 @@ final class ScheduleStore {
         lastWriteError = nil
     }
 
+    /// fe6: every ScheduleWriteError case except .busy/.notFound already set
+    /// lastWriteError at its own throw site before this fix -- those two
+    /// guard clauses threw directly with no side effect, so the 8+ non-Agent
+    /// call sites that do `Task { try? await scheduleStore.X(...) }` (which
+    /// discards the thrown error) got zero user-facing feedback specifically
+    /// for these two cases. Sets it here, at the single point both cases are
+    /// thrown from, rather than touching every call site.
+    private func fail(_ error: ScheduleWriteError) -> ScheduleWriteError {
+        lastWriteError = error.localizedDescription
+        return error
+    }
+
     init(repository: ScheduleRepository, outbox: OutboxStore = OutboxStore()) {
         self.repository = repository
         self.outbox = outbox
@@ -1021,7 +1033,7 @@ final class ScheduleStore {
     /// immediately; only the async network write and its outcome moved to
     /// being awaited instead of fired into a background `Task`.
     func save(_ schedule: ScheduleDetail) async throws -> ScheduleWriteOutcome {
-        guard !pendingWriteIDs.contains(schedule.id) else { throw ScheduleWriteError.busy }
+        guard !pendingWriteIDs.contains(schedule.id) else { throw fail(.busy) }
         pendingWriteIDs.insert(schedule.id)
         defer { pendingWriteIDs.remove(schedule.id) }
         return try await performSave(schedule)
@@ -1273,7 +1285,7 @@ final class ScheduleStore {
     /// would be a no-op. Founder-dogfooding review found exactly that bug.
     func toggleDone(id: UUID) async throws -> ScheduleWriteOutcome {
         guard let index = schedules.firstIndex(where: { $0.id == id }) else {
-            throw ScheduleWriteError.notFound
+            throw fail(.notFound)
         }
         return try await setDone(id: id, to: !schedules[index].isDone)
     }
@@ -1289,7 +1301,7 @@ final class ScheduleStore {
     /// for "already in the state you asked for."
     func setDone(id: UUID, to done: Bool) async throws -> ScheduleWriteOutcome {
         guard let index = schedules.firstIndex(where: { $0.id == id }) else {
-            throw ScheduleWriteError.notFound
+            throw fail(.notFound)
         }
         guard schedules[index].isDone != done else { return .committed }
         var updated = schedules[index]
@@ -1311,9 +1323,9 @@ final class ScheduleStore {
     /// guard-free `performSave(_:)` (not public `save(_:)`), so that
     /// fallback doesn't re-take a guard this function already holds.
     func move(id: UUID, to date: Date, startAt: Date? = nil, endAt: Date? = nil) async throws -> ScheduleWriteOutcome {
-        guard !pendingWriteIDs.contains(id) else { throw ScheduleWriteError.busy }
+        guard !pendingWriteIDs.contains(id) else { throw fail(.busy) }
         guard let index = schedules.firstIndex(where: { $0.id == id }) else {
-            throw ScheduleWriteError.notFound
+            throw fail(.notFound)
         }
         let original = schedules[index]
         var moved = original
@@ -1436,9 +1448,9 @@ final class ScheduleStore {
     }
 
     func delete(id: UUID) async throws -> ScheduleWriteOutcome {
-        guard !pendingWriteIDs.contains(id) else { throw ScheduleWriteError.busy }
+        guard !pendingWriteIDs.contains(id) else { throw fail(.busy) }
         guard let index = schedules.firstIndex(where: { $0.id == id }) else {
-            throw ScheduleWriteError.notFound
+            throw fail(.notFound)
         }
         let schedule = schedules.remove(at: index)
         updateWidgetSnapshot()
