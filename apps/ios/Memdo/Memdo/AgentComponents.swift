@@ -368,18 +368,18 @@ struct ProposedScheduleCard: View {
                 Button(action: onConfirm) {
                     HStack(spacing: 6) {
                         if isApplying {
-                            ProgressView().tint(MemdoTheme.onAccent)
-                        } else {
-                            Label("저장하기", systemImage: "checkmark")
+                            ProgressView().tint(MemdoTheme.onBrand)
+                        }
+                        // Label stays visible while applying (fd11) --
+                        // replacing it with a bare spinner left the button
+                        // with no text at all mid-save.
+                        Text(isApplying ? "저장하는 중" : "저장하기")
+                        if !isApplying {
+                            Image(systemName: "checkmark")
                         }
                     }
-                    .font(MemdoTypography.captionEmphasis)
-                    .foregroundStyle(MemdoTheme.onAccent)
-                    .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
-                    .background(MemdoTheme.accent,
-                                in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MemdoPrimaryActionButtonStyle())
                 .disabled(isApplying)
                 // Bare "저장하기" doesn't say what's being saved -- with more
                 // than one proposal card pending, VoiceOver users got several
@@ -389,17 +389,8 @@ struct ProposedScheduleCard: View {
 
                 Button(action: onDecline) {
                     Text("취소")
-                        .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
-                        .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
-                        .background(MemdoTheme.surface,
-                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(MemdoTheme.outline, lineWidth: 0.5)
-                        }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MemdoSecondaryActionButtonStyle())
                 .disabled(isApplying)
                 .accessibilityLabel("'\(draft.title)' 제안 취소")
             }
@@ -450,6 +441,21 @@ struct ProposedScheduleUpdateCard: View {
         proposal.action == "delete" ? "삭제하기" : "적용하기"
     }
 
+    // fd11: label stays visible while applying rather than being fully
+    // replaced by a bare spinner.
+    @ViewBuilder
+    private func confirmButtonLabel(tint: Color) -> some View {
+        HStack(spacing: 6) {
+            if isApplying {
+                ProgressView().tint(tint)
+            }
+            Text(isApplying ? "적용하는 중" : confirmLabel)
+            if !isApplying {
+                Image(systemName: "checkmark")
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Agent \(proposal.displayActionLabel) 제안", systemImage: icon)
@@ -489,37 +495,31 @@ struct ProposedScheduleUpdateCard: View {
             }
 
             HStack(spacing: 8) {
-                Button(action: onConfirm) {
-                    HStack(spacing: 6) {
-                        if isApplying {
-                            ProgressView().tint(MemdoTheme.onAccent)
-                        } else {
-                            Label(confirmLabel, systemImage: "checkmark")
-                        }
+                // fd9: delete used to render identically to complete/
+                // reschedule's safe "적용하기" button -- nothing distinguished
+                // an irreversible destructive action from a routine one. Two
+                // full button declarations (not one Button with a type-erased
+                // style) since ButtonStyle has no common existential here.
+                if proposal.action == "delete" {
+                    Button(action: onConfirm) {
+                        confirmButtonLabel(tint: MemdoTheme.onDestructive)
                     }
-                    .font(MemdoTypography.captionEmphasis)
-                    .foregroundStyle(MemdoTheme.onAccent)
-                    .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
-                    .background(MemdoTheme.accent,
-                                in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .buttonStyle(MemdoDestructiveActionButtonStyle())
+                    .disabled(isApplying)
+                    .accessibilityLabel(isApplying ? "적용하는 중" : "'\(proposal.title ?? "일정")' \(confirmLabel)")
+                } else {
+                    Button(action: onConfirm) {
+                        confirmButtonLabel(tint: MemdoTheme.onBrand)
+                    }
+                    .buttonStyle(MemdoPrimaryActionButtonStyle())
+                    .disabled(isApplying)
+                    .accessibilityLabel(isApplying ? "적용하는 중" : "'\(proposal.title ?? "일정")' \(confirmLabel)")
                 }
-                .buttonStyle(.plain)
-                .disabled(isApplying)
-                .accessibilityLabel(isApplying ? "적용하는 중" : "'\(proposal.title ?? "일정")' \(confirmLabel)")
 
                 Button(action: onDecline) {
                     Text("취소")
-                        .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
-                        .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
-                        .background(MemdoTheme.surface,
-                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(MemdoTheme.outline, lineWidth: 0.5)
-                        }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MemdoSecondaryActionButtonStyle())
                 .disabled(isApplying)
                 .accessibilityLabel("'\(proposal.title ?? "일정")' 제안 취소")
             }
@@ -545,6 +545,10 @@ struct ProposedScheduleUpdateCard: View {
 /// model actually proposed changing (every field on the DTO is optional).
 struct ProposedRoutineUpdateCard: View {
     let draft: CloudProposedRoutineUpdateDTO
+    /// True while the confirm tap's PreferencesStore mutation is actually in
+    /// flight (fd11) -- previously this card had no in-flight feedback at
+    /// all, unlike ProposedScheduleCard/ProposedScheduleUpdateCard.
+    var isApplying: Bool = false
     let onConfirm: () -> Void
     let onDecline: () -> Void
 
@@ -585,29 +589,25 @@ struct ProposedRoutineUpdateCard: View {
 
             HStack(spacing: 8) {
                 Button(action: onConfirm) {
-                    Label("적용하기", systemImage: "checkmark")
-                        .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.onAccent)
-                        .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
-                        .background(MemdoTheme.accent,
-                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    HStack(spacing: 6) {
+                        if isApplying {
+                            ProgressView().tint(MemdoTheme.onBrand)
+                        }
+                        Text(isApplying ? "적용하는 중" : "적용하기")
+                        if !isApplying {
+                            Image(systemName: "checkmark")
+                        }
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("루틴 설정 적용하기")
+                .buttonStyle(MemdoPrimaryActionButtonStyle())
+                .disabled(isApplying)
+                .accessibilityLabel(isApplying ? "적용하는 중" : "루틴 설정 적용하기")
 
                 Button(action: onDecline) {
                     Text("취소")
-                        .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
-                        .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
-                        .background(MemdoTheme.surface,
-                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(MemdoTheme.outline, lineWidth: 0.5)
-                        }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MemdoSecondaryActionButtonStyle())
+                .disabled(isApplying)
                 .accessibilityLabel("루틴 설정 제안 취소")
             }
         }
@@ -637,6 +637,9 @@ struct ProposedRoutineUpdateCard: View {
 struct ProposedReviewActionCard: View {
     let scheduleStore: ScheduleStore
     let draft: CloudProposedReviewActionDTO
+    /// True while the confirm tap's putReview call is actually in flight
+    /// (fd11) -- previously this card had no in-flight feedback at all.
+    var isApplying: Bool = false
     let onConfirm: () -> Void
     let onDecline: () -> Void
 
@@ -696,35 +699,31 @@ struct ProposedReviewActionCard: View {
             HStack(spacing: 8) {
                 if resolvedDate != nil {
                     Button(action: onConfirm) {
-                        Label("저장하기", systemImage: "checkmark")
-                            .font(MemdoTypography.captionEmphasis)
-                            .foregroundStyle(MemdoTheme.onAccent)
-                            .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
-                            .background(MemdoTheme.accent,
-                                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        HStack(spacing: 6) {
+                            if isApplying {
+                                ProgressView().tint(MemdoTheme.onBrand)
+                            }
+                            Text(isApplying ? "저장하는 중" : "저장하기")
+                            if !isApplying {
+                                Image(systemName: "checkmark")
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(MemdoPrimaryActionButtonStyle())
                     // Disabled for the entire duration of the existence
                     // check, not just while a conflict is confirmed -- so
                     // the user can't approve before the warning (if any)
-                    // has had a chance to render.
-                    .disabled(isCheckingExistingReview)
-                    .accessibilityLabel("\(displayDate ?? "") 회고 저장하기")
+                    // has had a chance to render. Also disabled while the
+                    // confirm mutation itself is in flight (fd11).
+                    .disabled(isCheckingExistingReview || isApplying)
+                    .accessibilityLabel(isApplying ? "저장하는 중" : "\(displayDate ?? "") 회고 저장하기")
                 }
 
                 Button(action: onDecline) {
                     Text("취소")
-                        .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
-                        .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
-                        .background(MemdoTheme.surface,
-                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(MemdoTheme.outline, lineWidth: 0.5)
-                        }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MemdoSecondaryActionButtonStyle())
+                .disabled(isApplying)
                 .accessibilityLabel("회고 제안 취소")
             }
         }
