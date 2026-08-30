@@ -108,6 +108,7 @@ struct AgentQuickActions: View {
 }
 
 struct AgentResponse: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let message: AgentMessage
     var onRetry: (() -> Void)? = nil
 
@@ -138,7 +139,9 @@ struct AgentResponse: View {
                     Image(systemName: "gearshape.fill")
                         .font(MemdoTypography.captionEmphasis)
                         .foregroundStyle(MemdoTheme.brandInk)
-                        .symbolEffect(.pulse)
+                        // fd10: renders statically under Reduce Motion,
+                        // same as TypingDotsView below.
+                        .symbolEffect(.pulse, isActive: !reduceMotion)
                 } else if message.isStreaming && message.text.isEmpty {
                     TypingDotsView()
                 } else if message.isError {
@@ -283,6 +286,7 @@ struct AgentMarkdownText: View {
 }
 
 private struct TypingDotsView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var active = false
 
     var body: some View {
@@ -290,13 +294,17 @@ private struct TypingDotsView: View {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
                     .fill(MemdoTheme.brand)
+                    // fd10: static (fully visible, no pulsing) under Reduce
+                    // Motion, instead of an unstoppable repeatForever loop.
                     .frame(width: 6, height: 6)
-                    .scaleEffect(active ? 1.0 : 0.3)
-                    .opacity(active ? 1.0 : 0.2)
+                    .scaleEffect(reduceMotion || active ? 1.0 : 0.3)
+                    .opacity(reduceMotion || active ? 1.0 : 0.2)
                     .animation(
-                        .easeInOut(duration: 0.5)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(i) * 0.18),
+                        reduceMotion
+                            ? nil
+                            : .easeInOut(duration: 0.5)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(i) * 0.18),
                         value: active
                     )
             }
@@ -783,6 +791,11 @@ struct AgentComposer: View {
                 .disabled(isLoading)
                 .padding(.leading, MemdoMetrics.rowInset)
                 .frame(minHeight: MemdoMetrics.touchTarget)
+                // fd16: placeholder-as-name disappears once the user starts
+                // typing (VoiceOver only derives a label from the
+                // placeholder while the field is empty) -- an explicit
+                // label keeps this field identifiable regardless of content.
+                .accessibilityLabel("Agent에게 보낼 메시지")
 
             Button(action: onSend) {
                 if isLoading {
@@ -798,7 +811,10 @@ struct AgentComposer: View {
             }
             .buttonStyle(.plain)
             .disabled(isEmpty || isLoading)
-            .accessibilityLabel("요청 보내기")
+            // fd16: reflects loading state instead of always announcing
+            // "요청 보내기", which VoiceOver would otherwise read even while
+            // the button is disabled mid-request.
+            .accessibilityLabel(isLoading ? "보내는 중" : "요청 보내기")
         }
         .padding(4)
         .memdoFloatingSurface(cornerRadius: MemdoMetrics.groupRadius, interactive: false)

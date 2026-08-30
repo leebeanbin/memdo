@@ -52,7 +52,8 @@ struct TodayHeader: View {
                     .font(MemdoTypography.captionEmphasis)
                     .foregroundStyle(MemdoTheme.brandInk)
                 Text(title)
-                    .font(.system(.title2, design: .rounded, weight: .bold))
+                    // fd13: same reasoning as MemdoPageHeader's titleGroup.
+                    .font(MemdoTypography.detailTitle)
                     .foregroundStyle(MemdoTheme.ink)
                 Text(subtitle)
                     .font(MemdoTypography.action)
