@@ -315,6 +315,40 @@ struct MemdoIconButtonStyle: ButtonStyle {
     }
 }
 
+/// Unified color-swatch picker button (fd7) -- replaces three near-identical
+/// 22/26/30pt gesture-only implementations (`.onTapGesture`, not a real
+/// `Button`) in ScheduleSheets.swift. Always a real 44pt tap target
+/// regardless of the visible swatch's own size, matching every other
+/// interactive control in this app; `action` lets each call site keep its
+/// own tap semantics (some toggle back to nil on re-tap, one always sets).
+struct MemdoColorSwatch: View {
+    let color: ScheduleColor
+    let isSelected: Bool
+    var swatchSize: CGFloat = 26
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(color.swiftUIColor)
+                    .frame(width: swatchSize, height: swatchSize)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: swatchSize * 0.46, weight: .bold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.35), radius: 1)
+                }
+            }
+            .frame(width: MemdoMetrics.touchTarget, height: MemdoMetrics.touchTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(color.label)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
 struct MemdoScheduleCountDots: View {
     let count: Int
     let isEmphasized: Bool
