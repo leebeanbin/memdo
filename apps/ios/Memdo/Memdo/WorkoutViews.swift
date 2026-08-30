@@ -1,6 +1,29 @@
 import SwiftUI
 import PhotosUI
 
+/// Same shape/motion as MemdoPrimaryActionButtonStyle (MemdoComponents.swift)
+/// but with MemdoTheme.activityAccent instead of the brand color -- a
+/// success/complete affordance ("운동 완료"), not this app's primary CTA
+/// color. Kept local to this file since nothing else needs it.
+private struct MemdoActivityAccentButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(MemdoTypography.action)
+            .foregroundStyle(MemdoTheme.onActivityAccent)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget)
+            .background(
+                MemdoTheme.activityAccent,
+                in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous)
+            )
+            .opacity(isEnabled ? (configuration.isPressed ? 0.72 : 1) : 0.42)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+    }
+}
+
 // MARK: - Compact Row (Today / Calendar)
 
 struct WorkoutLogRow: View {
@@ -16,9 +39,13 @@ struct WorkoutLogRow: View {
                         .fill(activityColor.opacity(0.15))
                         .frame(width: 36, height: 36)
                     Image(systemName: workout.activityType.systemImage)
-                        .font(.system(size: 15, weight: .medium))
+                        // fd15: MemdoTypography token instead of a raw
+                        // .system(size:) literal, matching this app's
+                        // established convention for Image(systemName:).
+                        .font(MemdoTypography.action)
                         .foregroundStyle(activityColor)
                 }
+                .accessibilityHidden(true)
 
                 // 제목 + 통계
                 VStack(alignment: .leading, spacing: 2) {
@@ -51,6 +78,10 @@ struct WorkoutLogRow: View {
             .padding(.vertical, 10)
             .background(Color.clear)
             .contentShape(Rectangle())
+            // fd15: combines the title/duration/distance/calories/heart-rate
+            // texts into one VoiceOver-readable element instead of six
+            // separate swipe stops for a single row.
+            .accessibilityElement(children: .combine)
         }
         .buttonStyle(.plain)
     }
@@ -81,6 +112,11 @@ struct TodayWorkoutSection: View {
                     .font(MemdoTypography.metric)
                     .foregroundStyle(MemdoTheme.brandInk)
                 }
+                // fd15: "추가" alone is ambiguous out of visual context --
+                // this app has several sections with their own "+ 추가"
+                // button, and VoiceOver reads button names without the
+                // surrounding section header for context.
+                .accessibilityLabel("운동 기록 추가")
             }
             .padding(.horizontal, MemdoMetrics.pagePadding)
             .padding(.bottom, 6)
@@ -94,7 +130,9 @@ struct TodayWorkoutSection: View {
                                 .fill(MemdoTheme.brand.opacity(0.1))
                                 .frame(width: 36, height: 36)
                             Image(systemName: "figure.run.circle")
-                                .font(.system(size: 16, weight: .medium))
+                                // fd15: MemdoTypography token instead of a
+                                // raw .system(size:) literal.
+                                .font(MemdoTypography.action)
                                 .foregroundStyle(MemdoTheme.brandInk)
                         }
                         VStack(alignment: .leading, spacing: 2) {
@@ -114,6 +152,10 @@ struct TodayWorkoutSection: View {
                     .padding(.vertical, 10)
                     .background(MemdoTheme.surface, in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
                     .contentShape(Rectangle())
+                    // fd15: combines the title/subtitle into one
+                    // VoiceOver-readable element instead of two separate
+                    // swipe stops plus a bare decorative chevron.
+                    .accessibilityElement(children: .combine)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -201,18 +243,19 @@ struct WorkoutDetailSheet: View {
     private var trackingSection: some View {
         VStack(spacing: 10) {
             if isTracking {
+                // fd15: routed through a shared-shaped ButtonStyle instead
+                // of a hand-rolled modifier chain (previously raw `.green`
+                // background + white text, measured at ~2.3:1 contrast --
+                // see MemdoTheme.activityAccent's doc comment).
                 Button {
                     WorkoutActivityTracker.complete(workoutID: workout.id)
                     isTracking = false
                 } label: {
                     Label("운동 완료", systemImage: "checkmark.circle.fill")
-                        .font(MemdoTypography.action)
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(.green, in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous))
-                        .foregroundStyle(.white)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MemdoActivityAccentButtonStyle())
                 .padding(.horizontal, MemdoMetrics.pagePadding)
+                .accessibilityLabel("운동 완료 처리")
             } else {
                 Button {
                     WorkoutActivityTracker.start(
@@ -223,13 +266,10 @@ struct WorkoutDetailSheet: View {
                     isTracking = true
                 } label: {
                     Label("Dynamic Island 추적 시작", systemImage: "liveactivity")
-                        .font(MemdoTypography.action)
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(MemdoTheme.accent, in: RoundedRectangle(cornerRadius: MemdoMetrics.fieldRadius, style: .continuous))
-                        .foregroundStyle(MemdoTheme.onAccent)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MemdoPrimaryActionButtonStyle())
                 .padding(.horizontal, MemdoMetrics.pagePadding)
+                .accessibilityLabel("Dynamic Island에서 운동 추적 시작")
             }
         }
     }
@@ -500,7 +540,9 @@ struct WorkoutLogEditorSheet: View {
                     } label: {
                         VStack(spacing: 6) {
                             Image(systemName: type.systemImage)
-                                .font(.system(size: 20, weight: .medium))
+                                // fd15: MemdoTypography token instead of a
+                                // raw .system(size:) literal.
+                                .font(MemdoTypography.title3)
                             Text(type.label)
                                 .font(MemdoTypography.captionEmphasis)
                                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
@@ -521,6 +563,11 @@ struct WorkoutLogEditorSheet: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    // fd15: combines the icon/label into one element and
+                    // exposes selection state -- previously neither the
+                    // icon nor the selected/unselected state was announced.
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
             .padding(.horizontal, MemdoMetrics.pagePadding)
@@ -687,10 +734,17 @@ struct HealthKitImportSheet: View {
                                     .foregroundStyle(selected.contains(workout.id)
                                                      ? MemdoTheme.brandInk : MemdoTheme.secondaryInk)
                                     .font(MemdoTypography.title3)
+                                    .accessibilityHidden(true)
                             }
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        // fd15: combines importRow's activity/date/duration
+                        // texts into one element and exposes selection
+                        // state -- previously neither was announced, and
+                        // the bare checkmark/circle icon had no label at all.
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(selected.contains(workout.id) ? .isSelected : [])
                     }
                 } header: {
                     Text("가져올 수 있는 운동 \(pending.count)개")
@@ -720,7 +774,9 @@ struct HealthKitImportSheet: View {
                     .fill(workout.activityType.color.opacity(0.15))
                     .frame(width: 36, height: 36)
                 Image(systemName: workout.activityType.systemImage)
-                    .font(.system(size: 15, weight: .medium))
+                    // fd15: MemdoTypography token instead of a raw
+                    // .system(size:) literal.
+                    .font(MemdoTypography.action)
                     .foregroundStyle(workout.activityType.color)
             }
             VStack(alignment: .leading, spacing: 2) {
