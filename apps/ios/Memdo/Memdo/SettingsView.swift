@@ -917,7 +917,8 @@ private struct GuestUpgradeRow: View {
     }
 }
 
-private struct GuestUpgradeSheet: View {
+// be18b: not private -- reused by AppShellView's shell-level guest-status banner.
+struct GuestUpgradeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(MemdoSession.self) private var session
 
