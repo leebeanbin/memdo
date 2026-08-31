@@ -108,7 +108,9 @@ extension View {
         }
         if target == .agentTab {
             let width: CGFloat = 56
-            let height: CGFloat = 44
+            // fd17: MemdoMetrics.touchTarget instead of a literal -- this is
+            // the tab bar icon's real tap-target height.
+            let height: CGFloat = MemdoMetrics.touchTarget
             return CGRect(
                 x: proxy.size.width * 0.815 - width / 2,
                 y: proxy.size.height - 74,
@@ -195,7 +197,11 @@ private struct CoachMarkOverlay: View {
             HStack {
                 Text("\(index + 1) / \(count)")
                     .font(MemdoTypography.captionEmphasis)
-                    .foregroundStyle(.secondary)
+                    // fd18: .secondary resolves against the .regularMaterial
+                    // + 70% black scrim this card sits on, not the app's
+                    // theme -- reads too faint there. MemdoTheme.secondaryInk
+                    // is this app's own token for the same role.
+                    .foregroundStyle(MemdoTheme.secondaryInk)
                 Spacer()
                 Button("건너뛰기", action: onSkip)
                     .font(MemdoTypography.captionEmphasis)

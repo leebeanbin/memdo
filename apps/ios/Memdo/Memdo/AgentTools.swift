@@ -390,7 +390,8 @@ struct FindFreeSlotTool: Tool {
         var lines: [String] = []
         for date in dates {
             let busyOnDay = snapshot.filter { Calendar.current.isDate($0.scheduledDate, inSameDayAs: date) }
-            let (start, end) = window(on: date, wStart: arguments.windowStart, wEnd: arguments.windowEnd)
+            guard let (start, end) = window(on: date, wStart: arguments.windowStart, wEnd: arguments.windowEnd)
+            else { continue }
             let slots = FreeSlotService.freeSlots(
                 busy: busyRanges(busyOnDay), windowStart: start, windowEnd: end, duration: duration
             )
@@ -412,7 +413,7 @@ struct FindFreeSlotTool: Tool {
         var lines: [String] = []
         for date in dates {
             let busyOnDay = snapshot.filter { Calendar.current.isDate($0.scheduledDate, inSameDayAs: date) }
-            let (start, end) = window(on: date, wStart: wStart, wEnd: wEnd)
+            guard let (start, end) = window(on: date, wStart: wStart, wEnd: wEnd) else { continue }
             let extents = FreeSlotService.fullFreeExtents(busy: busyRanges(busyOnDay), windowStart: start, windowEnd: end)
             guard !extents.isEmpty else { continue }
             if extents.count == 1, extents[0].start == start, extents[0].end == end {
@@ -449,10 +450,18 @@ struct FindFreeSlotTool: Tool {
     /// model didn't supply an explicit windowStart/windowEnd -- shared by
     /// both the duration-candidate path and the availability path so they
     /// never silently disagree on what "the whole day" means.
-    private func window(on date: Date, wStart: String, wEnd: String) -> (Date, Date) {
-        let cal   = Calendar.current
-        let start = timeFrom(wStart, on: date) ?? cal.date(bySettingHour: 8,  minute: 0, second: 0, of: date)!
-        let end   = timeFrom(wEnd,   on: date) ?? cal.date(bySettingHour: 22, minute: 0, second: 0, of: date)!
+    ///
+    /// fe16: date(bySettingHour:) can return nil on a DST-transition day --
+    /// a real crash path since this is called with model-supplied dates.
+    /// nil here means "couldn't resolve this one date's window," handled by
+    /// both callers' existing per-date guard/continue (same as their
+    /// existing "nothing to report this date" skip), not a whole-call failure.
+    private func window(on date: Date, wStart: String, wEnd: String) -> (Date, Date)? {
+        let cal = Calendar.current
+        guard
+            let start = timeFrom(wStart, on: date) ?? cal.date(bySettingHour: 8, minute: 0, second: 0, of: date),
+            let end = timeFrom(wEnd, on: date) ?? cal.date(bySettingHour: 22, minute: 0, second: 0, of: date)
+        else { return nil }
         return (start, end)
     }
 

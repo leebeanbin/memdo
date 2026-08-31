@@ -128,7 +128,10 @@ struct ScheduleRow: View {
                     .accessibilityHidden(true)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        // fd17: MemdoMetrics.touchTarget instead of a literal -- a magic
+        // number here doesn't stand out if a future edit slips in a
+        // wrong value (the exact shape of fd4/fd14's bugs).
+        .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget, alignment: .leading)
         .contentShape(Rectangle())
     }
 

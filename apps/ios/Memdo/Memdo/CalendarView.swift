@@ -808,7 +808,8 @@ private struct DayTimelineView: View {
                         Spacer()
                     }
                     .padding(.horizontal, MemdoMetrics.pagePadding)
-                    .frame(minHeight: 44, alignment: .leading)
+                    // fd17: MemdoMetrics.touchTarget instead of a literal.
+                    .frame(minHeight: MemdoMetrics.touchTarget, alignment: .leading)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
