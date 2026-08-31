@@ -190,8 +190,16 @@ actor WorkoutRepository {
                                     publishableKey: configuration.publishableKey)
     }
 
+    // fe12: the only repository without this guard -- a signed-out call
+    // attempted a real network token refresh instead of failing fast, and
+    // whatever opaque SDK error that produced overlapped with the try?
+    // chains at every call site into a silent no-op. Mirrors
+    // ScheduleRepository/PreferencesRepository's identical guard, including
+    // reusing ScheduleAPIError.notAuthenticated (same shared error type,
+    // not a new Workout-specific case).
     func accessToken() async throws -> String {
-        try await auth.auth.session.accessToken
+        guard auth.auth.currentSession != nil else { throw ScheduleAPIError.notAuthenticated }
+        return try await auth.auth.session.accessToken
     }
 
     func load(from: Date, to: Date) async throws -> [WorkoutLog] {
@@ -231,12 +239,23 @@ actor WorkoutRepository {
 
     // MARK: Storage
 
-    /// 이미지 Data → Supabase Storage 업로드 → public URL 반환
+    /// 이미지 Data → Supabase Storage 업로드 → 오브젝트 경로 반환 (URL이 아님).
+    /// fe11: workout-media 버킷은 private로 문서화되어 있는데 getPublicURL을
+    /// 썼음 -- 버킷이 실제로 private이면 저장된 모든 routeImageURL/photoURL이
+    /// 영구 깨진 링크였고, 실제로 public이면 GPS 경로가 접근 통제 없이 노출됐음.
+    /// 이제 경로만 저장해두고, 표시 시점마다 signedURL(for:)로 단기 유효
+    /// 서명 URL을 새로 발급받는다 -- 버킷의 실제 ACL이 무엇이든 안전.
     func uploadImage(_ data: Data, path: String) async throws -> String {
         let options = FileOptions(contentType: "image/jpeg", upsert: true)
         _ = try await auth.storage.from(Self.mediaBucket).upload(path, data: data, options: options)
-        let url = try auth.storage.from(Self.mediaBucket).getPublicURL(path: path)
-        return url.absoluteString
+        return path
+    }
+
+    /// 저장된 오브젝트 경로(routeImageURL/photoURL에 들어있는 값)로부터
+    /// 표시용 서명 URL을 새로 발급. 매 표시 시점마다 호출 -- 서명 URL 자체를
+    /// 저장하지 않는다 (만료됨).
+    func signedURL(for path: String, expiresIn: Int = 3600) async throws -> URL {
+        try await auth.storage.from(Self.mediaBucket).createSignedURL(path: path, expiresIn: expiresIn)
     }
 
     func routeImagePath(workoutID: UUID) -> String { "\(workoutID.uuidString.lowercased())/route.jpg" }
