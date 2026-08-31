@@ -91,6 +91,9 @@ struct AppShellView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     Task { await scheduleStore.refresh() }
+                    // bd26: workout_logs now participates in the same /sync
+                    // stream (see WorkoutStore.refresh()).
+                    Task { await workoutStore.refresh() }
                 }
             }
             .modifier(IntentCaptureBehavior { text in

@@ -168,6 +168,7 @@ final class WorkoutStore {
     private(set) var workouts: [WorkoutLog] = []
     private(set) var isSyncing = false
     private(set) var lastSyncError: String?
+    private var lastSyncCursor: String?
 
     private let repository: WorkoutRepository?
     let importer: HealthKitImporter
@@ -207,6 +208,36 @@ final class WorkoutStore {
             let localOnly = workouts.filter { !serverIDs.contains($0.id) }
             workouts = (serverWorkouts + localOnly).sorted { $0.startedAt > $1.startedAt }
         } catch { lastSyncError = error.localizedDescription }
+    }
+
+    /// Best-effort incremental pull of workout changes made elsewhere (other
+    /// devices) since the last sync cursor -- mirrors ScheduleStore.refresh(),
+    /// layered on top of load() the same way. /sync merges todos and
+    /// workout_logs into one stream (bd26); only entityType == "workout"
+    /// items are applied here, everything else in the page is ignored.
+    func refresh() async {
+        guard let repository else { return }
+        var cursor = lastSyncCursor
+        do {
+            var hasMore = true
+            var pagesFetched = 0
+            let maxPages = 200
+            while hasMore && pagesFetched < maxPages {
+                pagesFetched += 1
+                let page = try await repository.sync(cursor: cursor)
+                for item in page.items {
+                    guard item.entityType == "workout" else { continue }
+                    if let dto = item.workoutData, let workout = dto.toWorkoutLog() {
+                        upsertLocally(workout)
+                    }
+                }
+                cursor = page.nextCursor ?? cursor
+                hasMore = page.hasMore
+            }
+            lastSyncCursor = cursor
+        } catch {
+            // Refresh is best-effort; leave current data intact on failure.
+        }
     }
 
     // HealthKit에서 새 운동 가져오기 → (있으면) 경로 이미지 업로드 → 백엔드 저장
@@ -299,7 +330,7 @@ final class WorkoutStore {
     }
 
     func dismissSyncError() { lastSyncError = nil }
-    func reset() { workouts = []; lastSyncError = nil }
+    func reset() { workouts = []; lastSyncError = nil; lastSyncCursor = nil }
 
     private func upsertLocally(_ workout: WorkoutLog) {
         if let i = workouts.firstIndex(where: { $0.id == workout.id }) {

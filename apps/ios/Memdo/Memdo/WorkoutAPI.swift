@@ -237,6 +237,15 @@ actor WorkoutRepository {
         try await api.deleteWorkoutLog(id: id, accessToken: token)
     }
 
+    // bd26: /sync merges todos and workout_logs into one sync_seq-ordered
+    // stream -- same shared endpoint ScheduleRepository.sync(cursor:) already
+    // calls (MemdoAPIClient.sync is one method used by both repositories).
+    // WorkoutStore.refresh() filters for entityType == "workout" and ignores
+    // everything else in the page.
+    func sync(cursor: String?) async throws -> SyncResponseDTO {
+        try await api.sync(cursor: cursor, accessToken: accessToken())
+    }
+
     // MARK: Storage
 
     /// 이미지 Data → Supabase Storage 업로드 → 오브젝트 경로 반환 (URL이 아님).
