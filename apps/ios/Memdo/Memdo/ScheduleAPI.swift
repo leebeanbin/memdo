@@ -8,7 +8,7 @@ struct DayViewResponseDTO: Decodable {
     let needsReviewCount: Int
 }
 
-struct CalendarResponseDTO: Decodable {
+struct CalendarResponseDTO: Decodable, Identifiable {
     let id: String
     let name: String
     let purpose: String
@@ -26,6 +26,28 @@ struct CalendarResponseDTO: Decodable {
         )
     }
 }
+
+// bd26: POST /calendars only ever creates a purpose:'custom' calendar --
+// there's no purpose field here to send.
+struct CalendarCreateRequestDTO: Encodable {
+    let name: String
+    let colorToken: String?
+    let sortOrder: Int
+}
+
+// PATCH is a genuine partial update server-side, but this client always
+// sends every field -- CalendarManagementView always has the full current
+// row (it just fetched it), so a full resend is simplest and correct here,
+// no read-modify-write race to avoid the way preferences' full-resend
+// convention exists to guard against.
+struct CalendarUpdateRequestDTO: Encodable {
+    let name: String
+    let colorToken: String?
+    let sortOrder: Int
+    let isVisible: Bool
+}
+
+private struct CalendarDeleteResponseDTO: Decodable { let id: String }
 
 struct GoogleCalendarStartResponseDTO: Decodable {
     let authorizationUrl: String
@@ -417,6 +439,39 @@ actor MemdoAPIClient {
 
     func calendars(accessToken: String) async throws -> [CalendarResponseDTO] {
         try await send(path: "calendars", accessToken: accessToken)
+    }
+
+    func createCalendar(
+        _ input: CalendarCreateRequestDTO,
+        accessToken: String
+    ) async throws -> CalendarResponseDTO {
+        try await send(
+            path: "calendars",
+            method: "POST",
+            body: encoder.encode(input),
+            accessToken: accessToken
+        )
+    }
+
+    func updateCalendar(
+        id: String,
+        _ input: CalendarUpdateRequestDTO,
+        accessToken: String
+    ) async throws -> CalendarResponseDTO {
+        try await send(
+            path: "calendars/\(id)",
+            method: "PATCH",
+            body: encoder.encode(input),
+            accessToken: accessToken
+        )
+    }
+
+    func deleteCalendar(id: String, accessToken: String) async throws {
+        let _: CalendarDeleteResponseDTO = try await send(
+            path: "calendars/\(id)",
+            method: "DELETE",
+            accessToken: accessToken
+        )
     }
 
     func day(on date: Date, accessToken: String) async throws -> DayViewResponseDTO {
@@ -941,6 +996,44 @@ actor ScheduleRepository {
 
     func loadCategories() async throws -> [ScheduleUserCategory] {
         try await api.categories(accessToken: accessToken()).items
+    }
+
+    // bd26: returns the full CalendarResponseDTO (colorToken/isVisible/
+    // sortOrder included) for CalendarManagementView -- ScheduleCalendar
+    // itself stays the minimal shape everywhere else (AddScheduleSheet's
+    // picker, ScheduleDetail.calendar, ...) uses, unchanged by this feature.
+    func loadCalendarDTOs() async throws -> [CalendarResponseDTO] {
+        try await api.calendars(accessToken: accessToken())
+    }
+
+    func createCalendar(name: String, colorToken: String?, sortOrder: Int) async throws -> CalendarResponseDTO {
+        try await api.createCalendar(
+            CalendarCreateRequestDTO(name: name, colorToken: colorToken, sortOrder: sortOrder),
+            accessToken: accessToken()
+        )
+    }
+
+    func updateCalendar(
+        id: String,
+        name: String,
+        colorToken: String?,
+        sortOrder: Int,
+        isVisible: Bool
+    ) async throws -> CalendarResponseDTO {
+        try await api.updateCalendar(
+            id: id,
+            CalendarUpdateRequestDTO(
+                name: name,
+                colorToken: colorToken,
+                sortOrder: sortOrder,
+                isVisible: isVisible
+            ),
+            accessToken: accessToken()
+        )
+    }
+
+    func deleteCalendar(id: String) async throws {
+        try await api.deleteCalendar(id: id, accessToken: accessToken())
     }
 
     func replaceCategories(_ categories: [ScheduleUserCategory]) async throws -> [ScheduleUserCategory] {
