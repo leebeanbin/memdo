@@ -405,6 +405,7 @@ final class AgentDomainServicesTests: XCTestCase {
 
     private func basePreferences() -> UserPreferences {
         UserPreferences(
+            updatedAt: "2026-08-31T00:00:00Z",
             timezone: "Asia/Seoul",
             widgetStyle: "default",
             defaultMood: nil,

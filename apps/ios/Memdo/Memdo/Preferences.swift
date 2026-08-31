@@ -6,6 +6,11 @@ import Supabase
 /// The client only exposes a subset in the UI, so unchanged fields must round-trip
 /// verbatim: always GET the full object, mutate a few fields, then PUT it back.
 struct UserPreferences: Equatable {
+    /// Optimistic-concurrency token (bd19) -- threaded from the last GET/PUT
+    /// response back into the next PUT's request body, the same way
+    /// ScheduleDetail.version is threaded through schedule writes. The
+    /// server rejects a PUT whose updatedAt doesn't match its current row.
+    var updatedAt: String
     var timezone: String
     var widgetStyle: String
     var defaultMood: String?
@@ -51,10 +56,11 @@ struct PreferencesResponseDTO: Decodable {
 
     struct Briefing: Decodable {
         let enabled: Bool
-        let localTime: String?
+        let time: String?
         let days: [String]
     }
 
+    let updatedAt: String
     let timezone: String
     let widgetStyle: String
     let defaultMood: String?
@@ -69,6 +75,7 @@ struct PreferencesResponseDTO: Decodable {
 
     var model: UserPreferences {
         UserPreferences(
+            updatedAt: updatedAt,
             timezone: timezone,
             widgetStyle: widgetStyle,
             defaultMood: defaultMood,
@@ -83,7 +90,7 @@ struct PreferencesResponseDTO: Decodable {
             dailyReviewDays: dailyReview.days,
             dailyReviewIncludeReflection: dailyReview.includeReflection,
             newsBriefingEnabled: newsBriefing.enabled,
-            newsBriefingTime: newsBriefing.localTime,
+            newsBriefingTime: newsBriefing.time,
             newsBriefingDays: newsBriefing.days
         )
     }
@@ -99,10 +106,11 @@ struct PreferencesInputDTO: Encodable {
 
     struct Briefing: Encodable {
         let enabled: Bool
-        let localTime: String?
+        let time: String?
         let days: [String]
     }
 
+    let updatedAt: String
     let timezone: String
     let widgetStyle: String
     let defaultMood: String?
@@ -116,6 +124,7 @@ struct PreferencesInputDTO: Encodable {
     let newsBriefing: Briefing
 
     init(_ preferences: UserPreferences) {
+        updatedAt = preferences.updatedAt
         timezone = preferences.timezone
         widgetStyle = preferences.widgetStyle
         defaultMood = preferences.defaultMood
@@ -133,7 +142,7 @@ struct PreferencesInputDTO: Encodable {
         )
         newsBriefing = Briefing(
             enabled: preferences.newsBriefingEnabled,
-            localTime: preferences.newsBriefingTime,
+            time: preferences.newsBriefingTime,
             days: preferences.newsBriefingDays
         )
     }
