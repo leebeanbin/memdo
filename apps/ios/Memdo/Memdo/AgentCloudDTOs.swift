@@ -242,7 +242,17 @@ struct AgentStreamLineDTO: Decodable {
     let clarificationRequest: CloudClarificationRequestDTO?
     let toolNames: [String]?
     let debugTrace: AgentDebugTraceDTO?
-    let error: String?
+    // bd24 (memdo-backend): a mid-stream error used to be a bare
+    // {error: string}, the one place in the whole API that didn't use the
+    // standard {error:{code,message,...}} envelope every other error
+    // response already does -- now it does too.
+    let error: AgentStreamErrorDTO?
+}
+
+struct AgentStreamErrorDTO: Decodable {
+    let code: String
+    let message: String
+    let requestId: String?
 }
 
 /// agentCloudChat's terminal result -- the model calls at most one propose_*
