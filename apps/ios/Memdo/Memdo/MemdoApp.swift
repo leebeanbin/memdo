@@ -121,9 +121,11 @@ final class MemdoSession {
         for await (event, session) in client.auth.authStateChanges {
             if let session {
                 guard !session.user.isAnonymous else {
-                    // Anonymous users enter guest mode — data is stored in Supabase
-                    // under their anonymous user_id and migrates if they link a social
-                    // identity later (Supabase anonymous→permanent promotion).
+                    // Anonymous users enter guest mode -- data is stored in Supabase
+                    // under their anonymous user_id and stays there when they later
+                    // link a social identity (be18: signIn(with:)/signInWithApple
+                    // call client.auth.linkIdentity*, not signInWith*, while a guest
+                    // session is active, so user.id is unchanged by the upgrade).
                     if activeUserID != session.user.id {
                         await scheduleStore?.reset()
                         preferencesStore?.reset()
@@ -181,7 +183,18 @@ final class MemdoSession {
         defer { isBusy = false }
 
         do {
-            try await client.auth.signInWithOAuth(provider: provider, redirectTo: redirectURL)
+            // be18: signInWithOAuth authenticates into whatever account this
+            // identity already belongs to (or a new one) -- independent of
+            // the current session. Calling it from a guest session doesn't
+            // upgrade the anonymous account, it silently switches to a
+            // different one and orphans everything the guest created.
+            // linkIdentity attaches the new identity to the CURRENT session
+            // instead, keeping the same user.id.
+            if phase == .guest {
+                try await client.auth.linkIdentity(provider: provider, redirectTo: redirectURL)
+            } else {
+                try await client.auth.signInWithOAuth(provider: provider, redirectTo: redirectURL)
+            }
         } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
             return
         } catch {
@@ -196,9 +209,17 @@ final class MemdoSession {
         defer { isBusy = false }
 
         do {
-            try await client.auth.signInWithIdToken(
-                credentials: .init(provider: .apple, idToken: idToken, nonce: nonce)
-            )
+            // be18: same reasoning as signIn(with:) above -- link to the
+            // current guest session instead of signing into a separate one.
+            if phase == .guest {
+                try await client.auth.linkIdentityWithIdToken(
+                    credentials: .init(provider: .apple, idToken: idToken, nonce: nonce)
+                )
+            } else {
+                try await client.auth.signInWithIdToken(
+                    credentials: .init(provider: .apple, idToken: idToken, nonce: nonce)
+                )
+            }
         } catch {
             errorMessage = error.localizedDescription
             return

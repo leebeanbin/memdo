@@ -101,8 +101,51 @@ struct AppShellView: View {
                 EventCaptureSheet(initialText: intentText ?? "") { event in createFromCapture(event) }
             }
             .overlay { backendStateOverlay }
+            .overlay(alignment: .top) { guestStatusBanner }
             .overlay(alignment: .bottom) { writeErrorToast }
             .overlay(alignment: .bottom) { tourSkipHint }
+    }
+
+    // be18b: guest sign-in is silent and unconditional on first launch, with
+    // no welcome/choice screen -- this is the app's only proactive signal
+    // that the account is temporary, shown across every tab (not just
+    // Settings, where the equivalent GuestUpgradeRow already lives but only
+    // reaches someone who goes looking). Persistent, not auto-dismissed --
+    // the anonymous session (and everything in it) is genuinely lost if the
+    // app is deleted or the device is reset before it's linked.
+    @ViewBuilder
+    private var guestStatusBanner: some View {
+        if session.phase == .guest {
+            Button {
+                presentedSheet = .guestUpgrade
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "person.crop.circle.badge.exclamationmark")
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .accessibilityHidden(true)
+                    Text("게스트로 사용 중 · 계정을 연결하면 데이터가 보존돼요")
+                        .font(MemdoTypography.metric)
+                        .foregroundStyle(MemdoTheme.ink)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(MemdoTypography.caption2)
+                        .foregroundStyle(MemdoTheme.secondaryInk)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    .regularMaterial,
+                    in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                )
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, MemdoMetrics.pagePadding)
+            .padding(.top, 8)
+            .accessibilityLabel("게스트로 사용 중입니다. 계정을 연결하면 데이터가 보존돼요.")
+            .accessibilityHint("두 번 탭해서 계정을 연결하세요.")
+        }
     }
 
     @ViewBuilder
@@ -392,11 +435,13 @@ private extension URL {
 private enum AppSheetDestination: Identifiable {
     case guide
     case summary
+    case guestUpgrade
 
     var id: String {
         switch self {
         case .guide: "guide"
         case .summary: "summary"
+        case .guestUpgrade: "guestUpgrade"
         }
     }
 }
@@ -412,6 +457,8 @@ private struct AppShellBehavior: ViewModifier {
                 MemdoGuideSheet(onStartCoachMarkTour: onStartCoachMarkTour)
             case .summary:
                 DailySummaryView()
+            case .guestUpgrade:
+                GuestUpgradeSheet()
             }
         }
     }
