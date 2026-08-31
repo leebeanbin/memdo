@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import Supabase
 import WidgetKit
+import os
 
 enum ScheduleKind: String, CaseIterable, Identifiable, Codable {
     case event
@@ -574,6 +575,7 @@ func classifyStaleVersionResolution(
 @MainActor
 @Observable
 final class ScheduleStore {
+    private static let logger = Logger(subsystem: "com.memdo.ios", category: "schedule")
     private(set) var schedules: [ScheduleDetail] = []
     private(set) var calendars: [ScheduleCalendar] = []
     private(set) var state = ScheduleStoreState.idle
@@ -908,6 +910,17 @@ final class ScheduleStore {
             if changed { updateWidgetSnapshot() }
         } catch {
             // Refresh is best-effort; leave current data intact on failure.
+            // Auth failures are worth a log line (fe17) -- unlike a dropped
+            // connection, they mean every subsequent refresh will keep
+            // failing silently until the session is restored.
+            switch error {
+            case ScheduleAPIError.notAuthenticated:
+                Self.logger.error("refresh() failed: not authenticated")
+            case ScheduleAPIError.server(let status, _, _, _) where status == 401:
+                Self.logger.error("refresh() failed: server returned 401")
+            default:
+                break
+            }
         }
     }
 
