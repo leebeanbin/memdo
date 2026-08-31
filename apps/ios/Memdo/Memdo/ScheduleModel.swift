@@ -894,12 +894,17 @@ final class ScheduleStore {
                 pagesFetched += 1
                 let page = try await repository.sync(cursor: cursor)
                 for item in page.items {
+                    // bd26: /sync now merges other entity types (workout_logs)
+                    // into the same stream -- ignore anything that isn't a todo,
+                    // the same way an unrecognized item should be skipped rather
+                    // than erroring.
+                    guard item.entityType == "todo" else { continue }
                     if item.operation == "delete" {
                         if let id = UUID(uuidString: item.id), schedules.contains(where: { $0.id == id }) {
                             schedules.removeAll { $0.id == id }
                             changed = true
                         }
-                    } else if let dto = item.data,
+                    } else if let dto = item.todoData,
                               let calendar = calendarsByID[dto.calendarId],
                               let mapped = try? ScheduleDetail(dto: dto, calendar: calendar) {
                         if let index = schedules.firstIndex(where: { $0.id == mapped.id }) {
