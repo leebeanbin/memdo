@@ -883,6 +883,14 @@ final class ScheduleStore {
         let calendarsByID = Dictionary(uniqueKeysWithValues: calendars.map { ($0.id, $0) })
         var cursor = lastSyncCursor
         var changed = false
+        // bd26: /sync now also merges user_categories -- loaded once up
+        // front rather than re-reading UserDefaults per item, persisted once
+        // at the end if anything actually changed. syncUserCategories()'s
+        // full-GET-replace path stays the initial-load mechanism; this is
+        // the incremental catch-up path, same load()-vs-refresh() split
+        // todos already have.
+        var cachedCategories = ScheduleUserCategory.load()
+        var categoriesChanged = false
         do {
             var hasMore = true
             // hasMore/nextCursor come from the server; this cap is just cheap
@@ -894,25 +902,41 @@ final class ScheduleStore {
                 pagesFetched += 1
                 let page = try await repository.sync(cursor: cursor)
                 for item in page.items {
-                    // bd26: /sync now merges other entity types (workout_logs)
-                    // into the same stream -- ignore anything that isn't a todo,
-                    // the same way an unrecognized item should be skipped rather
-                    // than erroring.
-                    guard item.entityType == "todo" else { continue }
-                    if item.operation == "delete" {
-                        if let id = UUID(uuidString: item.id), schedules.contains(where: { $0.id == id }) {
-                            schedules.removeAll { $0.id == id }
+                    switch item.entityType {
+                    case "todo":
+                        if item.operation == "delete" {
+                            if let id = UUID(uuidString: item.id), schedules.contains(where: { $0.id == id }) {
+                                schedules.removeAll { $0.id == id }
+                                changed = true
+                            }
+                        } else if let dto = item.todoData,
+                                  let calendar = calendarsByID[dto.calendarId],
+                                  let mapped = try? ScheduleDetail(dto: dto, calendar: calendar) {
+                            if let index = schedules.firstIndex(where: { $0.id == mapped.id }) {
+                                schedules[index] = mapped
+                            } else {
+                                schedules.append(mapped)
+                            }
                             changed = true
                         }
-                    } else if let dto = item.todoData,
-                              let calendar = calendarsByID[dto.calendarId],
-                              let mapped = try? ScheduleDetail(dto: dto, calendar: calendar) {
-                        if let index = schedules.firstIndex(where: { $0.id == mapped.id }) {
-                            schedules[index] = mapped
-                        } else {
-                            schedules.append(mapped)
+                    case "category":
+                        if item.operation == "delete" {
+                            if let id = UUID(uuidString: item.id) {
+                                cachedCategories.removeAll { $0.id == id }
+                                categoriesChanged = true
+                            }
+                        } else if let category = item.categoryData {
+                            if let index = cachedCategories.firstIndex(where: { $0.id == category.id }) {
+                                cachedCategories[index] = category
+                            } else {
+                                cachedCategories.append(category)
+                            }
+                            categoriesChanged = true
                         }
-                        changed = true
+                    default:
+                        // Unrecognized entity type -- skip rather than error,
+                        // same as any other item this store doesn't apply.
+                        continue
                     }
                 }
                 cursor = page.nextCursor ?? cursor
@@ -920,6 +944,7 @@ final class ScheduleStore {
             }
             lastSyncCursor = cursor
             if changed { updateWidgetSnapshot() }
+            if categoriesChanged { ScheduleUserCategory.persist(cachedCategories) }
         } catch {
             // Refresh is best-effort; leave current data intact on failure.
             // Auth failures are worth a log line (fe17) -- unlike a dropped

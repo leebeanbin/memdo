@@ -261,19 +261,21 @@ private struct TodoRescheduleResponseDTO: Decodable {
     let replacement: TodoResponseDTO
 }
 
-// bd26: entityType-aware -- /sync now merges todos and workout_logs into
-// one sync_seq-ordered stream. `data`'s shape depends on entityType, so a
-// plain synthesized Decodable (trying to decode `data` as TodoResponseDTO
-// regardless) would throw on a workout item and fail the whole page's
-// decode. ScheduleStore only reads todoData (entityType == "todo");
-// WorkoutStore only reads workoutData -- each ignores items it doesn't
-// recognize rather than erroring.
+// bd26: entityType-aware -- /sync now merges todos, workout_logs, and
+// user_categories into one sync_seq-ordered stream. `data`'s shape depends
+// on entityType, so a plain synthesized Decodable (trying to decode `data`
+// as TodoResponseDTO regardless) would throw on a non-todo item and fail
+// the whole page's decode. Each store reads only its own *Data property and
+// ignores items it doesn't recognize rather than erroring. ScheduleUserCategory
+// already matches /categories' DTO shape field-for-field (see
+// CategoriesResponseDTO's comment), so it's reused directly here too.
 struct SyncItemDTO: Decodable {
     let entityType: String
     let operation: String
     let id: String
     let todoData: TodoResponseDTO?
     let workoutData: WorkoutLogResponseDTO?
+    let categoryData: ScheduleUserCategory?
 
     private enum CodingKeys: String, CodingKey {
         case entityType, operation, id, data
@@ -284,12 +286,19 @@ struct SyncItemDTO: Decodable {
         entityType = try container.decode(String.self, forKey: .entityType)
         operation = try container.decode(String.self, forKey: .operation)
         id = try container.decode(String.self, forKey: .id)
-        if entityType == "workout" {
+        switch entityType {
+        case "workout":
             todoData = nil
+            categoryData = nil
             workoutData = try container.decodeIfPresent(WorkoutLogResponseDTO.self, forKey: .data)
-        } else {
+        case "category":
+            todoData = nil
+            workoutData = nil
+            categoryData = try container.decodeIfPresent(ScheduleUserCategory.self, forKey: .data)
+        default:
             todoData = try container.decodeIfPresent(TodoResponseDTO.self, forKey: .data)
             workoutData = nil
+            categoryData = nil
         }
     }
 }
