@@ -263,6 +263,11 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
     var version: Int
     /// Non-nil when this item belongs to a recurring rule (shown as a repeat badge).
     var scheduleRuleId: String?
+    /// Non-nil when this item was created from a user category (bd18). `color`/
+    /// `emoji` below are a per-todo override that wins when set; nil means
+    /// "inherit the category's current emoji/color," derived server-side so a
+    /// later rename/recolor of the category doesn't leave this item stale.
+    var categoryId: UUID?
     var color: ScheduleColor?
     var emoji: String?
     var estimatedMinutes: Int?
@@ -295,6 +300,7 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         sortOrder: Int = 0,
         version: Int = 1,
         scheduleRuleId: String? = nil,
+        categoryId: UUID? = nil,
         color: ScheduleColor? = nil,
         emoji: String? = nil,
         estimatedMinutes: Int? = nil,
@@ -321,6 +327,7 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         self.sortOrder = sortOrder
         self.version = version
         self.scheduleRuleId = scheduleRuleId
+        self.categoryId = categoryId
         self.color = color
         self.emoji = emoji
         self.estimatedMinutes = estimatedMinutes

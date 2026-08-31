@@ -858,9 +858,21 @@ struct AddScheduleSheet: View {
     private func selectCategory(_ category: AddCategory) {
         selectedCategory = category
         draft.kind = category.scheduleKind
-        draft.color = category.scheduleColor
-        if case .custom(let c) = category { draft.emoji = c.emoji }
-        else { draft.emoji = nil }
+        if case .custom(let c) = category {
+            // bd18: don't freeze the category's current emoji/color into the
+            // todo at creation time -- categoryId lets the server derive them
+            // from the category's live emoji/color, so a later rename/
+            // recolor doesn't leave this item stale. nil here means
+            // "inherit"; the existing color-swatch/emoji fields in the edit
+            // sheet remain the per-todo override.
+            draft.categoryId = c.id
+            draft.color = nil
+            draft.emoji = nil
+        } else {
+            draft.categoryId = nil
+            draft.color = category.scheduleColor
+            draft.emoji = nil
+        }
         if category == .event && !draft.hasScheduledTime { addScheduledTime() }
     }
 
