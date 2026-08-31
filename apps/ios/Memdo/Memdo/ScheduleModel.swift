@@ -1068,6 +1068,49 @@ final class ScheduleStore {
         Task { _ = try? await repository.replaceCategories(categories) }
     }
 
+    /// bd26: re-fetches calendars from the backend and updates the
+    /// minimal `calendars` list this store exposes everywhere else
+    /// (AddScheduleSheet's picker, ScheduleDetail.calendar, ...). Called
+    /// by CalendarManagementView after any create/update/delete so a
+    /// renamed or removed calendar is reflected app-wide without a full
+    /// reload of schedules too.
+    func refreshCalendars() async {
+        guard let dtos = try? await repository.loadCalendarDTOs() else { return }
+        calendars = dtos.map(\.scheduleCalendar)
+    }
+
+    /// bd26: full-detail read/write pass-throughs for CalendarManagementView
+    /// -- the view keeps its own [CalendarResponseDTO] list (colorToken/
+    /// isVisible/sortOrder included) separate from this store's minimal
+    /// `calendars`, calling refreshCalendars() itself after each mutation.
+    func loadCalendarDTOs() async throws -> [CalendarResponseDTO] {
+        try await repository.loadCalendarDTOs()
+    }
+
+    func createCalendar(name: String, colorToken: String?, sortOrder: Int) async throws {
+        _ = try await repository.createCalendar(name: name, colorToken: colorToken, sortOrder: sortOrder)
+    }
+
+    func updateCalendar(
+        id: String,
+        name: String,
+        colorToken: String?,
+        sortOrder: Int,
+        isVisible: Bool
+    ) async throws {
+        _ = try await repository.updateCalendar(
+            id: id,
+            name: name,
+            colorToken: colorToken,
+            sortOrder: sortOrder,
+            isVisible: isVisible
+        )
+    }
+
+    func deleteCalendar(id: String) async throws {
+        try await repository.deleteCalendar(id: id)
+    }
+
     /// Creates a recurrence rule on the backend, which materialises the
     /// occurrences server-side, then reloads to pull them in.
     func createRecurring(_ schedule: ScheduleDetail) async {

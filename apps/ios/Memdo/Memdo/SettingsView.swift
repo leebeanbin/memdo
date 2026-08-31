@@ -76,6 +76,15 @@ struct SettingsView: View {
             .id(CoachMarkTarget.settingsWidget)
             .coachMarkTarget(.settingsWidget)
 
+            // bd26: calendars were GET-only before this -- every user was
+            // stuck with the 2 seeded at signup (개인/업무).
+            SettingsGroup(title: "캘린더", icon: "calendar") {
+                Button { presentedSheet = .calendars } label: {
+                    SettingsDisclosureRow(title: "캘린더 관리", value: "\(scheduleStore.calendars.count)개")
+                }
+                .buttonStyle(.plain)
+            }
+
             SettingsGroup(title: "Agent", icon: "sparkles") {
                 Button { presentedSheet = .agentSettings } label: {
                     SettingsDisclosureRow(title: "연결 및 권한", value: "관리")
@@ -231,6 +240,8 @@ struct SettingsView: View {
                 AgentSettingsSheet()
             case .guestUpgrade:
                 GuestUpgradeSheet()
+            case .calendars:
+                CalendarManagementSheet()
             case .routines:
                 RoutineSettingsSheet(
                     notifications: $notifications,
@@ -522,6 +533,7 @@ private enum SettingsSheet: String, Identifiable {
     case agentSettings
     case guestUpgrade
     case routines
+    case calendars
     var id: String { rawValue }
 }
 

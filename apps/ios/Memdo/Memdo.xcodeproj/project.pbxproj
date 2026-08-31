@@ -68,6 +68,7 @@
 		AA47BAB65B42078F49070D0E /* AgentCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F8C1DE6F959CF3423D1DD8 /* AgentCoordinatorTests.swift */; };
 		B34D55BB23AB902823B3C287 /* AgentIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CAF5C62FEE7A3ECA9E67EB4 /* AgentIntentTests.swift */; };
 		B9BE1E1D72E8D516A1E5022D /* MemdoWidgetSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7840EFE57EB95989FBC7696 /* MemdoWidgetSchedule.swift */; };
+		BC7A4E5F0D3A82658A0CE5CB /* CalendarManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C8FB0C0BAF50ABB02D2B57 /* CalendarManagementView.swift */; };
 		BFC6AD583CB383FAF7ABE782 /* SlackNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 420E092EB2A4627375577F43 /* SlackNotifier.swift */; };
 		C058A05E23195B992D283DC5 /* FakeAgentRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA8E9E99B2955B5F2A3FABD6 /* FakeAgentRuntime.swift */; };
 		C535C49F5AF818D049EE98AE /* GoogleCalendarSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E9F76C022917F1D22E0D1CE /* GoogleCalendarSettings.swift */; };
@@ -162,6 +163,7 @@
 		42994A317F898780763B33D4 /* MemdoComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoComponents.swift; sourceTree = "<group>"; };
 		4CCEC3682202DC527390D6C3 /* AgentPrompts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentPrompts.swift; sourceTree = "<group>"; };
 		4E9F76C022917F1D22E0D1CE /* GoogleCalendarSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCalendarSettings.swift; sourceTree = "<group>"; };
+		51C8FB0C0BAF50ABB02D2B57 /* CalendarManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarManagementView.swift; sourceTree = "<group>"; };
 		54A9DCC8471814155094BAFF /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		592EA12B6FF1AB799EF6869C /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		5CAF5C62FEE7A3ECA9E67EB4 /* AgentIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIntentTests.swift; sourceTree = "<group>"; };
@@ -331,6 +333,7 @@
 				A5FCF0E385E87960B56A11F4 /* Assets.xcassets */,
 				2C57EC467343059432D7D60D /* AssistantView.swift */,
 				D74BAC4CE2DAFC9BABA5244E /* BriefingFeed.swift */,
+				51C8FB0C0BAF50ABB02D2B57 /* CalendarManagementView.swift */,
 				8FD6B2D482673663626353C2 /* CalendarView.swift */,
 				98D1929733AE37B7C5892133 /* CloudAgentRuntime.swift */,
 				15F344D2A79A26B779462E85 /* CloudAgentSettings.swift */,
@@ -602,6 +605,7 @@
 				F8D4CF99953AB55A8AF78167 /* AppShortcuts.swift in Sources */,
 				A09C21CAE62B67DF6753F375 /* AssistantView.swift in Sources */,
 				47980E617A1DA64917EB0AEB /* BriefingFeed.swift in Sources */,
+				BC7A4E5F0D3A82658A0CE5CB /* CalendarManagementView.swift in Sources */,
 				8440D2E9F99B1C9848CF21ED /* CalendarView.swift in Sources */,
 				15CE7ABB984F0E7F0E18C4E0 /* CloudAgentRuntime.swift in Sources */,
 				D2A3E9135268890871957A27 /* CloudAgentSettings.swift in Sources */,
