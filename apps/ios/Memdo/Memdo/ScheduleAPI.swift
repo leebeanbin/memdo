@@ -678,8 +678,13 @@ actor MemdoAPIClient {
             if let delta = parsed.delta { await onDelta(delta) }
             if let toolCallStarted = parsed.toolCallStarted { await onToolCallStarted(toolCallStarted) }
             if let toolCallFinished = parsed.toolCallFinished { await onToolCallFinished(toolCallFinished) }
-            if let message = parsed.error {
-                throw ScheduleAPIError.server(status: 502, code: "INTERNAL_ERROR", message: message, requestID: nil)
+            if let streamError = parsed.error {
+                throw ScheduleAPIError.server(
+                    status: 502,
+                    code: streamError.code,
+                    message: streamError.message,
+                    requestID: streamError.requestId
+                )
             }
             if parsed.done == true {
                 proposedSchedule = parsed.proposedSchedule
