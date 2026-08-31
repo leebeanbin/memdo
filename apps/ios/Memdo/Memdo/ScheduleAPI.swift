@@ -132,6 +132,9 @@ struct TodoResponseDTO: Decodable {
     let status: String
     let version: Int
     let scheduleRuleId: String?
+    // Optional (bd18) for the same reason isVirtual is -- a build shipped
+    // before the backend deploys the field must still decode the list.
+    let categoryId: String?
     let color: String?
     let emoji: String?
     let estimatedMinutes: Int?
@@ -159,6 +162,7 @@ struct TodoCreateRequestDTO: Encodable {
     let version: Int?
     let status: String?
     let scheduleRuleId: String?
+    let categoryId: String?
     let color: String?
     let emoji: String?
     let estimatedMinutes: Int?
@@ -197,6 +201,7 @@ struct TodoCreateRequestDTO: Encodable {
         version = includeVersion ? schedule.version : nil
         status = includeVersion ? schedule.status.rawValue : nil
         scheduleRuleId = schedule.scheduleRuleId
+        categoryId = schedule.categoryId?.uuidString
         color = schedule.color?.rawValue
         emoji = schedule.emoji.flatMap { $0.isEmpty ? nil : $0 }
         estimatedMinutes = schedule.kind == .task ? schedule.estimatedMinutes : nil
@@ -1034,6 +1039,7 @@ extension ScheduleDetail {
         sortOrder = dto.sortOrder
         version = dto.version
         scheduleRuleId = dto.scheduleRuleId
+        categoryId = dto.categoryId.flatMap(UUID.init(uuidString:))
         color = dto.color.flatMap(ScheduleColor.init(rawValue:))
         emoji = dto.emoji
         estimatedMinutes = dto.estimatedMinutes
