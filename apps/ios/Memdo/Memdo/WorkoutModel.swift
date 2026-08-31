@@ -114,6 +114,9 @@ struct WorkoutLog: Identifiable, Codable, Equatable {
     var calories: Double?
     var avgHeartRate: Double?
     var locationName: String?   // 수동 입력 ("강남 헬스장")
+    // fe11: 이름과 달리 URL이 아니라 Storage 오브젝트 경로를 담는다 (workout-
+    // media 버킷). 표시 시점에 WorkoutStore.signedImageURL(for:)로 매번 새
+    // 서명 URL을 발급받아야 함 -- 이 문자열 자체를 URL로 바로 파싱하면 안 됨.
     var routeImageURL: String?  // GPS 경로 자동 렌더
     var photoURL: String?       // 사용자 첨부 사진 (Nike RC 캡처 등)
     var exercises: [ExerciseSet]?
@@ -183,6 +186,14 @@ final class WorkoutStore {
 
     func hasWorkouts(on date: Date) -> Bool { !workouts(on: date).isEmpty }
 
+    /// fe11: routeImageURL/photoURL now hold a Storage object path, not a
+    /// ready-to-use URL -- resolves a fresh signed URL for display. Called
+    /// per display, not cached, since a signed URL expires.
+    func signedImageURL(for path: String) async -> URL? {
+        guard let repository else { return nil }
+        return try? await repository.signedURL(for: path)
+    }
+
     func load() async {
         guard let repository else { return }
         do {
@@ -244,13 +255,25 @@ final class WorkoutStore {
     }
 
     // 노트/장소/세트 편집 — details 테이블만 업데이트
+    // fe10: the double try? collapsed "no backend"/"not signed in"/"server
+    // rejected" into one silent branch that still applied the edit locally
+    // with no lastSyncError set -- indistinguishable from a real success,
+    // and the next load() would silently discard it. Mirrors save(_:)'s
+    // shape: optimistic local update up front, do/catch around the network
+    // call, lastSyncError on any failure (no rollback, same as save(_:)).
     func update(_ workout: WorkoutLog) {
+        upsertLocally(workout) // optimistic — visible immediately
         Task {
-            guard let repository,
-                  let token = try? await repository.accessToken(),
-                  let saved = try? await repository.updateDetails(workout, accessToken: token)
-            else { upsertLocally(workout); return }
-            upsertLocally(saved)
+            guard let repository, let token = try? await repository.accessToken() else {
+                lastSyncError = "운동을 서버에 저장하지 못했어요. 네트워크를 확인해 주세요."
+                return
+            }
+            do {
+                let saved = try await repository.updateDetails(workout, accessToken: token)
+                upsertLocally(saved)
+            } catch {
+                lastSyncError = "운동을 서버에 저장하지 못했어요. 네트워크를 확인해 주세요."
+            }
         }
     }
 

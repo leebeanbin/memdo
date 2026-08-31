@@ -181,6 +181,9 @@ struct WorkoutDetailSheet: View {
     @State private var editing = false
     @State private var showDeleteConfirm = false
     @State private var isTracking = false
+    // fe11: routeImageURL/photoURL are now Storage object paths, not
+    // ready-to-use URLs -- resolved into a fresh signed URL on appear.
+    @State private var resolvedImageURL: URL?
     let workout: WorkoutLog
 
     var body: some View {
@@ -274,19 +277,33 @@ struct WorkoutDetailSheet: View {
         }
     }
 
+    // fe11: routeImageURL/photoURL hold a Storage object path now, not a
+    // ready-to-use URL -- resolves a fresh signed URL asynchronously
+    // instead of parsing the stored string directly as one. `.task(id:)`
+    // re-resolves if the underlying path ever changes (e.g. editing swaps
+    // photoURL for a new upload).
     @ViewBuilder
     private var imageSection: some View {
-        if let urlString = workout.routeImageURL ?? workout.photoURL,
-           let url = URL(string: urlString) {
-            AsyncImage(url: url) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Rectangle().fill(.quaternary)
-                    .overlay(ProgressView())
+        if let path = workout.routeImageURL ?? workout.photoURL {
+            Group {
+                if let resolvedImageURL {
+                    AsyncImage(url: resolvedImageURL) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Rectangle().fill(.quaternary)
+                            .overlay(ProgressView())
+                    }
+                } else {
+                    Rectangle().fill(.quaternary)
+                        .overlay(ProgressView())
+                }
             }
             .frame(maxWidth: .infinity)
             .frame(height: 200)
             .clipped()
+            .task(id: path) {
+                resolvedImageURL = await workoutStore.signedImageURL(for: path)
+            }
         }
     }
 

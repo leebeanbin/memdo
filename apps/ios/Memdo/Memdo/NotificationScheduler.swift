@@ -414,10 +414,16 @@ final class MemdoNotificationDelegate: NSObject, UNUserNotificationCenterDelegat
         let userInfo = response.notification.request.content.userInfo
         if response.actionIdentifier == NotificationScheduler.completeActionID,
            let link = userInfo["memdo_link"] as? String,
-           let idString = link.components(separatedBy: "/").last {
+           let idString = link.components(separatedBy: "/").last,
+           // fe13: force-unwrapped URL(string:) on the same deep-link path
+           // AppShellView.openDeepLink's "complete" case hardens -- a
+           // notification payload containing a character that made this
+           // string an invalid URL would crash on tap instead of silently
+           // no-oping like every other malformed-deep-link case here does.
+           let url = URL(string: "memdo://complete/\(idString)") {
             // .foreground action opens the app; route to complete deep link
             DispatchQueue.main.async {
-                UIApplication.shared.open(URL(string: "memdo://complete/\(idString)")!)
+                UIApplication.shared.open(url)
             }
         } else if let link = userInfo["memdo_link"] as? String,
                   let url = URL(string: "memdo://\(link)") {
