@@ -124,6 +124,15 @@ struct ScheduleUserCategory: Identifiable, Codable, Equatable {
     static func persist(_ cats: [ScheduleUserCategory]) {
         UserDefaults.standard.set(try? JSONEncoder().encode(cats), forKey: storageKey)
     }
+
+    /// fe14: this cache used to survive `ScheduleStore.reset()` -- if the
+    /// newly signed-in account has no server categories of its own yet,
+    /// `syncUserCategories()`'s local-wins-on-empty-remote path pushed the
+    /// *previous* account's category names straight onto the new account.
+    /// Not a stale read, a real cross-account write.
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: storageKey)
+    }
 }
 
 enum ScheduleColor: String, CaseIterable, Identifiable, Codable {
@@ -730,12 +739,19 @@ final class ScheduleStore {
         try await repository.putReview(date: date, reflection: reflection)
     }
 
+    // fe15: compactMap silently dropped both an unknown calendar id and a
+    // genuine decode failure into the same "no results" state, indistinguishable
+    // from a real empty search. Mirrors ScheduleRepository.load/loadRange's
+    // existing handling of the identical case: a throwing map, not a
+    // swallowing compactMap.
     func search(_ query: String) async throws -> [ScheduleDetail] {
         let calendarsByID = Dictionary(uniqueKeysWithValues: calendars.map { ($0.id, $0) })
         let dtos = try await repository.search(query: query)
-        return dtos.compactMap { dto in
-            guard let calendar = calendarsByID[dto.calendarId] else { return nil }
-            return try? ScheduleDetail(dto: dto, calendar: calendar)
+        return try dtos.map { dto in
+            guard let calendar = calendarsByID[dto.calendarId] else {
+                throw ScheduleAPIError.incompatibleValue(dto.calendarId)
+            }
+            return try ScheduleDetail(dto: dto, calendar: calendar)
         }
     }
 
@@ -1217,18 +1233,31 @@ final class ScheduleStore {
     /// returns normally), used from every PATCH/DELETE mutation's
     /// VERSION_CONFLICT branch.
     private func resolveStaleVersion(idBeingWritten: UUID, originalScheduledDate: Date) async throws -> Never {
-        let wasAlreadyLoading = state == .loading
-        if !wasAlreadyLoading {
-            await load()
-        }
-        let loadFailed: Bool
-        if case .failed = state { loadFailed = true } else { loadFailed = false }
+        // fe9: previously called the full load() -> drainOutbox(), re-entering
+        // the outbox drain while pendingWriteIDs still holds the guard for
+        // idBeingWritten (this catch block runs before save()/move()/delete()'s
+        // own `defer { pendingWriteIDs.remove(...) }` executes) -- the exact
+        // race fe8 fixed for the general retry path. A version conflict only
+        // needs the truth about THIS ONE item, not the whole store, so
+        // fetchRange narrowly around its own date instead -- fetchRange never
+        // touches the outbox at all.
+        //
+        // Passing the narrow fetch's own [from, to] as loadedFrom/loadedTo
+        // (rather than the store's broader window) reuses
+        // classifyStaleVersionResolution's existing pure logic correctly:
+        // targetDate falls inside [from, to] by construction, so the
+        // classification comes down to whether this fetch itself succeeded
+        // and whether the id turned up in it -- exactly what matters here.
+        let calendar = Calendar.current
+        let from = calendar.date(byAdding: .day, value: -1, to: originalScheduledDate) ?? originalScheduledDate
+        let to = calendar.date(byAdding: .day, value: 1, to: originalScheduledDate) ?? originalScheduledDate
+        let refreshed = await fetchRange(from: from, to: to)
         let resolution = classifyStaleVersionResolution(
-            loadWasSkipped: wasAlreadyLoading,
-            loadFailed: loadFailed,
+            loadWasSkipped: false,
+            loadFailed: !refreshed,
             targetDate: originalScheduledDate,
-            loadedFrom: loadedFrom,
-            loadedTo: loadedTo,
+            loadedFrom: from,
+            loadedTo: to,
             idFoundAfterRefresh: schedules.contains(where: { $0.id == idBeingWritten })
         )
         throw ScheduleWriteError.staleVersion(resolution)
@@ -1266,6 +1295,14 @@ final class ScheduleStore {
         // notifications for user B's schedule after an account switch on
         // the same device (founder-dogfooding fix, fe7).
         SlackNotifier.webhookURL = ""
+        // Same reasoning again: the cached category set (UserDefaults,
+        // ScheduleUserCategory.load/persist) is also device-global. Without
+        // this, a newly signed-in account with no server categories yet gets
+        // the previous account's category names pushed onto it by
+        // syncUserCategories()'s local-wins-on-empty-remote path -- a real
+        // cross-account write, not just a stale read (founder-dogfooding
+        // fix, fe14).
+        ScheduleUserCategory.clear()
         updateWidgetSnapshot()
     }
 
