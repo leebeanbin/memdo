@@ -260,6 +260,14 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
     var isAllDay: Bool
     var timeBucket: ScheduleTimeBucket
     var sortOrder: Int
+    /// bd13/be16: canonical invariant enforced server-side (todoUpdate/
+    /// todoUpdateSchema in memdo-backend) -- `.completed` forces 100,
+    /// `.inProgress`/`.partial` are client-editable 0-99, every other
+    /// status forces 0. This client mirrors that invariant at the UI/
+    /// encoding layer (ScheduleEditorFields, TodoCreateRequestDTO) but
+    /// does not re-derive or enforce it independently -- the backend is
+    /// the single source of truth for what value actually gets stored.
+    var progress: Int
     var version: Int
     /// Non-nil when this item belongs to a recurring rule (shown as a repeat badge).
     var scheduleRuleId: String?
@@ -298,6 +306,7 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         isAllDay: Bool = false,
         timeBucket: ScheduleTimeBucket = .anytime,
         sortOrder: Int = 0,
+        progress: Int = 0,
         version: Int = 1,
         scheduleRuleId: String? = nil,
         categoryId: UUID? = nil,
@@ -325,6 +334,7 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         // start time is responsible for deriving the bucket via `.inferred(from:)`.
         self.timeBucket = timeBucket
         self.sortOrder = sortOrder
+        self.progress = progress
         self.version = version
         self.scheduleRuleId = scheduleRuleId
         self.categoryId = categoryId

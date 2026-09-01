@@ -152,6 +152,10 @@ struct TodoResponseDTO: Decodable {
     let reminderOffsetMinutes: Int?
     let sortOrder: Int
     let status: String
+    // bd13/be16: required, not optional -- backend and iOS ship together
+    // this round (no staggered rollout to guard against, matching every
+    // other breaking change this session).
+    let progress: Int
     let version: Int
     let scheduleRuleId: String?
     // Optional (bd18) for the same reason isVirtual is -- a build shipped
@@ -183,6 +187,7 @@ struct TodoCreateRequestDTO: Encodable {
     let reminderOffsetMinutes: Int?
     let version: Int?
     let status: String?
+    let progress: Int?
     let scheduleRuleId: String?
     let categoryId: String?
     let color: String?
@@ -222,6 +227,19 @@ struct TodoCreateRequestDTO: Encodable {
         reminderOffsetMinutes = schedule.reminderOffsetMinutes
         version = includeVersion ? schedule.version : nil
         status = includeVersion ? schedule.status.rawValue : nil
+        // bd13/be16: only present on an update (PATCH) to one of the two
+        // progress-bearing active statuses -- omitted for planned/completed/
+        // skipped/rescheduled/cancelled (matching how completed_at is
+        // already omitted rather than sent, bd14's pattern) and always
+        // omitted on create (POST). Sending schedule.progress unconditionally
+        // whenever includeVersion is true would send progress: 100 when
+        // editing any other field on an already-completed todo (its
+        // progress already holds 100), which the PATCH schema rejects
+        // outright (client-supplied progress is capped at 99) -- this isn't
+        // a hypothetical, it's the exact "rename a completed todo" case.
+        progress = (includeVersion && [.inProgress, .partial].contains(schedule.status))
+            ? schedule.progress
+            : nil
         scheduleRuleId = schedule.scheduleRuleId
         categoryId = schedule.categoryId?.uuidString
         color = schedule.color?.rawValue
@@ -1166,6 +1184,7 @@ extension ScheduleDetail {
         isAllDay = dto.isAllDay
         self.timeBucket = timeBucket
         sortOrder = dto.sortOrder
+        progress = dto.progress
         version = dto.version
         scheduleRuleId = dto.scheduleRuleId
         categoryId = dto.categoryId.flatMap(UUID.init(uuidString:))

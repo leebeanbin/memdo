@@ -407,6 +407,31 @@ struct ScheduleEditorFields: View {
                         }
                     }
                     .pickerStyle(.menu)
+
+                    // bd13/be16: the slider (the interactive control) only
+                    // exists in the view hierarchy for the two progress-
+                    // bearing statuses, matching the backend invariant
+                    // exactly -- not merely disabled for the other statuses,
+                    // genuinely absent, so a completed/planned/skipped/
+                    // rescheduled/cancelled task never visually implies its
+                    // canonical forced value (0% or 100%) could be dragged
+                    // to something else. The completion checkbox/status
+                    // picker stays the only way to reach those boundaries.
+                    if Self.progressIsEditable(for: schedule.status) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            LabeledContent("진행률", value: "\(schedule.progress)%")
+                            Slider(
+                                value: Binding(
+                                    get: { Double(schedule.progress) },
+                                    set: { schedule.progress = Int($0.rounded()) }
+                                ),
+                                in: 0...99,
+                                step: 1
+                            )
+                        }
+                    } else {
+                        LabeledContent("진행률", value: "\(schedule.progress)%")
+                    }
                 }
                 // 반복은 생성 시에만 규칙(schedule_rules)으로 만든다. 기존 일정의
                 // 반복 편집은 아직 미지원이라 값만 표시한다.
@@ -583,6 +608,18 @@ struct ScheduleEditorFields: View {
     private func suggestPreparation() {
         let prefix = schedule.memo.isEmpty ? "" : "\(schedule.memo)\n"
         schedule.memo = "\(prefix)준비: 관련 자료, 예상 소요 시간, 완료 기준"
+    }
+
+    /// bd13/be16: mirrors the backend's exact progress invariant
+    /// (todoUpdate/todoUpdateSchema in memdo-backend) -- only `.inProgress`/
+    /// `.partial` are client-editable; every other status has its progress
+    /// forced server-side (100 for `.completed`, 0 for everything else), so
+    /// the slider must not exist in the view hierarchy for those statuses
+    /// either. Pulled out as a static, pure function (mirroring
+    /// DailySummaryView.summaryTasks's extraction) so this exact decision
+    /// is unit-testable without SwiftUI view inspection.
+    static func progressIsEditable(for status: ScheduleStatus) -> Bool {
+        status == .inProgress || status == .partial
     }
 }
 

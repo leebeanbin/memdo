@@ -726,4 +726,71 @@ final class ScheduleModelTests: XCTestCase {
         )
         XCTAssertEqual(result, .refreshedAndRemoved)
     }
+
+    // MARK: - bd13/be16: progress invariant (iOS mirror of the backend's
+    // canonical status/progress table)
+
+    private func taskSchedule(status: ScheduleStatus, progress: Int) -> ScheduleDetail {
+        ScheduleDetail(
+            scheduledDate: .now,
+            title: "할 일",
+            status: status,
+            kind: .task,
+            calendar: ScheduleCalendar(
+                id: "8c7187df-8754-42fe-b70c-3a6876bab9b8",
+                title: "테스트",
+                purpose: "personal",
+                provider: .memdo
+            ),
+            progress: progress
+        )
+    }
+
+    func testTodoCreateRequestDTO_editingAlreadyCompletedTodo_omitsProgress() throws {
+        // The exact case a naive `includeVersion ? schedule.progress : nil`
+        // encoding would get wrong: editing ANY field on an already-
+        // completed todo (schedule.progress already holds 100) must not
+        // send progress: 100, which the PATCH schema rejects outright
+        // (client-supplied progress is capped at 99).
+        let schedule = taskSchedule(status: .completed, progress: 100)
+        let dto = try TodoCreateRequestDTO(schedule: schedule, includeVersion: true)
+        XCTAssertNil(dto.progress)
+    }
+
+    func testTodoCreateRequestDTO_progressOmittedForEveryForcedStatus() throws {
+        for status: ScheduleStatus in [.planned, .completed, .skipped, .rescheduled, .cancelled] {
+            let schedule = taskSchedule(status: status, progress: 42)
+            let dto = try TodoCreateRequestDTO(schedule: schedule, includeVersion: true)
+            XCTAssertNil(dto.progress, "expected progress omitted for \(status), got \(String(describing: dto.progress))")
+        }
+    }
+
+    func testTodoCreateRequestDTO_progressIncludedForActiveStatuses() throws {
+        for status: ScheduleStatus in [.inProgress, .partial] {
+            let schedule = taskSchedule(status: status, progress: 42)
+            let dto = try TodoCreateRequestDTO(schedule: schedule, includeVersion: true)
+            XCTAssertEqual(dto.progress, 42, "expected progress included for \(status)")
+        }
+    }
+
+    func testTodoCreateRequestDTO_progressAlwaysOmittedOnCreate() throws {
+        // includeVersion: false is the POST (create) path -- a new todo is
+        // always created at status planned, so an initial progress value
+        // isn't meaningful yet, matching the backend leaving todoInputSchema
+        // (create) alone.
+        let schedule = taskSchedule(status: .inProgress, progress: 42)
+        let dto = try TodoCreateRequestDTO(schedule: schedule, includeVersion: false)
+        XCTAssertNil(dto.progress)
+    }
+
+    func testProgressIsEditable_matchesTheBackendInvariantExactly() {
+        let editable: Set<ScheduleStatus> = [.inProgress, .partial]
+        for status: ScheduleStatus in [.planned, .inProgress, .partial, .completed, .skipped, .rescheduled, .cancelled] {
+            XCTAssertEqual(
+                ScheduleEditorFields.progressIsEditable(for: status),
+                editable.contains(status),
+                "progressIsEditable disagreed with the expected set for \(status)"
+            )
+        }
+    }
 }
