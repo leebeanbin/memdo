@@ -56,6 +56,13 @@ func parseAgentTime(_ s: String, on date: Date) -> Date? {
     return Calendar.current.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: date)
 }
 
+/// Inverse of parseAgentTime -- formats a Date's time-of-day back to the
+/// agent-facing "HH:mm" string (bd4, for the default-endTime staging fix).
+func formatAgentTime(_ date: Date) -> String {
+    let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+    return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+}
+
 /// "오늘"/"내일"/"M월 d일" for an agent-supplied date token. Shared by
 /// ProposedScheduleDraft and AgentScheduleUpdateProposal so both proposal
 /// kinds render dates identically.
@@ -310,6 +317,8 @@ struct ProposeScheduleTool: Tool {
         switch result {
         case .invalidDate:
             return "날짜를 이해하지 못했어요. 다시 말씀해 주세요."
+        case .needsEndTime:
+            return "23:59에 시작하는 일정은 종료 시간을 정할 수 없어요. 다른 시작 시간을 알려주세요."
         case .staged(let draft, let conflict, let conflictCheckFailed):
             await proposal.propose(draft, conflict: conflict, conflictCheckFailed: conflictCheckFailed)
             guard let conflict else {
