@@ -793,4 +793,35 @@ final class ScheduleModelTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - bd13/be16 (review): displayedProgress must never show a
+    // stale storedProgress for a status the user just changed locally.
+
+    func testDisplayedProgress_completedAlwaysShows100_regardlessOfStaleStoredValue() {
+        // The exact stale-display scenario from review: an in-progress
+        // task at 73% flipped to completed via the status picker, before
+        // any server round-trip. schedule.progress is still 73 in memory --
+        // the DISPLAY must not show it.
+        XCTAssertEqual(ScheduleEditorFields.displayedProgress(status: .completed, storedProgress: 73), 100)
+        XCTAssertEqual(ScheduleEditorFields.displayedProgress(status: .completed, storedProgress: 0), 100)
+    }
+
+    func testDisplayedProgress_activeStatusesShowTheStoredValueAsIs() {
+        for status: ScheduleStatus in [.inProgress, .partial] {
+            XCTAssertEqual(ScheduleEditorFields.displayedProgress(status: status, storedProgress: 42), 42)
+        }
+    }
+
+    func testDisplayedProgress_everyForcedZeroStatusIgnoresStaleStoredValue() {
+        // Same stale-display concern for the other direction: a task that
+        // was in-progress at 73% and just got marked skipped/rescheduled/
+        // cancelled locally must not keep showing "73%" either.
+        for status: ScheduleStatus in [.planned, .skipped, .rescheduled, .cancelled] {
+            XCTAssertEqual(
+                ScheduleEditorFields.displayedProgress(status: status, storedProgress: 73),
+                0,
+                "expected 0 for \(status) regardless of stale storedProgress"
+            )
+        }
+    }
 }

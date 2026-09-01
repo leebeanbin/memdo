@@ -430,7 +430,19 @@ struct ScheduleEditorFields: View {
                             )
                         }
                     } else {
-                        LabeledContent("진행률", value: "\(schedule.progress)%")
+                        // bd13/be16 (review): schedule.progress can be stale
+                        // relative to a status the user just changed locally,
+                        // before any server round-trip -- e.g. flipping an
+                        // in-progress task (progress: 73) to completed via
+                        // the status picker doesn't itself zero/set progress,
+                        // so reading schedule.progress directly here would
+                        // show "73%" next to "완료" until save. Derived from
+                        // status instead, matching the canonical value the
+                        // backend will actually store.
+                        LabeledContent(
+                            "진행률",
+                            value: "\(Self.displayedProgress(status: schedule.status, storedProgress: schedule.progress))%"
+                        )
                     }
                 }
                 // 반복은 생성 시에만 규칙(schedule_rules)으로 만든다. 기존 일정의
@@ -620,6 +632,23 @@ struct ScheduleEditorFields: View {
     /// is unit-testable without SwiftUI view inspection.
     static func progressIsEditable(for status: ScheduleStatus) -> Bool {
         status == .inProgress || status == .partial
+    }
+
+    /// bd13/be16 (review): the value to actually DISPLAY for a non-editable
+    /// status -- never `storedProgress` as-is, since it can be stale
+    /// relative to a status the user just changed locally (the slider's own
+    /// `schedule.progress` binding doesn't get zeroed/set when `status`
+    /// changes elsewhere, e.g. via the completion toggle or status picker,
+    /// until the next server round-trip). Mirrors the backend's exact
+    /// forcing rule (todoUpdate in memdo-backend) so the read-only readout
+    /// always matches what will actually be saved, not whatever the model
+    /// happens to be holding onto mid-edit.
+    static func displayedProgress(status: ScheduleStatus, storedProgress: Int) -> Int {
+        switch status {
+        case .completed: 100
+        case .inProgress, .partial: storedProgress
+        case .planned, .skipped, .rescheduled, .cancelled: 0
+        }
     }
 }
 
