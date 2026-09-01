@@ -27,6 +27,13 @@ struct CalendarResponseDTO: Decodable, Identifiable {
     }
 }
 
+// bd6: unified list envelope -- always false today (no cursor/limit
+// exists for this endpoint), decoded but not yet acted on.
+struct CalendarListResponseDTO: Decodable {
+    let items: [CalendarResponseDTO]
+    let hasMore: Bool
+}
+
 // bd26: POST /calendars only ever creates a purpose:'custom' calendar --
 // there's no purpose field here to send.
 struct CalendarCreateRequestDTO: Encodable {
@@ -70,6 +77,9 @@ struct GoogleCalendarDisconnectResponseDTO: Decodable {
 // struct needed, it's sent and received directly.
 struct CategoriesResponseDTO: Decodable {
     let items: [ScheduleUserCategory]
+    // bd6: unified list envelope -- always false today (no cursor/limit
+    // exists for this endpoint), decoded but not yet acted on.
+    let hasMore: Bool
 }
 
 struct CategoriesReplaceRequestDTO: Encodable {
@@ -438,7 +448,8 @@ actor MemdoAPIClient {
     }
 
     func calendars(accessToken: String) async throws -> [CalendarResponseDTO] {
-        try await send(path: "calendars", accessToken: accessToken)
+        let response: CalendarListResponseDTO = try await send(path: "calendars", accessToken: accessToken)
+        return response.items
     }
 
     func createCalendar(

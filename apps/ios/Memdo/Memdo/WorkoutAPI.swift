@@ -122,6 +122,9 @@ struct WorkoutLogResponseDTO: Decodable {
 
 private struct WorkoutLogListResponseDTO: Decodable {
     let items: [WorkoutLogResponseDTO]
+    // bd6: unified list envelope -- always false today (no cursor/limit
+    // exists for this endpoint), decoded but not yet acted on.
+    let hasMore: Bool
 }
 
 // MARK: - MemdoAPIClient extension
