@@ -569,6 +569,8 @@ struct AgentSheet: View {
                 proposal.propose(draft, conflict: conflict, conflictCheckFailed: conflictCheckFailed)
             case .invalidDate:
                 appendRecoverableErrorIfNoAssistantText(messageID: messageID)
+            case .needsEndTime:
+                appendNeedsEndTimeMessage(messageID: messageID)
             }
         }
         if let proposedUpdate = result.proposedScheduleUpdate {
@@ -641,10 +643,33 @@ struct AgentSheet: View {
     /// which usually produces its own clarifying reply in the streamed text,
     /// so adding a second error here on top of that would just duplicate it.
     private func appendRecoverableErrorIfNoAssistantText(messageID: AgentMessage.ID) {
+        appendFallbackMessage(
+            messageID: messageID,
+            text: "요청하신 내용을 정확히 이해하지 못했어요. 다시 말씀해 주시겠어요?",
+            isError: true
+        )
+    }
+
+    /// bd4: stageScheduleProposal declined to stage a card at all for the
+    /// 23:59-start boundary case rather than default to an invalid or
+    /// incomplete interval -- shown here as a targeted clarifying question,
+    /// the same "plain assistant text, no card" shape request_clarification
+    /// uses, not the generic recoverable-error text (this isn't a failure
+    /// to understand the request, just a specific detail that needs one
+    /// more answer).
+    private func appendNeedsEndTimeMessage(messageID: AgentMessage.ID) {
+        appendFallbackMessage(
+            messageID: messageID,
+            text: "23:59에 시작하는 일정은 종료 시간을 정할 수 없어요. 다른 시작 시간을 알려주시겠어요?",
+            isError: false
+        )
+    }
+
+    private func appendFallbackMessage(messageID: AgentMessage.ID, text: String, isError: Bool) {
         guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
         guard messages[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        messages[index].text = "요청하신 내용을 정확히 이해하지 못했어요. 다시 말씀해 주시겠어요?"
-        messages[index].isError = true
+        messages[index].text = text
+        messages[index].isError = isError
     }
 
     private func resetConversation() {

@@ -309,6 +309,67 @@ final class AgentDomainServicesTests: XCTestCase {
         XCTAssertEqual(result, .invalidDate)
     }
 
+    // MARK: - bd4: default endTime staged before the card is shown, not at
+    // approval time -- see stageScheduleProposal's own doc comment.
+
+    func test_stageSchedule_defaultsEndTime_whenOmitted() {
+        let result = stageScheduleProposal(
+            title: "치과", date: "today", startTime: "15:00", endTime: "", isTask: false, note: "",
+            existing: []
+        )
+        guard case .staged(let draft, _, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        // Default is start + 1h -- the draft/card must show the same value
+        // toScheduleDetail() would otherwise have defaulted only at save
+        // time (the bug this fix eliminates).
+        XCTAssertEqual(draft.endTimeString, "16:00")
+    }
+
+    func test_stageSchedule_doesNotOverrideExplicitEndTime() {
+        let result = stageScheduleProposal(
+            title: "치과", date: "today", startTime: "15:00", endTime: "15:30", isTask: false, note: "",
+            existing: []
+        )
+        guard case .staged(let draft, _, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertEqual(draft.endTimeString, "15:30")
+    }
+
+    func test_stageSchedule_midnightBoundary_2330_clampsToEndOfDay() {
+        let result = stageScheduleProposal(
+            title: "야근", date: "today", startTime: "23:30", endTime: "", isTask: false, note: "",
+            existing: []
+        )
+        guard case .staged(let draft, _, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertEqual(draft.endTimeString, "23:59")
+    }
+
+    func test_stageSchedule_midnightBoundary_2358_clampsToEndOfDay() {
+        let result = stageScheduleProposal(
+            title: "야근", date: "today", startTime: "23:58", endTime: "", isTask: false, note: "",
+            existing: []
+        )
+        guard case .staged(let draft, _, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertEqual(draft.endTimeString, "23:59")
+    }
+
+    func test_stageSchedule_midnightBoundary_2359_needsEndTime_notInvalidInterval() {
+        // start == 23:59 has zero representable same-day minutes left for a
+        // valid end -- must decline to stage rather than produce
+        // endTimeString == startTimeString (a zero-length interval).
+        let result = stageScheduleProposal(
+            title: "야근", date: "today", startTime: "23:59", endTime: "", isTask: false, note: "",
+            existing: []
+        )
+        XCTAssertEqual(result, .needsEndTime)
+    }
+
     func test_stageSchedule_task_hasNoConflict() {
         // A task has no resolvedInterval() -- nothing to conflict-check,
         // regardless of what's in `existing`.
