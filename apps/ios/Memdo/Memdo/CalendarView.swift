@@ -46,6 +46,22 @@ struct CalendarView: View {
     }
 
     private var scheduleCounts: [Int: Int] {
+        monthByDay.reduce(into: [:]) { counts, entry in
+            counts[entry.key] = entry.value.count
+        }
+    }
+
+    // Each day's dots are colored by its items (see MemdoScheduleCountDots)
+    // so a day mixing calendars -- e.g. a personal item and a Google-mirrored
+    // one -- reads as such at a glance instead of every day looking
+    // identical regardless of which calendars are on it.
+    private var dayColors: [Int: [Color]] {
+        monthByDay.reduce(into: [:]) { colors, entry in
+            colors[entry.key] = entry.value.map { $0.color?.swiftUIColor ?? MemdoTheme.brand }
+        }
+    }
+
+    private var monthByDay: [Int: [ScheduleDetail]] {
         let calendar = Calendar.current
         guard let monthInterval = calendar.dateInterval(of: .month, for: displayedMonth)
         else { return [:] }
@@ -56,8 +72,8 @@ struct CalendarView: View {
                 ($0.endAt ?? $0.scheduledDate) >= monthInterval.start
         }
         let byDay = ScheduleStore.groupedByOccurrenceDay(schedules, in: monthInterval, calendar: calendar)
-        return byDay.reduce(into: [:]) { counts, entry in
-            counts[calendar.component(.day, from: entry.key)] = entry.value.count
+        return byDay.reduce(into: [:]) { result, entry in
+            result[calendar.component(.day, from: entry.key)] = entry.value
         }
     }
 
@@ -91,6 +107,7 @@ struct CalendarView: View {
                         month: displayedMonth,
                         selectedDate: selectedDate,
                         scheduleCounts: scheduleCounts,
+                        dayColors: dayColors,
                         workoutDays: workoutDays,
                         googleCalendarConnected: googleCalendarConnected,
                         onSelect: select,
@@ -255,6 +272,7 @@ private struct CalendarMonthCard: View {
     let month: Date
     let selectedDate: Date
     let scheduleCounts: [Int: Int]
+    let dayColors: [Int: [Color]]
     let workoutDays: Set<Int>
     let googleCalendarConnected: Bool
     let onSelect: (Date) -> Void
@@ -421,7 +439,7 @@ private struct CalendarMonthCard: View {
                 .background(isSelected ? MemdoTheme.accent : .clear, in: Circle())
                 .overlay(alignment: .bottom) {
                     HStack(spacing: 3) {
-                        MemdoScheduleCountDots(count: count, isEmphasized: isSelected)
+                        MemdoScheduleCountDots(count: count, isEmphasized: isSelected, colors: dayColors[day, default: []])
                         if hasWorkout {
                             Circle()
                                 .fill(isSelected ? MemdoTheme.onAccent.opacity(0.8) : Color.orange)

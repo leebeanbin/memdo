@@ -93,6 +93,7 @@ struct TodayWeekIndex: View {
     let dates: [Date]
     let selectedDate: Date
     let scheduleCounts: [Date: Int]
+    let dayColors: [Date: [Color]]
     let onSelect: (Date) -> Void
     let onAdd: (Date) -> Void
 
@@ -132,7 +133,8 @@ struct TodayWeekIndex: View {
                             .font(MemdoTypography.action.monospacedDigit())
                         MemdoScheduleCountDots(
                             count: count,
-                            isEmphasized: isSelected
+                            isEmphasized: isSelected,
+                            colors: dayColors[date, default: []]
                         )
                     }
                     .foregroundStyle(isSelected ? MemdoTheme.onAccent : MemdoTheme.secondaryInk)

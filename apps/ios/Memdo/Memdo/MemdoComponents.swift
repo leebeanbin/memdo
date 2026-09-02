@@ -357,12 +357,18 @@ struct MemdoColorSwatch: View {
 struct MemdoScheduleCountDots: View {
     let count: Int
     let isEmphasized: Bool
+    // Per-item colors (in display order), so a day mixing e.g. a personal
+    // and a Google-mirrored item shows that at a glance instead of every
+    // day's dots looking identical regardless of which calendars are on it.
+    // Fewer colors than count, or none at all, falls back to the plain
+    // brand dot exactly like before this existed.
+    var colors: [Color] = []
 
     var body: some View {
         HStack(spacing: 4) {
-            ForEach(0..<min(count, 3), id: \.self) { _ in
+            ForEach(0..<min(count, 3), id: \.self) { index in
                 Circle()
-                    .fill(isEmphasized ? MemdoTheme.onAccent : MemdoTheme.brand)
+                    .fill(isEmphasized ? MemdoTheme.onAccent : (colors.indices.contains(index) ? colors[index] : MemdoTheme.brand))
                     .frame(width: 3, height: 3)
             }
         }

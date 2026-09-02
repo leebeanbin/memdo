@@ -13,6 +13,7 @@ struct SettingsView: View {
     let onStartCoachMarkTour: ((CoachMarkTour) -> Void)?
     @Environment(MemdoSession.self) private var session
     @Environment(ScheduleStore.self) private var scheduleStore
+    @Environment(AppNoticeCenter.self) private var noticeCenter
     @State private var dailySummary = true
     @State private var planningPromptEnabled = true
     @State private var notifications = true
@@ -23,7 +24,6 @@ struct SettingsView: View {
     @State private var showsSignOutConfirmation = false
     @State private var showsDeleteAccountConfirmation = false
     @State private var isDeletingAccount = false
-    @State private var deleteAccountErrorMessage: String?
     @State private var summaryTimePushTask: Task<Void, Never>?
     @State private var promptTimePushTask: Task<Void, Never>?
     @AppStorage(
@@ -46,16 +46,9 @@ struct SettingsView: View {
                 : MemdoMetrics.tabBarClearance + 280,
             scrollTarget: coachMarkTarget
         ) {
-            if let error = session.preferencesStore?.lastError {
-                Button {
-                    session.preferencesStore?.dismissError()
-                } label: {
-                    Label(error, systemImage: "exclamationmark.circle.fill")
-                        .font(MemdoTypography.caption)
-                        .foregroundStyle(.red)
-                        .memdoSettingsRow()
-                }
-                .buttonStyle(.plain)
+            if noticeCenter.current != nil {
+                AppNoticeInlineLabel()
+                    .memdoSettingsRow()
             }
 
             SettingsGroup(title: "하루", icon: "sun.max") {
@@ -141,14 +134,6 @@ struct SettingsView: View {
                     .memdoSettingsRow()
                 }
 
-                if let errorMessage = session.errorMessage {
-                    Divider()
-                    Label(errorMessage, systemImage: "exclamationmark.circle.fill")
-                        .font(MemdoTypography.caption)
-                        .foregroundStyle(.red)
-                        .memdoSettingsRow()
-                }
-
                 // Guests have no real account (no email/external identity) to
                 // delete -- "게스트 데이터 초기화" above already clears local
                 // data with the same warning. Showing this too was redundant and
@@ -176,14 +161,6 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(session.isBusy || isDeletingAccount)
-
-                    if let deleteAccountErrorMessage {
-                        Divider()
-                        Label(deleteAccountErrorMessage, systemImage: "exclamationmark.circle.fill")
-                            .font(MemdoTypography.caption)
-                            .foregroundStyle(.red)
-                            .memdoSettingsRow()
-                    }
                 }
             }
 
@@ -331,13 +308,12 @@ struct SettingsView: View {
     /// handler -- no separate local-clear code needed here).
     private func deleteAccountAndSignOut() async {
         isDeletingAccount = true
-        deleteAccountErrorMessage = nil
         defer { isDeletingAccount = false }
         do {
             try await scheduleStore.deleteAccount()
             await session.signOut()
         } catch {
-            deleteAccountErrorMessage = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
         }
     }
 
@@ -669,7 +645,7 @@ private struct AgentSettingsSheet: View {
                                 AgentConnectionRow(
                                     icon: .asset("GoogleCalendar"),
                                     title: "Google Calendar",
-                                    capability: "일정 읽기 전용",
+                                    capability: "일정 양방향 동기화",
                                     status: connectionStatus(googleCalendarConnected),
                                     badge: nil
                                 )

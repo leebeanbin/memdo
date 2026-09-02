@@ -31,12 +31,6 @@ struct AppShellView: View {
     @Environment(WorkoutStore.self) private var workoutStore
     @Environment(MemdoSession.self) private var session
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    // fd12: the write-error toast's auto-dismiss timer is suspended while
-    // either assistive technology is running, so a VoiceOver/Switch Control
-    // user has time to actually hear and act on it instead of it vanishing
-    // on the same fixed timer a sighted user gets.
-    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
-    @Environment(\.accessibilitySwitchControlEnabled) private var switchControlEnabled
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = AppTab.today
     @State private var showIntentCapture = false
@@ -105,8 +99,8 @@ struct AppShellView: View {
             }
             .overlay { backendStateOverlay }
             .overlay(alignment: .top) { guestStatusBanner }
-            .overlay(alignment: .bottom) { writeErrorToast }
             .overlay(alignment: .bottom) { tourSkipHint }
+            .appNoticeToast()
     }
 
     // be18b: guest sign-in is silent and unconditional on first launch, with
@@ -148,44 +142,6 @@ struct AppShellView: View {
             .padding(.top, 8)
             .accessibilityLabel("게스트로 사용 중입니다. 계정을 연결하면 데이터가 보존돼요.")
             .accessibilityHint("두 번 탭해서 계정을 연결하세요.")
-        }
-    }
-
-    @ViewBuilder
-    private var writeErrorToast: some View {
-        if let message = scheduleStore.lastWriteError {
-            // fd12: a real Button (not .onTapGesture, which VoiceOver/Switch
-            // Control users can't invoke) that also posts an accessibility
-            // announcement -- previously a VoiceOver user had no way to
-            // learn this toast existed at all unless they happened to swipe
-            // past it before the auto-dismiss timer fired.
-            Button {
-                scheduleStore.dismissWriteError()
-            } label: {
-                Label(message, systemImage: "exclamationmark.triangle.fill")
-                    .font(MemdoTypography.metric)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        .regularMaterial,
-                        in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
-                    )
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, MemdoMetrics.pagePadding)
-            .padding(.bottom, 12)
-            .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
-            .accessibilityLabel("\(message). 닫으려면 두 번 탭하세요.")
-            .task(id: message) {
-                AccessibilityNotification.Announcement(message).post()
-                // Suspended while VoiceOver/Switch Control is running --
-                // see the environment properties' doc comment above.
-                guard !voiceOverEnabled, !switchControlEnabled else { return }
-                try? await Task.sleep(for: MemdoMetrics.bannerDismissDuration)
-                if scheduleStore.lastWriteError == message {
-                    scheduleStore.dismissWriteError()
-                }
-            }
         }
     }
 

@@ -46,6 +46,15 @@ struct TodayView: View {
         })
     }
 
+    // Colors each weekday's dots by its items, same as the Calendar tab's
+    // month grid, instead of every day's dots always showing the plain
+    // brand color regardless of which calendars are on it.
+    private var dayColors: [Date: [Color]] {
+        Dictionary(uniqueKeysWithValues: weekDates.map { date in
+            (date, scheduleStore.items(for: date).filter { !$0.isDone }.map { $0.color?.swiftUIColor ?? MemdoTheme.brand })
+        })
+    }
+
     // `schedules` (scheduleStore.items(for:)) is already isActive-filtered
     // for the day, any kind. A `kind == .task` filter here excluded every
     // timed event from the header's completion ring/progress -- same root
@@ -104,6 +113,7 @@ struct TodayView: View {
                             dates: weekDates,
                             selectedDate: selectedDate,
                             scheduleCounts: scheduleCounts,
+                            dayColors: dayColors,
                             onSelect: selectDate,
                             onAdd: openAddSchedule
                         )

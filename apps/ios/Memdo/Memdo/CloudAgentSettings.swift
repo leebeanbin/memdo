@@ -6,11 +6,11 @@ import SwiftUI
 struct CloudAgentConnectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScheduleStore.self) private var scheduleStore
+    @Environment(AppNoticeCenter.self) private var noticeCenter
     @State private var isConnected: Bool?
     @State private var draftKey = ""
     @State private var isBusy = false
     @State private var isLoadingDetails = false
-    @State private var errorMessage: String?
     @State private var detailErrorMessage: String?
     @State private var showDisconnectConfirm = false
     @State private var models: [AgentModelDTO] = []
@@ -38,11 +38,9 @@ struct CloudAgentConnectionSheet: View {
                     } header: {
                         Label("OpenRouter", systemImage: "cloud")
                     }
-                    if let errorMessage {
+                    if noticeCenter.current != nil {
                         Section {
-                            Label(errorMessage, systemImage: "exclamationmark.circle")
-                                .font(MemdoTypography.caption)
-                                .foregroundStyle(MemdoTheme.destructive)
+                            AppNoticeInlineLabel()
                         }
                     }
 
@@ -128,6 +126,7 @@ struct CloudAgentConnectionSheet: View {
             Button("취소", role: .cancel) {}
         }
         .memdoSheetPresentation([.height(350), .large])
+        .appNoticeToast()
         .task { await loadStatus() }
     }
 
@@ -176,10 +175,8 @@ struct CloudAgentConnectionSheet: View {
                         pasteButton
                     }
 
-                    if let errorMessage {
-                        Label(errorMessage, systemImage: "exclamationmark.circle")
-                            .font(MemdoTypography.caption)
-                            .foregroundStyle(MemdoTheme.destructive)
+                    if noticeCenter.current != nil {
+                        AppNoticeInlineLabel()
                     }
                 }
 
@@ -311,35 +308,35 @@ struct CloudAgentConnectionSheet: View {
             if isConnected == true { await loadConnectedContent() }
         } catch {
             isConnected = false
-            errorMessage = "연결 상태를 확인하지 못했어요."
+            noticeCenter.error("연결 상태를 확인하지 못했어요.")
         }
     }
 
     private func connect() async {
         isBusy = true
-        errorMessage = nil
         defer { isBusy = false }
         do {
             try await scheduleStore.saveAgentKey(draftKey.trimmingCharacters(in: .whitespacesAndNewlines))
             draftKey = ""
             isConnected = true
             await loadConnectedContent()
+            noticeCenter.success("OpenRouter를 연결했어요.")
         } catch {
-            errorMessage = "연결하지 못했어요. 키를 확인해 주세요."
+            noticeCenter.error("연결하지 못했어요. 키를 확인해 주세요.")
         }
     }
 
     private func disconnect() async {
         isBusy = true
-        errorMessage = nil
         defer { isBusy = false }
         do {
             try await scheduleStore.deleteAgentKey()
             isConnected = false
             models = []
             usage = nil
+            noticeCenter.success("연결을 해지했어요.")
         } catch {
-            errorMessage = "연결 해지에 실패했어요. 잠시 후 다시 시도해 주세요."
+            noticeCenter.error("연결 해지에 실패했어요. 잠시 후 다시 시도해 주세요.")
         }
     }
 

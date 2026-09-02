@@ -105,17 +105,23 @@ struct ScheduleDetailSheet: View {
                         } else {
                             LabeledContent("장소", value: draft.location.isEmpty ? "없음" : draft.location)
                         }
+                        // Origin stays visible even once editable -- an informational
+                        // badge, not a gate, so the user still knows this item came
+                        // from Google Calendar (see materialize-on-edit: the first
+                        // edit/delete links it to a real todos row and pushes back).
                         if draft.isExternal {
                             LabeledContent("출처", value: draft.calendar.title)
-                        } else {
-                            LabeledContent("알림", value: draft.reminder)
+                        }
+                        LabeledContent("알림", value: draft.reminder)
+                        if !draft.isExternal {
                             // repeatRule isn't round-tripped from the server (the todo
                             // response only carries scheduleRuleId, not the rule's
                             // frequency) -- reflect presence rather than a value that's
-                            // always "반복 안 함" even when the row does repeat.
+                            // always "반복 안 함" even when the row does repeat. A
+                            // Google-mirrored item never has a scheduleRuleId.
                             LabeledContent("반복", value: draft.scheduleRuleId != nil ? "반복 중" : "반복 안 함")
-                            LabeledContent("메모", value: draft.memo.nilFallback)
                         }
+                        LabeledContent("메모", value: draft.memo.nilFallback)
                     }
                     if !draft.attachedLinks.isEmpty {
                         Section("관련 링크") {
@@ -137,22 +143,24 @@ struct ScheduleDetailSheet: View {
                     Button(isEditing ? "취소" : "닫기") { cancelOrDismiss() }
                         .foregroundStyle(MemdoTheme.accent)
                 }
-                if !draft.isExternal {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        HStack(spacing: 8) {
-                            Button(isEditing ? "저장" : "수정") { editOrSave() }
-                                .fontWeight(.semibold)
-                                .disabled(!canSave)
-                            if !isEditing {
-                                Menu {
-                                    Button("삭제", systemImage: "trash", role: .destructive) {
-                                        showsDeleteConfirmation = true
-                                    }
-                                } label: {
-                                    Image(systemName: "ellipsis")
+                // Editable even for a Google-mirrored item now -- the first
+                // edit/delete materializes it into a real todos row and pushes
+                // the change back to Google (see ScheduleStore.performSave/
+                // performDelete's isVirtual || isExternal materialize branch).
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: 8) {
+                        Button(isEditing ? "저장" : "수정") { editOrSave() }
+                            .fontWeight(.semibold)
+                            .disabled(!canSave)
+                        if !isEditing {
+                            Menu {
+                                Button("삭제", systemImage: "trash", role: .destructive) {
+                                    showsDeleteConfirmation = true
                                 }
-                                .accessibilityLabel("일정 더보기")
+                            } label: {
+                                Image(systemName: "ellipsis")
                             }
+                            .accessibilityLabel("일정 더보기")
                         }
                     }
                 }

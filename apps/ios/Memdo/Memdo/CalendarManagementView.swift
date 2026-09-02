@@ -11,9 +11,9 @@ import SwiftUI
 struct CalendarManagementSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScheduleStore.self) private var scheduleStore
+    @Environment(AppNoticeCenter.self) private var noticeCenter
     @State private var items: [CalendarResponseDTO] = []
     @State private var isLoading = true
-    @State private var errorMessage: String?
     @State private var showAddCalendar = false
     @State private var editingCalendar: CalendarResponseDTO?
     @State private var deletingCalendar: CalendarResponseDTO?
@@ -26,15 +26,22 @@ struct CalendarManagementSheet: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List {
-                        if let errorMessage {
+                        if noticeCenter.current != nil {
                             Section {
-                                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                                    .font(MemdoTypography.caption)
-                                    .foregroundStyle(.red)
+                                AppNoticeInlineLabel()
                             }
                         }
                         Section {
                             ForEach(items) { item in
+                                // Google Calendar's synthetic entry (provider ==
+                                // "google") has no backing user_calendars row --
+                                // its id is really the connection's id, and
+                                // only color_token is a real, persisted column
+                                // on that row (server-side: calendars/index.ts
+                                // PATCH falls back to google_calendar_connections
+                                // when the id isn't a user_calendars row). Name
+                                // is Google's own, not Memdo's to rename, so the
+                                // edit sheet locks it for this one entry.
                                 Button {
                                     editingCalendar = item
                                 } label: {
@@ -50,7 +57,7 @@ struct CalendarManagementSheet: View {
                                 }
                             }
                         } footer: {
-                            Text("개인·업무 캘린더는 이름과 색상만 바꿀 수 있어요. 직접 추가한 캘린더는 일정이 없을 때만 삭제할 수 있어요.")
+                            Text("개인·업무 캘린더는 이름과 색상만 바꿀 수 있어요. 직접 추가한 캘린더는 일정이 없을 때만 삭제할 수 있어요. Google Calendar는 색상만 바꿀 수 있어요.")
                         }
                     }
                     .memdoSystemList()
@@ -99,6 +106,7 @@ struct CalendarManagementSheet: View {
             Text("이 작업은 되돌릴 수 없어요.")
         }
         .memdoSheetPresentation([.large])
+        .appNoticeToast()
     }
 
     private func load() async {
@@ -106,9 +114,8 @@ struct CalendarManagementSheet: View {
         defer { isLoading = false }
         do {
             items = try await scheduleStore.loadCalendarDTOs()
-            errorMessage = nil
         } catch {
-            errorMessage = "캘린더를 불러오지 못했어요."
+            noticeCenter.error("캘린더를 불러오지 못했어요.")
         }
     }
 
@@ -121,8 +128,9 @@ struct CalendarManagementSheet: View {
             )
             await load()
             await scheduleStore.refreshCalendars()
+            noticeCenter.success("캘린더를 추가했어요.")
         } catch {
-            errorMessage = "캘린더를 추가하지 못했어요."
+            noticeCenter.error("캘린더를 추가하지 못했어요.")
         }
     }
 
@@ -137,8 +145,9 @@ struct CalendarManagementSheet: View {
             )
             await load()
             await scheduleStore.refreshCalendars()
+            noticeCenter.success("캘린더를 수정했어요.")
         } catch {
-            errorMessage = "캘린더를 수정하지 못했어요."
+            noticeCenter.error("캘린더를 수정하지 못했어요.")
         }
     }
 
@@ -147,10 +156,11 @@ struct CalendarManagementSheet: View {
             try await scheduleStore.deleteCalendar(id: calendar.id)
             await load()
             await scheduleStore.refreshCalendars()
+            noticeCenter.success("캘린더를 삭제했어요.")
         } catch ScheduleAPIError.server(_, _, let message, _) {
-            errorMessage = message
+            noticeCenter.error(message)
         } catch {
-            errorMessage = "캘린더를 삭제하지 못했어요."
+            noticeCenter.error("캘린더를 삭제하지 못했어요.")
         }
     }
 }
@@ -166,6 +176,7 @@ private struct CalendarManagementRow: View {
         switch item.purpose {
         case "personal": "개인"
         case "work": "업무"
+        case "external": "연결됨"
         default: "직접 추가"
         }
     }
@@ -212,6 +223,10 @@ private struct CalendarEditSheet: View {
         _selectedColor = State(initialValue: existing?.colorToken.flatMap(ScheduleColor.init(rawValue:)))
     }
 
+    private var isGoogleConnection: Bool {
+        existing?.provider == "google"
+    }
+
     private var canSave: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -220,7 +235,15 @@ private struct CalendarEditSheet: View {
         NavigationStack {
             Form {
                 Section("이름") {
-                    TextField("캘린더 이름", text: $name)
+                    if isGoogleConnection {
+                        // Google's own calendar name, not Memdo's to rename --
+                        // shown for context, not editable. calendars/index.ts's
+                        // PATCH fallback for this row ignores name regardless.
+                        Text(name)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                    } else {
+                        TextField("캘린더 이름", text: $name)
+                    }
                 }
                 Section("색상") {
                     HStack(spacing: 10) {

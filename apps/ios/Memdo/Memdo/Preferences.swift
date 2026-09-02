@@ -202,31 +202,26 @@ actor PreferencesRepository {
 @Observable
 final class PreferencesStore {
     private(set) var preferences: UserPreferences?
-    /// Set when a load or save fails. Settings must stay usable even offline, so
-    /// this doesn't block the UI -- it's a dismissible notice, not a hard error.
-    private(set) var lastError: String?
     private let repository: PreferencesRepository
+    /// Load/save failures post here as a dismissible, non-blocking notice --
+    /// Settings must stay usable even offline.
+    private let noticeCenter: AppNoticeCenter
 
-    init(repository: PreferencesRepository) {
+    init(repository: PreferencesRepository, noticeCenter: AppNoticeCenter = AppNoticeCenter()) {
         self.repository = repository
+        self.noticeCenter = noticeCenter
     }
 
     func load() async {
         do {
             preferences = try await repository.load()
-            lastError = nil
         } catch {
-            lastError = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
         }
     }
 
     func reset() {
         preferences = nil
-        lastError = nil
-    }
-
-    func dismissError() {
-        lastError = nil
     }
 
     /// Mutates the cached full object and persists it. Loads first if nothing is
@@ -237,13 +232,20 @@ final class PreferencesStore {
     /// failure (nothing to update) or a save failure (previous value is
     /// restored, same as before). `@discardableResult` so existing fire-and-
     /// forget call sites (SettingsView, MemdoGuideSheet) keep compiling and
-    /// behaving identically; `lastError`'s existing set/clear behavior is
-    /// unchanged either way. Callers that need to know whether their change
+    /// behaving identically. Callers that need to know whether their change
     /// actually persisted (e.g. an Agent proposal approval, which shouldn't
     /// tell the user something was applied when it wasn't) inspect the
     /// return value.
+    ///
+    /// `notify` gates only the success notice -- a failure always posts one.
+    /// Defaults to `false`: every current caller is an ambient auto-save
+    /// (a toggle flip, a debounced time-picker push), and a toast firing on
+    /// every one of those would be noisy and inconsistent with standard iOS
+    /// Settings UX, where the control's own state is the confirmation. Pass
+    /// `true` only for a distinct, user-initiated save action that should get
+    /// its own confirmation.
     @discardableResult
-    func update(_ transform: (inout UserPreferences) -> Void) async -> Bool {
+    func update(_ transform: (inout UserPreferences) -> Void, notify: Bool = false) async -> Bool {
         if preferences == nil {
             await load()
         }
@@ -253,11 +255,11 @@ final class PreferencesStore {
         preferences = updated
         do {
             preferences = try await repository.save(updated)
-            lastError = nil
+            if notify { noticeCenter.success("설정을 저장했어요.") }
             return true
         } catch {
             preferences = previous
-            lastError = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
             return false
         }
     }

@@ -586,11 +586,11 @@ final class ScheduleStore {
     private(set) var schedules: [ScheduleDetail] = []
     private(set) var calendars: [ScheduleCalendar] = []
     private(set) var state = ScheduleStoreState.idle
-    /// Failure from a single item's create/update/delete/reschedule -- surfaced as a
+    private let repository: ScheduleRepository
+    /// Failures from a single item's create/update/delete/reschedule post here as a
     /// dismissible, non-blocking notice. `state` is reserved for load() failures,
     /// which take down the whole collection; a single item failing shouldn't.
-    private(set) var lastWriteError: String?
-    private let repository: ScheduleRepository
+    private let noticeCenter: AppNoticeCenter
     private var lastWidgetDays: [MemdoWidgetDay]?
     private var lastSyncCursor: String?
     /// IDs with a create/update/delete/reschedule in flight. A re-entrant call for
@@ -610,25 +610,26 @@ final class ScheduleStore {
         pendingWriteIDs.contains(id)
     }
 
-    func dismissWriteError() {
-        lastWriteError = nil
-    }
-
-    /// fe6: every ScheduleWriteError case except .busy/.notFound already set
-    /// lastWriteError at its own throw site before this fix -- those two
+    /// fe6: every ScheduleWriteError case except .busy/.notFound already posted
+    /// to noticeCenter at its own throw site before this fix -- those two
     /// guard clauses threw directly with no side effect, so the 8+ non-Agent
     /// call sites that do `Task { try? await scheduleStore.X(...) }` (which
     /// discards the thrown error) got zero user-facing feedback specifically
-    /// for these two cases. Sets it here, at the single point both cases are
+    /// for these two cases. Posts here, at the single point both cases are
     /// thrown from, rather than touching every call site.
     private func fail(_ error: ScheduleWriteError) -> ScheduleWriteError {
-        lastWriteError = error.localizedDescription
+        noticeCenter.error(error.localizedDescription)
         return error
     }
 
-    init(repository: ScheduleRepository, outbox: OutboxStore = OutboxStore()) {
+    init(
+        repository: ScheduleRepository,
+        outbox: OutboxStore = OutboxStore(),
+        noticeCenter: AppNoticeCenter = AppNoticeCenter()
+    ) {
         self.repository = repository
         self.outbox = outbox
+        self.noticeCenter = noticeCenter
         networkMonitor = NetworkMonitor { [weak self] in
             Task { @MainActor in await self?.drainOutbox() }
         }
@@ -831,8 +832,8 @@ final class ScheduleStore {
         let padding = 30
 
         // Only widen the loaded window on a real fetch success -- fetchRange
-        // used to swallow its own error into lastWriteError and return
-        // normally, so a single transient failure widened the window
+        // used to swallow its own error into a notice and return normally,
+        // so a single transient failure widened the window
         // anyway. The store then believed it had data for a range it never
         // actually fetched: every later visit to those days rendered an
         // empty day indistinguishable from a genuinely empty one, and
@@ -860,7 +861,7 @@ final class ScheduleStore {
             merge(fetched)
             return true
         } catch {
-            lastWriteError = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
             return false
         }
     }
@@ -1016,14 +1017,14 @@ final class ScheduleStore {
                 // *any* non-offline failure, including ones that would have
                 // succeeded a moment later (founder-dogfooding fix, fe8).
                 if case .server(let status, _, _, _) = error, status >= 500 {
-                    lastWriteError = error.localizedDescription
+                    noticeCenter.error(error.localizedDescription)
                     continue
                 }
                 await outbox.remove(entry.scheduleID)
-                lastWriteError = error.localizedDescription
+                noticeCenter.error(error.localizedDescription)
             } catch {
                 await outbox.remove(entry.scheduleID)
-                lastWriteError = error.localizedDescription
+                noticeCenter.error(error.localizedDescription)
             }
         }
         updateWidgetSnapshot()
@@ -1118,7 +1119,7 @@ final class ScheduleStore {
             try await repository.createRule(schedule)
             await load()
         } catch {
-            lastWriteError = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
         }
     }
 
@@ -1130,7 +1131,7 @@ final class ScheduleStore {
                 try await repository.deleteRule(id: ruleId)
                 await load()
             } catch {
-                lastWriteError = error.localizedDescription
+                noticeCenter.error(error.localizedDescription)
             }
         }
     }
@@ -1156,7 +1157,12 @@ final class ScheduleStore {
         // A virtual occurrence (event-mode rule, computed but never written to the
         // DB) has no real row to PATCH -- regardless of whether it's already in
         // `schedules` locally (it got there via the same GET that computed it).
-        if schedule.isVirtual {
+        // A Google-mirrored item (isExternal) is the same situation: it only
+        // exists in google_calendar_mirror_events until the first edit
+        // materializes it into a real todos row (backend detects the id
+        // matches a mirror row and handles this transparently -- see
+        // todos/index.ts POST).
+        if schedule.isVirtual || schedule.isExternal {
             if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
                 schedules[index] = schedule
             } else {
@@ -1201,12 +1207,13 @@ final class ScheduleStore {
             await NotificationScheduler.scheduleEndNotification(for: schedule)
             return .queuedOffline
         } catch {
-            if schedule.isVirtual {
-                // This wasn't a net-new item -- it's a computed occurrence that
-                // still exists (the server will recompute it as virtual again on
-                // the next list). Restore the pre-edit value instead of erasing
-                // it; removing it here would just make the recurring occurrence
-                // vanish from every list/widget until a full reload.
+            if schedule.isVirtual || schedule.isExternal {
+                // This wasn't a net-new item -- it's a computed occurrence (or a
+                // Google-mirrored event) that still exists (the server will
+                // recompute/re-mirror it again on the next list). Restore the
+                // pre-edit value instead of erasing it; removing it here would
+                // just make the item vanish from every list/widget until a full
+                // reload.
                 if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
                     schedules[index] = schedule
                 } else {
@@ -1217,7 +1224,7 @@ final class ScheduleStore {
                 schedules.removeAll { $0.id == schedule.id }
             }
             updateWidgetSnapshot()
-            lastWriteError = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
             // No notification was ever scheduled for this attempt (create()
             // only schedules on a real commit/offline-queue below), so
             // there's nothing to undo here.
@@ -1277,7 +1284,7 @@ final class ScheduleStore {
             // Real failure on just the status half -- `saved` stays as-is in
             // `schedules` (correct, it's real), and its notification (set
             // above) is already consistent with that -- nothing to undo.
-            lastWriteError = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
             throw ScheduleWriteError.partialFailure(underlying: error)
         }
     }
@@ -1308,7 +1315,7 @@ final class ScheduleStore {
         } catch {
             replace(schedule.id, with: previous)
             updateWidgetSnapshot()
-            lastWriteError = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
             // No notification was scheduled for the edited value before this
             // request (see create()/update() -- scheduling only ever happens
             // inside a commit/offline branch), so nothing needs restoring
@@ -1521,7 +1528,7 @@ final class ScheduleStore {
         var materialized: ScheduleDetail?
         do {
             let baseVersion: Int
-            if original.isVirtual {
+            if original.isVirtual || original.isExternal {
                 let real = try await repository.create(original)
                 materialized = real
                 baseVersion = real.version
@@ -1565,7 +1572,7 @@ final class ScheduleStore {
                 schedules[index] = materialized ?? original
             }
             updateWidgetSnapshot()
-            lastWriteError = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
             // Notifications were never touched before this request (only the
             // success/offline branches above schedule anything), so nothing
             // needs restoring -- whatever was scheduled for `original` before
@@ -1595,9 +1602,10 @@ final class ScheduleStore {
         // value would re-POST and 409 on the id it already owns.
         var materialized: ScheduleDetail?
         do {
-            if schedule.isVirtual {
+            if schedule.isVirtual || schedule.isExternal {
                 // No real row exists yet to delete -- materialize it first (so the
-                // series knows this date is spoken for) and delete that.
+                // series knows this date is spoken for, or so the Google-mirrored
+                // event has a real row to soft-delete/unlink) and delete that.
                 let real = try await repository.create(schedule)
                 materialized = real
                 try await repository.delete(real)
@@ -1630,7 +1638,7 @@ final class ScheduleStore {
                 schedules.append(materialized ?? schedule)
             }
             updateWidgetSnapshot()
-            lastWriteError = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
             // Notifications were never cancelled before this request (see
             // above -- only commit/offline cancel), so nothing needs
             // rescheduling here; the restored row's notification was never

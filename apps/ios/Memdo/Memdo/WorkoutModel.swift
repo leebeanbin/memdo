@@ -167,14 +167,15 @@ struct WorkoutLog: Identifiable, Codable, Equatable {
 final class WorkoutStore {
     private(set) var workouts: [WorkoutLog] = []
     private(set) var isSyncing = false
-    private(set) var lastSyncError: String?
     private var lastSyncCursor: String?
 
     private let repository: WorkoutRepository?
+    private let noticeCenter: AppNoticeCenter
     let importer: HealthKitImporter
 
-    init(repository: WorkoutRepository? = nil) {
+    init(repository: WorkoutRepository? = nil, noticeCenter: AppNoticeCenter = AppNoticeCenter()) {
         self.repository = repository
+        self.noticeCenter = noticeCenter
         self.importer = HealthKitImporter()
     }
 
@@ -207,7 +208,7 @@ final class WorkoutStore {
             // so an offline save isn't silently wiped by the next load.
             let localOnly = workouts.filter { !serverIDs.contains($0.id) }
             workouts = (serverWorkouts + localOnly).sorted { $0.startedAt > $1.startedAt }
-        } catch { lastSyncError = error.localizedDescription }
+        } catch { noticeCenter.error(error.localizedDescription) }
     }
 
     /// Best-effort incremental pull of workout changes made elsewhere (other
@@ -280,7 +281,7 @@ final class WorkoutStore {
                 let saved = try await repository.create(workout, accessToken: token)
                 upsertLocally(saved)
             } catch {
-                lastSyncError = "운동을 서버에 저장하지 못했어요. 네트워크를 확인해 주세요."
+                noticeCenter.error("운동을 서버에 저장하지 못했어요. 네트워크를 확인해 주세요.")
             }
         }
     }
@@ -288,22 +289,22 @@ final class WorkoutStore {
     // 노트/장소/세트 편집 — details 테이블만 업데이트
     // fe10: the double try? collapsed "no backend"/"not signed in"/"server
     // rejected" into one silent branch that still applied the edit locally
-    // with no lastSyncError set -- indistinguishable from a real success,
+    // with no failure notice posted -- indistinguishable from a real success,
     // and the next load() would silently discard it. Mirrors save(_:)'s
     // shape: optimistic local update up front, do/catch around the network
-    // call, lastSyncError on any failure (no rollback, same as save(_:)).
+    // call, a notice posted on any failure (no rollback, same as save(_:)).
     func update(_ workout: WorkoutLog) {
         upsertLocally(workout) // optimistic — visible immediately
         Task {
             guard let repository, let token = try? await repository.accessToken() else {
-                lastSyncError = "운동을 서버에 저장하지 못했어요. 네트워크를 확인해 주세요."
+                noticeCenter.error("운동을 서버에 저장하지 못했어요. 네트워크를 확인해 주세요.")
                 return
             }
             do {
                 let saved = try await repository.updateDetails(workout, accessToken: token)
                 upsertLocally(saved)
             } catch {
-                lastSyncError = "운동을 서버에 저장하지 못했어요. 네트워크를 확인해 주세요."
+                noticeCenter.error("운동을 서버에 저장하지 못했어요. 네트워크를 확인해 주세요.")
             }
         }
     }
@@ -324,13 +325,12 @@ final class WorkoutStore {
             } catch {
                 // Server rejected the delete — restore the item locally
                 upsertLocally(workout)
-                lastSyncError = error.localizedDescription
+                noticeCenter.error(error.localizedDescription)
             }
         }
     }
 
-    func dismissSyncError() { lastSyncError = nil }
-    func reset() { workouts = []; lastSyncError = nil; lastSyncCursor = nil }
+    func reset() { workouts = []; lastSyncCursor = nil }
 
     private func upsertLocally(_ workout: WorkoutLog) {
         if let i = workouts.firstIndex(where: { $0.id == workout.id }) {

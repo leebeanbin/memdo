@@ -7,13 +7,21 @@ import UserNotifications
 
 @main
 struct MemdoApp: App {
-    @State private var session = MemdoSession()
+    @State private var noticeCenter: AppNoticeCenter
+    @State private var session: MemdoSession
     @Environment(\.scenePhase) private var scenePhase
+
+    init() {
+        let noticeCenter = AppNoticeCenter()
+        _noticeCenter = State(initialValue: noticeCenter)
+        _session = State(initialValue: MemdoSession(noticeCenter: noticeCenter))
+    }
 
     var body: some Scene {
         WindowGroup {
             MemdoRootView(session: session)
                 .environment(session)
+                .environment(noticeCenter)
                 .font(MemdoTypography.body)
                 .dynamicTypeSize(.xSmall ... .accessibility3)
                 .onOpenURL { session.handle($0) }
@@ -61,7 +69,6 @@ final class MemdoSession {
 
     private(set) var phase = Phase.loading
     private(set) var isBusy = false
-    private(set) var errorMessage: String?
     private(set) var accountLabel = ""
     private(set) var providerLabel = ""
     let scheduleStore: ScheduleStore?
@@ -69,10 +76,12 @@ final class MemdoSession {
     let workoutStore: WorkoutStore
 
     private let client: SupabaseClient?
+    private let noticeCenter: AppNoticeCenter
     private var activeUserID: UUID?
 
-    init() {
-        var ws = WorkoutStore()
+    init(noticeCenter: AppNoticeCenter) {
+        self.noticeCenter = noticeCenter
+        var ws = WorkoutStore(noticeCenter: noticeCenter)
         do {
             let configuration = try MemdoConfiguration.current()
             let client = SupabaseClient(
@@ -99,13 +108,16 @@ final class MemdoSession {
             )
             self.client = client
             scheduleStore = ScheduleStore(
-                repository: ScheduleRepository(configuration: configuration, auth: client)
+                repository: ScheduleRepository(configuration: configuration, auth: client),
+                noticeCenter: noticeCenter
             )
             preferencesStore = PreferencesStore(
-                repository: PreferencesRepository(configuration: configuration, auth: client)
+                repository: PreferencesRepository(configuration: configuration, auth: client),
+                noticeCenter: noticeCenter
             )
             ws = WorkoutStore(
-                repository: WorkoutRepository(configuration: configuration, auth: client)
+                repository: WorkoutRepository(configuration: configuration, auth: client),
+                noticeCenter: noticeCenter
             )
         } catch {
             client = nil
@@ -179,7 +191,6 @@ final class MemdoSession {
     func signIn(with provider: Provider) async {
         guard let client, let redirectURL = URL(string: "memdo://auth/callback") else { return }
         isBusy = true
-        errorMessage = nil
         defer { isBusy = false }
 
         do {
@@ -198,14 +209,13 @@ final class MemdoSession {
         } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
             return
         } catch {
-            errorMessage = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
         }
     }
 
     func signInWithApple(idToken: String, nonce: String, authorizationCode: String?) async {
         guard let client else { return }
         isBusy = true
-        errorMessage = nil
         defer { isBusy = false }
 
         do {
@@ -221,7 +231,7 @@ final class MemdoSession {
                 )
             }
         } catch {
-            errorMessage = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
             return
         }
 
@@ -246,25 +256,23 @@ final class MemdoSession {
     func signInAnonymously() async {
         guard let client else { return }
         isBusy = true
-        errorMessage = nil
         defer { isBusy = false }
         do {
             try await client.auth.signInAnonymously()
         } catch {
-            errorMessage = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
         }
     }
 
     func signOut() async {
         guard let client else { return }
         isBusy = true
-        errorMessage = nil
         defer { isBusy = false }
 
         do {
             try await client.auth.signOut()
         } catch {
-            errorMessage = error.localizedDescription
+            noticeCenter.error(error.localizedDescription)
         }
     }
 
@@ -356,6 +364,7 @@ private struct MemdoLaunchView: View {
 
 struct MemdoSignInView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(AppNoticeCenter.self) private var noticeCenter
     @State private var currentNonce: String?
 
     let session: MemdoSession
@@ -461,12 +470,9 @@ struct MemdoSignInView: View {
                 .padding(.top, 12)
         }
 
-        if let errorMessage = session.errorMessage {
-            Label(errorMessage, systemImage: "exclamationmark.circle.fill")
-                .font(MemdoTypography.caption)
-                .foregroundStyle(.red)
+        if noticeCenter.current != nil {
+            AppNoticeInlineLabel()
                 .padding(.top, 12)
-                .accessibilityLabel("로그인 오류: \(errorMessage)")
         }
     }
 

@@ -90,6 +90,18 @@ struct ScheduleRow: View {
                 }
 
                 HStack(spacing: 4) {
+                    // Tasks already color their leading checkbox (see
+                    // leadingMarker above); events in .timeline context only
+                    // got a barely-visible 1pt accent line (EventTimeMarker's
+                    // capsule), which read as "no color" even once
+                    // schedule.color was wired up correctly -- same visible
+                    // dot ScheduleSourceIcon/.dated's badge already use.
+                    if schedule.kind == .event, let c = schedule.color {
+                        Circle()
+                            .fill(c.swiftUIColor)
+                            .frame(width: 7, height: 7)
+                            .accessibilityHidden(true)
+                    }
                     if let provider = schedule.meetingProvider {
                         Image(systemName: provider.systemImage)
                             .font(MemdoTypography.caption2)

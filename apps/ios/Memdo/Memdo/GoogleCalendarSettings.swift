@@ -12,9 +12,9 @@ private final class GoogleCalendarAuthPresentationContext: NSObject,
 struct GoogleCalendarConnectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScheduleStore.self) private var scheduleStore
+    @Environment(AppNoticeCenter.self) private var noticeCenter
     @State private var status: GoogleCalendarStatusResponseDTO?
     @State private var isBusy = false
-    @State private var errorMessage: String?
     @State private var authSession: ASWebAuthenticationSession?
     private let presentationContext = GoogleCalendarAuthPresentationContext()
 
@@ -27,17 +27,19 @@ struct GoogleCalendarConnectionSheet: View {
                     MCPToolIdentityRow(
                         icon: .asset("GoogleCalendar"),
                         title: "Google Calendar",
-                        summary: "Google Calendar 일정을 가져와서 내 캘린더에 함께 보여줘요."
+                        summary: "Memdo와 Google Calendar 일정을 서로 동기화해요."
                     )
                 } header: {
                     Text("Agent MCP 도구")
                 }
                 Section("연결하면 가능한 일") {
                     Label("Google Calendar 일정을 캘린더 화면에 함께 표시", systemImage: "calendar")
-                    Label("15분마다 자동으로 최신 일정 반영", systemImage: "arrow.triangle.2.circlepath")
+                    Label("Google Calendar 변경사항을 실시간에 가깝게 반영 (최대 15분 지연 가능)", systemImage: "arrow.triangle.2.circlepath")
+                    Label("Memdo에서 만들거나 수정한 일정을 Google Calendar에 반영", systemImage: "arrow.up.circle")
+                    Label("Google Calendar에서 가져온 일정도 Memdo에서 수정 가능", systemImage: "pencil.circle")
                 }
                 Section("권한 원칙") {
-                    Label("읽기 전용 — Google Calendar에 쓰거나 수정하지 않음", systemImage: "eye")
+                    Label("양방향 동기화 — 서로 만들거나 수정한 일정이 상대방에도 반영돼요", systemImage: "arrow.triangle.2.circlepath.circle")
                 }
                 if isConnected {
                     Section {
@@ -71,10 +73,9 @@ struct GoogleCalendarConnectionSheet: View {
                             .disabled(isBusy)
                     }
                 }
-                if let errorMessage {
+                if noticeCenter.current != nil {
                     Section {
-                        Label(errorMessage, systemImage: "exclamationmark.circle.fill")
-                            .foregroundStyle(.red)
+                        AppNoticeInlineLabel()
                     }
                 }
             }
@@ -88,6 +89,7 @@ struct GoogleCalendarConnectionSheet: View {
             }
         }
         .memdoSheetPresentation([.large])
+        .appNoticeToast()
         .task { await loadStatus() }
     }
 
@@ -102,7 +104,6 @@ struct GoogleCalendarConnectionSheet: View {
 
     private func connect() {
         isBusy = true
-        errorMessage = nil
         Task {
             defer { isBusy = false }
             do {
@@ -130,28 +131,29 @@ struct GoogleCalendarConnectionSheet: View {
                 let statusValue = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?
                     .queryItems?.first(where: { $0.name == "status" })?.value
                 if statusValue != "success" {
-                    errorMessage = "연결이 취소되었어요."
+                    noticeCenter.error("연결이 취소되었어요.")
                     return
                 }
                 await loadStatus()
+                noticeCenter.success("Google Calendar를 연결했어요.")
             } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
                 return
             } catch {
-                errorMessage = "연결하지 못했어요. 잠시 후 다시 시도해 주세요."
+                noticeCenter.error("연결하지 못했어요. 잠시 후 다시 시도해 주세요.")
             }
         }
     }
 
     private func disconnect() {
         isBusy = true
-        errorMessage = nil
         Task {
             defer { isBusy = false }
             do {
                 try await scheduleStore.googleCalendarDisconnect()
                 await loadStatus()
+                noticeCenter.success("연결을 해지했어요.")
             } catch {
-                errorMessage = "연결 해지에 실패했어요. 잠시 후 다시 시도해 주세요."
+                noticeCenter.error("연결 해지에 실패했어요. 잠시 후 다시 시도해 주세요.")
             }
         }
     }
