@@ -181,6 +181,15 @@ struct AgentResponse: View {
                     .font(MemdoTypography.subtitle)
                     .foregroundStyle(message.isError ? .red : MemdoTheme.ink)
                     .textSelection(.enabled)
+                    // Deltas already arrive incrementally over the wire
+                    // (CloudAgentRuntime's onDelta -> .textSnapshot), but
+                    // every update just hard-replaced the Text with no
+                    // transition, so each growth still visually "popped" in
+                    // as one abrupt block instead of reading as live
+                    // typing. This animates height/content changes as
+                    // message.text grows, matching the streaming that's
+                    // already happening underneath.
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: message.text)
             }
 
             // Retry
@@ -242,6 +251,13 @@ struct AgentMarkdownText: View {
     struct Line: Identifiable, Equatable {
         let id: Int
         let isListItem: Bool
+        // 1...3 for a "#"/"##"/"###" line, nil otherwise. A model response
+        // reliably uses markdown headings for section structure ("###
+        // 학습량 측면") -- same raw-markup symptom as the list-marker bug
+        // this file's header comment describes, just for "#" instead of
+        // "* "/"- ": the literal "#" characters used to render as plain
+        // text since nothing stripped or styled them.
+        let headingLevel: Int?
         let content: String
     }
 
@@ -250,9 +266,24 @@ struct AgentMarkdownText: View {
         text.components(separatedBy: "\n").enumerated().map { index, raw in
             let trimmed = raw.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("* ") || trimmed.hasPrefix("- ") {
-                return Line(id: index, isListItem: true, content: String(trimmed.dropFirst(2)))
+                return Line(
+                    id: index,
+                    isListItem: true,
+                    headingLevel: nil,
+                    content: String(trimmed.dropFirst(2))
+                )
             }
-            return Line(id: index, isListItem: false, content: raw)
+            let hashCount = trimmed.prefix(while: { $0 == "#" }).count
+            if hashCount > 0, hashCount <= 6, trimmed.count > hashCount,
+               trimmed[trimmed.index(trimmed.startIndex, offsetBy: hashCount)] == " " {
+                return Line(
+                    id: index,
+                    isListItem: false,
+                    headingLevel: min(hashCount, 3),
+                    content: String(trimmed.dropFirst(hashCount + 1))
+                )
+            }
+            return Line(id: index, isListItem: false, headingLevel: nil, content: raw)
         }
     }
 
@@ -266,9 +297,17 @@ struct AgentMarkdownText: View {
 
     private var lines: [Line] { Self.lines(for: text) }
 
+    private static func headingFont(_ level: Int) -> Font {
+        switch level {
+        case 1: MemdoTypography.sectionTitle
+        default: MemdoTypography.action
+        }
+    }
+
     var body: some View {
+        let allLines = lines
         VStack(alignment: .leading, spacing: 4) {
-            ForEach(lines) { line in
+            ForEach(allLines) { line in
                 if line.content.isEmpty {
                     Color.clear.frame(height: 6)
                 } else if line.isListItem {
@@ -277,6 +316,14 @@ struct AgentMarkdownText: View {
                             .foregroundStyle(MemdoTheme.secondaryInk)
                         Text(Self.inlineAttributed(line.content))
                     }
+                } else if let level = line.headingLevel {
+                    Text(Self.inlineAttributed(line.content))
+                        .font(Self.headingFont(level))
+                        .foregroundStyle(MemdoTheme.ink)
+                        // A touch of breathing room above a heading (not the
+                        // very first line) so sections read as separated,
+                        // not just differently weighted inline text.
+                        .padding(.top, line.id == allLines.first?.id ? 0 : 6)
                 } else {
                     Text(Self.inlineAttributed(line.content))
                 }

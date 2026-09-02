@@ -343,6 +343,35 @@ final class ScheduleModelTests: XCTestCase {
         XCTAssertEqual(lines[0].content, "그냥 평범한 응답이에요.")
     }
 
+    func testAgentMarkdownTextClassifiesHeadingLinesAndStripsTheHashMarkers() {
+        // Exact symptom from a real reported screenshot: "### 📊 1. 학습량
+        // 측면: **상급(Hard)**" rendered with the literal "###" characters
+        // still in the text, no distinct heading styling at all.
+        let text = """
+            ### 📊 1. 학습량 측면: **상급(Hard)**
+            ## 요약
+            # 제목
+            일반 문단은 헤딩이 아니야
+            #해시태그처럼_공백없는건_헤딩이_아니야
+            """
+        let lines = AgentMarkdownText.lines(for: text)
+
+        XCTAssertEqual(lines[0].headingLevel, 3)
+        XCTAssertEqual(lines[0].content, "📊 1. 학습량 측면: **상급(Hard)**")
+        XCTAssertFalse(lines[0].isListItem)
+
+        XCTAssertEqual(lines[1].headingLevel, 2)
+        XCTAssertEqual(lines[1].content, "요약")
+
+        XCTAssertEqual(lines[2].headingLevel, 1)
+        XCTAssertEqual(lines[2].content, "제목")
+
+        XCTAssertNil(lines[3].headingLevel)
+        XCTAssertEqual(lines[3].content, "일반 문단은 헤딩이 아니야")
+
+        XCTAssertNil(lines[4].headingLevel, "no space after # means it's not a heading marker")
+    }
+
     func testAIConsentDefaultsToGrantedAndPersists() {
         let key = "memdo.v1.aiConsentGranted"
         let original = UserDefaults.standard.object(forKey: key)
