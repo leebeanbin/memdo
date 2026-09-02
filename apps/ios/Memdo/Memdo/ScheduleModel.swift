@@ -1112,6 +1112,18 @@ final class ScheduleStore {
         try await repository.deleteCalendar(id: id)
     }
 
+    func googleSyncedCalendars() async throws -> GoogleSyncedCalendarsListResponseDTO {
+        try await repository.googleSyncedCalendars()
+    }
+
+    func addGoogleSyncedCalendar(googleCalendarId: String, summary: String) async throws {
+        _ = try await repository.addGoogleSyncedCalendar(googleCalendarId: googleCalendarId, summary: summary)
+    }
+
+    func removeGoogleSyncedCalendar(id: String) async throws {
+        try await repository.removeGoogleSyncedCalendar(id: id)
+    }
+
     /// Creates a recurrence rule on the backend, which materialises the
     /// occurrences server-side, then reloads to pull them in.
     func createRecurring(_ schedule: ScheduleDetail) async {

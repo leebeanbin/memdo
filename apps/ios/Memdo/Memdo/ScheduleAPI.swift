@@ -49,6 +49,39 @@ struct CalendarUpdateRequestDTO: Encodable {
 
 private struct CalendarDeleteResponseDTO: Decodable { let id: String }
 
+// GET /google-calendar-synced-calendars -- every calendar on the user's
+// Google account (Calendar's own "다른 캘린더" list: a holiday calendar, a
+// secondary personal calendar, ...), merged with which ones Memdo already
+// syncs. The primary calendar itself is out of scope here -- connect/
+// disconnect manages that, not this list.
+struct GoogleAvailableCalendarDTO: Decodable, Identifiable {
+    let googleCalendarId: String
+    let summary: String
+    let isSynced: Bool
+
+    var id: String { googleCalendarId }
+}
+
+struct GoogleSyncedCalendarDTO: Decodable, Identifiable {
+    let id: String
+    let googleCalendarId: String
+    let summary: String
+    let colorToken: String?
+    let lastSyncedAt: String?
+}
+
+struct GoogleSyncedCalendarsListResponseDTO: Decodable {
+    let available: [GoogleAvailableCalendarDTO]
+    let synced: [GoogleSyncedCalendarDTO]
+}
+
+struct GoogleSyncedCalendarCreateRequestDTO: Encodable {
+    let googleCalendarId: String
+    let summary: String
+}
+
+private struct GoogleSyncedCalendarDeleteResponseDTO: Decodable { let id: String }
+
 struct GoogleCalendarStartResponseDTO: Decodable {
     let authorizationUrl: String
 }
@@ -469,6 +502,30 @@ actor MemdoAPIClient {
     func deleteCalendar(id: String, accessToken: String) async throws {
         let _: CalendarDeleteResponseDTO = try await send(
             path: "calendars/\(id)",
+            method: "DELETE",
+            accessToken: accessToken
+        )
+    }
+
+    func googleSyncedCalendars(accessToken: String) async throws -> GoogleSyncedCalendarsListResponseDTO {
+        try await send(path: "google-calendar-synced-calendars", accessToken: accessToken)
+    }
+
+    func addGoogleSyncedCalendar(
+        _ input: GoogleSyncedCalendarCreateRequestDTO,
+        accessToken: String
+    ) async throws -> GoogleSyncedCalendarDTO {
+        try await send(
+            path: "google-calendar-synced-calendars",
+            method: "POST",
+            body: encoder.encode(input),
+            accessToken: accessToken
+        )
+    }
+
+    func removeGoogleSyncedCalendar(id: String, accessToken: String) async throws {
+        let _: GoogleSyncedCalendarDeleteResponseDTO = try await send(
+            path: "google-calendar-synced-calendars/\(id)",
             method: "DELETE",
             accessToken: accessToken
         )
@@ -1034,6 +1091,21 @@ actor ScheduleRepository {
 
     func deleteCalendar(id: String) async throws {
         try await api.deleteCalendar(id: id, accessToken: accessToken())
+    }
+
+    func googleSyncedCalendars() async throws -> GoogleSyncedCalendarsListResponseDTO {
+        try await api.googleSyncedCalendars(accessToken: accessToken())
+    }
+
+    func addGoogleSyncedCalendar(googleCalendarId: String, summary: String) async throws -> GoogleSyncedCalendarDTO {
+        try await api.addGoogleSyncedCalendar(
+            GoogleSyncedCalendarCreateRequestDTO(googleCalendarId: googleCalendarId, summary: summary),
+            accessToken: accessToken()
+        )
+    }
+
+    func removeGoogleSyncedCalendar(id: String) async throws {
+        try await api.removeGoogleSyncedCalendar(id: id, accessToken: accessToken())
     }
 
     func replaceCategories(_ categories: [ScheduleUserCategory]) async throws -> [ScheduleUserCategory] {
