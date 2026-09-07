@@ -167,6 +167,12 @@ struct ScheduleDetailSheet: View {
             }
         }
         .memdoSheetPresentation([.large])
+        // A save from here doesn't always dismiss (editOrSave()'s save
+        // branch just flips isEditing off, staying on this screen) --
+        // without its own toast host, a queued-offline/error notice fired
+        // while the user lingers here would be invisible until they later
+        // happen to view a screen that has one.
+        .appNoticeToast()
         .onChange(of: liveVersion) { _, _ in resyncVersionFromStore() }
         .confirmationDialog(
             "일정을 삭제할까요?",

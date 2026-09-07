@@ -4,6 +4,7 @@ struct CalendarView: View {
     let coachMarkTarget: CoachMarkTarget?
     @Environment(ScheduleStore.self) private var scheduleStore
     @Environment(WorkoutStore.self) private var workoutStore
+    @Environment(AppNoticeCenter.self) private var noticeCenter
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isSearchPresented: Bool
     @Binding var targetDate: Date?
@@ -135,9 +136,9 @@ struct CalendarView: View {
             case .day(let date):
                 DayAgendaSheet(date: date)
             case .add(let date, let kind):
-                AddScheduleSheet(date: date, defaultKind: kind, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
+                AddScheduleSheet(date: date, defaultKind: kind, onSave: saveEdited)
             case .detail(let schedule):
-                ScheduleDetailSheet(schedule: schedule, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
+                ScheduleDetailSheet(schedule: schedule, onSave: saveEdited)
             }
         }
         .sheet(item: $selectedWorkout) { workout in
@@ -157,6 +158,14 @@ struct CalendarView: View {
             }
         }
         .task { googleCalendarConnected = (try? await scheduleStore.googleCalendarStatus())?.connected == true }
+    }
+
+    private func saveEdited(_ edited: ScheduleDetail) {
+        Task {
+            if let outcome = try? await scheduleStore.save(edited) {
+                noticeCenter.reportWriteOutcome(outcome)
+            }
+        }
     }
 
     private func select(_ date: Date) {
@@ -585,6 +594,7 @@ private struct DayAgendaSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScheduleStore.self) private var scheduleStore
     @Environment(WorkoutStore.self) private var workoutStore
+    @Environment(AppNoticeCenter.self) private var noticeCenter
     let date: Date
     @State private var presentedSheet: DayAgendaDestination?
     @State private var selectedWorkout: WorkoutLog?
@@ -596,6 +606,14 @@ private struct DayAgendaSheet: View {
 
     private var dayWorkouts: [WorkoutLog] {
         workoutStore.workouts(on: date)
+    }
+
+    private func saveEdited(_ edited: ScheduleDetail) {
+        Task {
+            if let outcome = try? await scheduleStore.save(edited) {
+                noticeCenter.reportWriteOutcome(outcome)
+            }
+        }
     }
 
     var body: some View {
@@ -638,9 +656,9 @@ private struct DayAgendaSheet: View {
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
             case .add:
-                AddScheduleSheet(date: date, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
+                AddScheduleSheet(date: date, onSave: saveEdited)
             case .detail(let schedule):
-                ScheduleDetailSheet(schedule: schedule, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
+                ScheduleDetailSheet(schedule: schedule, onSave: saveEdited)
             }
         }
         .sheet(item: $selectedWorkout) { workout in

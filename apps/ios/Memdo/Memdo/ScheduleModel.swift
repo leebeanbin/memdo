@@ -486,6 +486,29 @@ enum ScheduleWriteOutcome {
     case createdStatusQueuedOffline
 }
 
+extension AppNoticeCenter {
+    /// Surfaces a schedule write's outcome as a toast, for callers that
+    /// don't already build their own richer feedback from the same value
+    /// (AssistantView's chat bubbles do -- see writeOutcomeMessage there --
+    /// and deliberately never call this, so a chat-originated save doesn't
+    /// also pop an out-of-context toast later). `.committed` says nothing:
+    /// the optimistic UI update already reflects it instantly, and a
+    /// hard failure already gets its own `.error(...)` call inside
+    /// ScheduleStore's write methods before they throw -- this only covers
+    /// the one outcome that previously had no feedback at all: a write that
+    /// didn't fail, but also didn't reach the server yet.
+    func reportWriteOutcome(_ outcome: ScheduleWriteOutcome) {
+        switch outcome {
+        case .committed:
+            break
+        case .queuedOffline:
+            success("오프라인이라 변경을 저장 대기 중이에요. 연결되면 동기화할게요.")
+        case .createdStatusQueuedOffline:
+            success("일정은 만들어졌고, 완료 표시는 오프라인이라 동기화 대기 중이에요.")
+        }
+    }
+}
+
 /// Distinguishes exactly the failure shapes this Store's mutation methods
 /// need to give the caller an honest, non-generic message -- not a general
 /// error-wrapping abstraction, just the specific cases found while fixing

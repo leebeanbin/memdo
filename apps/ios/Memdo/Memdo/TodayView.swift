@@ -13,6 +13,7 @@ struct TodayView: View {
     let onOpenGuide: () -> Void
     @Environment(ScheduleStore.self) private var scheduleStore
     @Environment(WorkoutStore.self) private var workoutStore
+    @Environment(AppNoticeCenter.self) private var noticeCenter
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var presentedSheet: TodaySheetDestination?
@@ -180,11 +181,11 @@ struct TodayView: View {
             .sheet(item: $presentedSheet) { destination in
                 switch destination {
                 case .addTask(let date):
-                    AddScheduleSheet(date: date, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
+                    AddScheduleSheet(date: date, onSave: saveEdited)
                 case .dailySummary(let date):
                     DailySummaryView(date: date)
                 case .detail(let schedule):
-                    ScheduleDetailSheet(schedule: schedule, onSave: { edited in Task { try? await scheduleStore.save(edited) } })
+                    ScheduleDetailSheet(schedule: schedule, onSave: saveEdited)
                 }
             }
             .sheet(item: $selectedWorkout) { workout in
@@ -245,7 +246,19 @@ struct TodayView: View {
     }
 
     private func toggleDone(_ schedule: ScheduleDetail) {
-        Task { try? await scheduleStore.toggleDone(id: schedule.id) }
+        Task {
+            if let outcome = try? await scheduleStore.toggleDone(id: schedule.id) {
+                noticeCenter.reportWriteOutcome(outcome)
+            }
+        }
+    }
+
+    private func saveEdited(_ edited: ScheduleDetail) {
+        Task {
+            if let outcome = try? await scheduleStore.save(edited) {
+                noticeCenter.reportWriteOutcome(outcome)
+            }
+        }
     }
 
     private func toggleSchedules() {

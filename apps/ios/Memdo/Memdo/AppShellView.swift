@@ -30,6 +30,7 @@ struct AppShellView: View {
     let scheduleStore: ScheduleStore
     @Environment(WorkoutStore.self) private var workoutStore
     @Environment(MemdoSession.self) private var session
+    @Environment(AppNoticeCenter.self) private var noticeCenter
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = AppTab.today
@@ -241,9 +242,7 @@ struct AppShellView: View {
         .sensoryFeedback(.selection, trigger: selectedTab)
         .onOpenURL(perform: openDeepLink)
         .sheet(item: $scheduleSheet) { schedule in
-            ScheduleDetailSheet(schedule: schedule) { edited in
-                Task { try? await scheduleStore.save(edited) }
-            }
+            ScheduleDetailSheet(schedule: schedule, onSave: saveEdited)
         }
     }
 
@@ -259,6 +258,14 @@ struct AppShellView: View {
                 }
             }
         )
+    }
+
+    private func saveEdited(_ edited: ScheduleDetail) {
+        Task {
+            if let outcome = try? await scheduleStore.save(edited) {
+                noticeCenter.reportWriteOutcome(outcome)
+            }
+        }
     }
 
     private func openDeepLink(_ url: URL) {
@@ -281,7 +288,7 @@ struct AppShellView: View {
                !schedule.isDone {
                 var completed = schedule
                 completed.isDone = true
-                Task { try? await scheduleStore.save(completed) }
+                saveEdited(completed)
             }
         case "schedule":
             // memdo://schedule/{uuid} — tap on a per-schedule reminder
@@ -327,7 +334,9 @@ struct AppShellView: View {
             )
             schedule.memo = event.notes
             if let url = event.meetingURL { schedule.meetingURLString = url.absoluteString }
-            try? await scheduleStore.save(schedule)
+            if let outcome = try? await scheduleStore.save(schedule) {
+                noticeCenter.reportWriteOutcome(outcome)
+            }
         }
     }
 
