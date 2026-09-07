@@ -49,8 +49,8 @@ targets:
     platform: iOS
     sources:
       - MemdoWidget
-      - Memdo/MemdoWidgetSchedule.swift
-      - Memdo/MemdoLiveActivity.swift
+      - Memdo/Widgets/MemdoWidgetSchedule.swift
+      - Memdo/Widgets/MemdoLiveActivity.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memdo.ios.widget
@@ -64,7 +64,7 @@ targets:
     platform: iOS
     sources:
       - MemdoShare
-      - Memdo/PendingWorkoutStore.swift
+      - Memdo/Workout/PendingWorkoutStore.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.memdo.ios.share
