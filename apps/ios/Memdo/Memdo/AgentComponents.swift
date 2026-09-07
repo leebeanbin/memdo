@@ -484,6 +484,14 @@ struct ProposedScheduleUpdateCard: View {
     /// True while the confirm tap's Store mutation is actually in flight --
     /// disables the button so a rapid double-tap can't fire two requests.
     var isApplying: Bool = false
+    /// True only when the target is a still-external (isExternal), never-
+    /// touched-in-Memdo Google-mirrored item -- confirming converts it into
+    /// a permanently Memdo-owned, push-back row (materialize-on-edit), a
+    /// real one-time behavior change with no other framing anywhere in the
+    /// confirm flow. AssistantView looks this up locally from the proposal's
+    /// id before construction; the server-side proposal DTO carries no
+    /// origin info to derive it from here.
+    var isFromGoogleCalendar: Bool = false
     let onConfirm: () -> Void
     let onDecline: () -> Void
 
@@ -536,6 +544,15 @@ struct ProposedScheduleUpdateCard: View {
                     .font(MemdoTypography.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
                     .lineLimit(1)
+                }
+
+                if isFromGoogleCalendar {
+                    Label(
+                        "Google Calendar에서 가져온 일정이에요. 적용하면 Memdo 일정으로 전환되고, Google Calendar에도 반영돼요.",
+                        systemImage: "arrow.triangle.2.circlepath"
+                    )
+                    .font(MemdoTypography.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
                 }
 
                 // Reflection result, same convention as ProposedScheduleCard

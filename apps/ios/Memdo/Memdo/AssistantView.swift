@@ -111,6 +111,18 @@ struct AgentSheet: View {
     /// action racing in on the same id from elsewhere, e.g. TodayView).
     @State private var isApplyingProposal = false
     @State private var isApplyingUpdateProposal = false
+
+    /// See ProposedScheduleUpdateCard.isFromGoogleCalendar's doc comment --
+    /// the server-side proposal only ever carries an id, never origin, so
+    /// this cross-references the store's already-loaded schedules (which
+    /// do know isExternal) at render time rather than the backend needing
+    /// to send anything new.
+    private var updateProposalIsFromGoogleCalendar: Bool {
+        guard let idString = updateProposal.id, let id = UUID(uuidString: idString) else {
+            return false
+        }
+        return scheduleStore.schedules.first(where: { $0.id == id })?.isExternal ?? false
+    }
     // fd11: same in-flight guard/feedback as isApplyingProposal above,
     // previously missing entirely for these two proposal kinds.
     @State private var isApplyingRoutineProposal = false
@@ -235,7 +247,11 @@ struct AgentSheet: View {
                 }
             }
             if updateProposal.isPending {
-                ProposedScheduleUpdateCard(proposal: updateProposal, isApplying: isApplyingUpdateProposal) {
+                ProposedScheduleUpdateCard(
+                    proposal: updateProposal,
+                    isApplying: isApplyingUpdateProposal,
+                    isFromGoogleCalendar: updateProposalIsFromGoogleCalendar
+                ) {
                     Task { await confirmScheduleUpdateProposal() }
                 } onDecline: {
                     declineScheduleUpdateProposal()
