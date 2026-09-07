@@ -328,7 +328,14 @@ struct ScheduleEditorFields: View {
                             }
                         }
                         Section("캘린더") {
-                            ForEach(scheduleStore.calendars) { cal in
+                            // Google 캘린더(연결의 합성 항목 + 구독 중인
+                            // 추가 캘린더)는 읽기 전용 구독이라 새 항목의
+                            // 대상으로 고를 수 없음 -- 골라도 서버가 400을
+                            // 반환할 뿐이었음. schedule.calendar가 이미
+                            // Google 항목을 가리키는 경우(머티리얼라이즈된
+                            // 항목 편집)는 이 목록과 무관하게 위 라벨에서
+                            // 그대로 정상 표시됨.
+                            ForEach(scheduleStore.calendars.filter { $0.provider != .google }) { cal in
                                 Button { schedule.calendar = cal } label: {
                                     Label(
                                         cal.title,
@@ -729,7 +736,10 @@ struct AddScheduleSheet: View {
                         if !selectedCategory.isWorkout && !scheduleStore.calendars.isEmpty {
                             Divider()
                             Section("캘린더") {
-                                ForEach(scheduleStore.calendars) { cal in
+                                // Google 캘린더는 읽기 전용 구독이라 새
+                                // 항목의 대상으로 고를 수 없음 -- 위
+                                // ScheduleEditorFields의 동일한 필터 참고.
+                                ForEach(scheduleStore.calendars.filter { $0.provider != .google }) { cal in
                                     Button { draft.calendar = cal } label: {
                                         Label(
                                             cal.title,
