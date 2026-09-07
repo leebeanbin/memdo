@@ -280,6 +280,11 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
     /// virtual occurrence handling). Saving/completing/deleting one must create
     /// the real row first (ScheduleStore routes this transparently).
     var isVirtual: Bool
+    /// Non-nil once this Memdo-origin item has been pushed to Google
+    /// Calendar at least once. Always nil for a Google-mirrored item
+    /// (`isExternal`) -- that direction is shown via its own "출처" label,
+    /// not this.
+    var googleEventId: String?
 
     init(
         id: UUID = UUID(),
@@ -305,7 +310,8 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         emoji: String? = nil,
         estimatedMinutes: Int? = nil,
         meetingURLString: String? = nil,
-        isVirtual: Bool = false
+        isVirtual: Bool = false,
+        googleEventId: String? = nil
     ) {
         self.id = id
         self.scheduledDate = Calendar.current.startOfDay(for: scheduledDate)
@@ -333,9 +339,14 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         self.estimatedMinutes = estimatedMinutes
         self.meetingURLString = meetingURLString.flatMap { $0.isEmpty ? nil : $0 }
         self.isVirtual = isVirtual
+        self.googleEventId = googleEventId
     }
 
     var source: String { calendar.provider.displayName }
+    /// True once this Memdo-origin item has actually been pushed to Google
+    /// Calendar -- the real signal behind the detail sheet's sync badge
+    /// (see ScheduleDetailHeader), not the calendar's provider alone.
+    var isSyncedToGoogle: Bool { googleEventId != nil }
     var isExternal: Bool { calendar.provider == .google }
     // Rescheduled/cancelled/skipped entries are kept for history but hidden from
     // the active lists so a moved item doesn't leave a ghost on its old day.

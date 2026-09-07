@@ -263,9 +263,19 @@ private struct ScheduleDetailHeader: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(schedule.source)
-                        .font(MemdoTypography.captionEmphasis)
-                        .foregroundStyle(MemdoTheme.secondaryInk)
+                    // schedule.source used to render unconditionally here --
+                    // "내 일정" for every Memdo-origin item regardless of
+                    // whether it was ever pushed to Google, which a real
+                    // user read as "this only lives locally" once two-way
+                    // sync existed to make that untrue. Only shown now when
+                    // there's something genuinely informative to say: the
+                    // item's real origin (Google) or its real sync outcome
+                    // (actually pushed) -- never a static ownership label.
+                    if let syncStatusLabel {
+                        Text(syncStatusLabel)
+                            .font(MemdoTypography.captionEmphasis)
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                    }
                     if let c = schedule.color {
                         Circle()
                             .fill(c.swiftUIColor)
@@ -285,6 +295,12 @@ private struct ScheduleDetailHeader: View {
                     .foregroundStyle(MemdoTheme.accent)
             }
         }
+    }
+
+    private var syncStatusLabel: String? {
+        if schedule.isExternal { return schedule.source }
+        if schedule.isSyncedToGoogle { return "Google Calendar 동기화됨" }
+        return nil
     }
 }
 

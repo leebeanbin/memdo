@@ -198,6 +198,12 @@ struct TodoResponseDTO: Decodable {
     // ships before the backend deploys the field doesn't hard-fail decoding
     // the entire todos list over one missing key.
     let isVirtual: Bool?
+    // Non-nil once this item has been pushed to Google Calendar at least
+    // once (two-way sync) -- lets the client show a real "동기화됨" signal
+    // instead of a static label that used to read as "this only lives
+    // locally" regardless of connection/push state.
+    let googleEventId: String?
+    let googleSyncedAt: String?
 }
 
 struct TodoCreateRequestDTO: Encodable {
@@ -1246,6 +1252,7 @@ extension ScheduleDetail {
         estimatedMinutes = dto.estimatedMinutes
         meetingURLString = dto.meetingUrl.flatMap { $0.isEmpty ? nil : $0 }
         isVirtual = dto.isVirtual ?? false
+        googleEventId = dto.googleEventId
     }
 }
 

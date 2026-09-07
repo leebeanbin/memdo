@@ -156,9 +156,14 @@ struct ScheduleRow: View {
         } else {
             timing = "할 일 · \(schedule.startTimeText)"
         }
-        return schedule.isExternal
-            ? "\(timing) · \(schedule.calendar.title)"
-            : "\(timing) · \(schedule.calendar.title) · \(schedule.source)"
+        // schedule.source used to be appended for every Memdo-origin row
+        // here too ("... · 내 일정", always the same text regardless of
+        // Google sync state) -- dropped as pure noise: the calendar title
+        // right before it already conveys ownership, and repeating a sync
+        // status on every row of a dense list added clutter without new
+        // information. The real, accurate signal now lives in the one place
+        // it's actually inspected -- ScheduleDetailHeader's sync badge.
+        return "\(timing) · \(schedule.calendar.title)"
     }
 }
 
