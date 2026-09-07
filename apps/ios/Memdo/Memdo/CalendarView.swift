@@ -977,6 +977,15 @@ extension Date {
         return fmt.string(from: self)
     }
 
+    /// "9월 2일 오후 3:22" -- for a "마지막 동기화" style timestamp, where the
+    /// exact time of day matters (unlike the date-only helpers above).
+    var memdoMonthDayTime: String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "ko_KR")
+        fmt.dateFormat = "M월 d일 a h:mm"
+        return fmt.string(from: self)
+    }
+
     /// "2026년 8월 12일 수요일"
     var memdoFullDate: String {
         let fmt = DateFormatter()

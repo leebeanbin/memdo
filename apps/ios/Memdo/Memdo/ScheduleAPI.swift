@@ -92,6 +92,13 @@ struct GoogleCalendarStatusResponseDTO: Decodable {
     let calendarId: String?
     let lastSyncedAt: String?
     let lastError: String?
+    // Optional (defaults applied at the mapping site below) so a build
+    // shipped before the backend deploys these fields still decodes the
+    // rest of the status response instead of hard-failing on one missing
+    // key -- same convention as isVirtual/categoryId elsewhere in this file.
+    let needsReconnect: Bool?
+    let pendingCount: Int?
+    let failedCount: Int?
 }
 
 struct GoogleCalendarDisconnectResponseDTO: Decodable {
@@ -672,6 +679,14 @@ actor MemdoAPIClient {
         try await send(path: "google-calendar-status", accessToken: accessToken)
     }
 
+    /// "다시 시도" -- resets attempts/last_error server-side for this
+    /// user's own permanently-failed push rows only, then returns the same
+    /// status shape (with the now-updated failedCount) so the caller can
+    /// refresh its display from one round-trip.
+    func retryGoogleCalendarPush(accessToken: String) async throws -> GoogleCalendarStatusResponseDTO {
+        try await send(path: "google-calendar-status", method: "POST", accessToken: accessToken)
+    }
+
     func googleCalendarDisconnect(accessToken: String) async throws -> GoogleCalendarDisconnectResponseDTO {
         try await send(path: "google-calendar-disconnect", method: "POST", accessToken: accessToken)
     }
@@ -1053,6 +1068,10 @@ actor ScheduleRepository {
         try await api.googleCalendarStatus(accessToken: accessToken())
     }
 
+    func retryGoogleCalendarPush() async throws -> GoogleCalendarStatusResponseDTO {
+        try await api.retryGoogleCalendarPush(accessToken: accessToken())
+    }
+
     func googleCalendarDisconnect() async throws {
         _ = try await api.googleCalendarDisconnect(accessToken: accessToken())
     }
@@ -1266,7 +1285,7 @@ private struct ErrorEnvelope: Decodable {
     let error: APIError
 }
 
-private enum APIDate {
+enum APIDate {
     // ISO8601DateFormatter is expensive to create; formatting/parsing on a shared
     // read-only instance is thread-safe, so cache one per format policy.
     nonisolated(unsafe) private static let standardFormatter = ISO8601DateFormatter()

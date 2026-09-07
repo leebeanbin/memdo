@@ -76,6 +76,15 @@ struct SettingsView: View {
                     SettingsDisclosureRow(title: "캘린더 관리", value: "\(scheduleStore.calendars.count)개")
                 }
                 .buttonStyle(.plain)
+                Divider()
+                // Google Calendar 연결은 Agent 설정 안에도 여전히 있음
+                // (연결된 서비스 목록으로도 자연스러운 위치) -- 여기 추가된
+                // 항목은 "캘린더" 기능으로 먼저 찾아보는 사용자를 위한
+                // 진입점으로, 기존 경로를 대체하지 않고 덧붙인 것.
+                Button { presentedSheet = .googleCalendar } label: {
+                    SettingsDisclosureRow(title: "Google Calendar 연동", value: "관리")
+                }
+                .buttonStyle(.plain)
             }
 
             SettingsGroup(title: "Agent", icon: "sparkles") {
@@ -219,6 +228,8 @@ struct SettingsView: View {
                 GuestUpgradeSheet()
             case .calendars:
                 CalendarManagementSheet()
+            case .googleCalendar:
+                GoogleCalendarConnectionSheet()
             case .routines:
                 RoutineSettingsSheet(
                     notifications: $notifications,
@@ -510,6 +521,7 @@ private enum SettingsSheet: String, Identifiable {
     case guestUpgrade
     case routines
     case calendars
+    case googleCalendar
     var id: String { rawValue }
 }
 

@@ -9,17 +9,65 @@ private final class GoogleCalendarAuthPresentationContext: NSObject,
     }
 }
 
+/// Derived from GoogleCalendarStatusResponseDTO -- a connection that's
+/// `status: 'error'`/`'revoked'`, or `'active'` but missing write scope
+/// (`needsReconnect`), genuinely needs the user to reconnect; one that's
+/// `'active'` with a non-null `lastError` is a transient hiccup
+/// (rate-limited/unclassified) the backend already keeps retrying on its
+/// own -- these used to be visually indistinguishable (both just showed
+/// the plain "연결" button, identical to never having connected at all).
+private enum GoogleCalendarConnectionState {
+    case neverConnected
+    case needsReconnect(reason: String)
+    case transient
+    case connected
+}
+
 struct GoogleCalendarConnectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ScheduleStore.self) private var scheduleStore
     @Environment(AppNoticeCenter.self) private var noticeCenter
     @State private var status: GoogleCalendarStatusResponseDTO?
     @State private var isBusy = false
+    @State private var isRetrying = false
     @State private var authSession: ASWebAuthenticationSession?
     @State private var showSyncedCalendars = false
     private let presentationContext = GoogleCalendarAuthPresentationContext()
 
-    private var isConnected: Bool { status?.connected == true }
+    private var connectionState: GoogleCalendarConnectionState {
+        guard let status, status.status != "disconnected" else { return .neverConnected }
+        if status.status == "revoked" {
+            return .needsReconnect(reason: "연결이 취소됐어요. 다시 연결해주세요.")
+        }
+        if status.status == "error" {
+            switch status.lastError {
+            case "auth_expired":
+                return .needsReconnect(reason: "연결이 만료됐어요. 다시 연결해주세요.")
+            case "calendar_not_found":
+                return .needsReconnect(reason: "연결된 캘린더를 찾을 수 없어요. 다시 연결하거나 다른 캘린더를 선택해주세요.")
+            default:
+                return .needsReconnect(reason: "연결에 문제가 생겼어요. 다시 연결해주세요.")
+            }
+        }
+        // status == 'active' from here.
+        if status.needsReconnect == true {
+            return .needsReconnect(reason: "쓰기 권한이 없어요. 다시 연결하면 Memdo에서 만든 일정도 Google Calendar에 반영돼요.")
+        }
+        if status.lastError != nil {
+            return .transient
+        }
+        return .connected
+    }
+
+    // "다른 캘린더 추가"/마지막 동기화/연결 해지는 실제로 연결이 살아있는
+    // 상태(정상 연결 + 일시적 오류 둘 다) 모두에서 유효 -- 재연결이
+    // 필요한 상태에서만 숨김.
+    private var showsConnectedSections: Bool {
+        switch connectionState {
+        case .connected, .transient: true
+        case .neverConnected, .needsReconnect: false
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -42,7 +90,21 @@ struct GoogleCalendarConnectionSheet: View {
                 Section("권한 원칙") {
                     Label("양방향 동기화 — 서로 만들거나 수정한 일정이 상대방에도 반영돼요", systemImage: "arrow.triangle.2.circlepath.circle")
                 }
-                if isConnected {
+                switch connectionState {
+                case .needsReconnect(let reason):
+                    Section {
+                        Label(reason, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                case .transient:
+                    Section {
+                        Label("지금 요청이 많이 몰려 있어요. 잠시 후 자동으로 다시 시도해요.", systemImage: "clock.arrow.circlepath")
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                    }
+                case .neverConnected, .connected:
+                    EmptyView()
+                }
+                if showsConnectedSections {
                     Section {
                         Button {
                             showSyncedCalendars = true
@@ -54,7 +116,7 @@ struct GoogleCalendarConnectionSheet: View {
                     }
                     Section {
                         if let lastSyncedAt = status?.lastSyncedAt {
-                            LabeledContent("마지막 동기화", value: lastSyncedAt)
+                            LabeledContent("마지막 동기화", value: formattedSyncTime(lastSyncedAt))
                         }
                         Button(role: .destructive, action: disconnect) {
                             if isBusy {
@@ -77,10 +139,30 @@ struct GoogleCalendarConnectionSheet: View {
                                     Text("연결 중")
                                 }
                             } else {
-                                Text("Google Calendar 연결")
+                                switch connectionState {
+                                case .needsReconnect: Text("다시 연결")
+                                default: Text("Google Calendar 연결")
+                                }
                             }
                         }
                             .disabled(isBusy)
+                    }
+                }
+                if let failedCount = status?.failedCount, failedCount > 0 {
+                    Section {
+                        Label("\(failedCount)개 일정이 Google Calendar에 반영되지 못했어요.", systemImage: "exclamationmark.circle")
+                            .foregroundStyle(MemdoTheme.destructive)
+                        Button(action: retry) {
+                            if isRetrying {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                    Text("다시 시도하는 중")
+                                }
+                            } else {
+                                Text("다시 시도")
+                            }
+                        }
+                            .disabled(isRetrying)
                     }
                 }
                 if noticeCenter.current != nil {
@@ -106,12 +188,29 @@ struct GoogleCalendarConnectionSheet: View {
         }
     }
 
+    private func formattedSyncTime(_ raw: String) -> String {
+        (try? APIDate.parseInstant(raw))?.memdoMonthDayTime ?? raw
+    }
+
     private func loadStatus() async {
         do {
             status = try await scheduleStore.googleCalendarStatus()
         } catch {
             // Silent: an unknown connection state just shows the "연결" button,
             // which re-checks on the next action anyway.
+        }
+    }
+
+    private func retry() {
+        isRetrying = true
+        Task {
+            defer { isRetrying = false }
+            do {
+                status = try await scheduleStore.retryGoogleCalendarPush()
+                noticeCenter.success("다시 시도했어요.")
+            } catch {
+                noticeCenter.error("다시 시도하지 못했어요. 잠시 후 다시 시도해 주세요.")
+            }
         }
     }
 
@@ -207,7 +306,13 @@ struct GoogleSyncedCalendarsPickerSheet: View {
                         Section {
                             ForEach(available) { calendar in
                                 Toggle(isOn: bindingFor(calendar)) {
-                                    Text(calendar.summary)
+                                    HStack {
+                                        Text(calendar.summary)
+                                        if busyCalendarId == calendar.googleCalendarId {
+                                            Spacer()
+                                            ProgressView()
+                                        }
+                                    }
                                 }
                                 .disabled(busyCalendarId == calendar.googleCalendarId)
                             }
