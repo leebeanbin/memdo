@@ -286,6 +286,7 @@ private struct ScheduleDetailHeader: View {
                         Circle()
                             .fill(c.swiftUIColor)
                             .frame(width: 8, height: 8)
+                            .accessibilityHidden(true)
                     }
                 }
                 HStack(spacing: 4) {

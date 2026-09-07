@@ -314,6 +314,7 @@ struct AgentMarkdownText: View {
                     HStack(alignment: .top, spacing: 6) {
                         Text("•")
                             .foregroundStyle(MemdoTheme.secondaryInk)
+                            .accessibilityHidden(true)
                         Text(Self.inlineAttributed(line.content))
                     }
                 } else if let level = line.headingLevel {
@@ -324,6 +325,9 @@ struct AgentMarkdownText: View {
                         // very first line) so sections read as separated,
                         // not just differently weighted inline text.
                         .padding(.top, line.id == allLines.first?.id ? 0 : 6)
+                        // Lets VoiceOver's Headings rotor navigate a long
+                        // assistant response by section.
+                        .accessibilityAddTraits(.isHeader)
                 } else {
                     Text(Self.inlineAttributed(line.content))
                 }

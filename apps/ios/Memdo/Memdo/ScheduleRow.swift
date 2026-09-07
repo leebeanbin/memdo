@@ -55,11 +55,16 @@ struct ScheduleRow: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(schedule.isDone ? "완료 취소" : "완료로 표시")
             } else {
+                // Not hidden, unlike every other decorative marker in this
+                // function -- in this non-interactive (no onToggleDone)
+                // variant, this checkmark is the only place completion
+                // state exists at all for VoiceOver; rowContent's own
+                // title text carries no "완료됨" equivalent.
                 Image(systemName: schedule.isDone ? "checkmark.circle.fill" : "circle")
                     .font(MemdoTypography.title3)
                     .foregroundStyle(schedule.isDone ? MemdoTheme.secondaryInk : activeColor)
                     .frame(width: MemdoMetrics.rowLeadingWidth, height: MemdoMetrics.touchTarget)
-                    .accessibilityHidden(true)
+                    .accessibilityLabel(schedule.isDone ? "완료됨" : "완료 안 됨")
             }
         } else if context == .timeline && !dynamicTypeSize.isAccessibilitySize {
             EventTimeMarker(schedule: schedule, accentColor: schedule.color?.swiftUIColor)
@@ -145,6 +150,13 @@ struct ScheduleRow: View {
         // wrong value (the exact shape of fd4/fd14's bugs).
         .frame(maxWidth: .infinity, minHeight: MemdoMetrics.touchTarget, alignment: .leading)
         .contentShape(Rectangle())
+        // Without this, VoiceOver stops separately at the time text,
+        // meeting/repeat icons, title, and metadata line -- 4-6 swipes for
+        // one row -- instead of announcing the whole thing as one unit.
+        // The task-completion checkbox is unaffected: it lives in the
+        // sibling leadingMarker, not inside rowContent, so it stays its
+        // own separately-labeled action regardless of this.
+        .accessibilityElement(children: .combine)
     }
 
     private var metadata: String {
