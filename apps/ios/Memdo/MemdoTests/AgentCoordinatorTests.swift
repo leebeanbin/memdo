@@ -117,6 +117,17 @@ final class AgentCoordinatorTests: XCTestCase {
         XCTAssertEqual(collected.withLock { $0 }.last, .failed(.cloudConnectionRequired))
     }
 
+    func test_rateLimited_normalizesFromRateLimitedCode() async {
+        let cloud = FakeAgentRuntime(kind: .cloud)
+        cloud.errorToThrow = ScheduleAPIError.server(status: 429, code: "RATE_LIMITED", message: "x", requestID: nil)
+        let coordinator = AgentCoordinator(onDeviceRuntimeFactory: nil, cloudRuntime: cloud)
+        let collected = OSAllocatedUnfairLock(initialState: [AgentCoordinatorEvent]())
+
+        await awaitTerminal(coordinator, onDeviceAvailable: false, collected: collected)
+
+        XCTAssertEqual(collected.withLock { $0 }.last, .failed(.rateLimited))
+    }
+
     func test_genericError_normalizesToRuntimeFailure() async {
         struct SomeError: Error {}
         let cloud = FakeAgentRuntime(kind: .cloud)

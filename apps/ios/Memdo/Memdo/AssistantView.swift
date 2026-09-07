@@ -519,6 +519,13 @@ struct AgentSheet: View {
             case .runtimeFailure:
                 messages[index].text = "오류가 발생했어요. 다시 시도해주세요."
                 messages[index].isError = true
+            case .rateLimited:
+                // A transient upstream rate limit (confirmed live: the
+                // shared OpenRouter model pool), not a real failure --
+                // distinct copy so the user knows retrying shortly should
+                // actually help, unlike .runtimeFailure's generic message.
+                messages[index].text = "지금 요청이 많이 몰려 있어요. 잠시 후 다시 시도해주세요."
+                messages[index].isError = true
             }
             // Same reasoning as the .finished announcement above -- a
             // VoiceOver user needs to know a turn failed (and why), not just

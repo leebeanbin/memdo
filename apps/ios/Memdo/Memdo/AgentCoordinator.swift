@@ -26,6 +26,11 @@ enum AgentCoordinatorEvent: Equatable, Sendable {
 enum AgentExecutionFailure: Equatable, Sendable {
     case cloudConnectionRequired
     case runtimeFailure
+    /// Backend classified the failure as RATE_LIMITED (confirmed live: the
+    /// shared OpenRouter model pool 429s repeatedly) -- distinct from
+    /// .runtimeFailure so AssistantView can show "retry shortly, this
+    /// isn't broken" copy instead of the generic failure message.
+    case rateLimited
 }
 
 /// Owns Agent execution lifecycle: which runtime a turn goes to
@@ -138,8 +143,9 @@ final class AgentCoordinator {
     }
 
     private static func normalize(_ error: Error) -> AgentExecutionFailure {
-        if case ScheduleAPIError.server(_, let code, _, _) = error, code == "RESOURCE_NOT_FOUND" {
-            return .cloudConnectionRequired
+        if case ScheduleAPIError.server(_, let code, _, _) = error {
+            if code == "RESOURCE_NOT_FOUND" { return .cloudConnectionRequired }
+            if code == "RATE_LIMITED" { return .rateLimited }
         }
         return .runtimeFailure
     }
