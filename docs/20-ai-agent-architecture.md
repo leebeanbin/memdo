@@ -8,7 +8,7 @@
 > **개정(2026-08-22)**: 이 문서는 [ADR-073](./10-decisions-and-open-questions.md)이 대체한
 > `OpenAI Responses API + 서버 오케스트레이션` 단일 경로 설계를 실제 구현(온디바이스
 > FoundationModels + 사용자 BYOK OpenRouter 2트랙) 기준으로 다시 썼다. 1·2·5·5-1·8·9·10·11·12·13·14절과
-> 15절의 "Model registry"는 `apps/ios/Memdo/Memdo/AssistantView.swift`·`AgentTools.swift`와
+> 15절의 "Model registry"는 `apps/ios/Memdo/Memdo/Agent/AssistantView.swift`·`AgentTools.swift`와
 > `memdo-backend/supabase/functions/agent-cloud-chat`·`_shared/agent-cloud-contract.ts`를 정답으로
 > 삼아 갱신했다. 3·4절과 15절의 나머지 하위 절(의미 검색·Agents SDK·다중 Agent·MCP)은 원래 설계와
 > 실제 구현이 여전히 같은 방향이라 유지했다.
@@ -196,7 +196,7 @@ LLM은 Agent 그 자체가 아니라 **자연어를 제한된 도구 호출로 �
 | iOS `resolveAgentDateToken`이 파싱 실패한 날짜 토큰을 처리하는 방식 | **해결됨** — 함수 자체를 제거하고 실패 가능한 `AgentDateExpression(token:)`(`AgentIntent.swift`)로 대체. `ProposeScheduleTool`/`UpdateScheduleTool`/`FindFreeSlotTool.call(arguments:)`와 `AssistantView`의 클라우드 응답 스테이징 지점 모두 파싱 실패 시 스테이징하지 않고 설명 문자열만 반환한다. `UpdateScheduleTool.Arguments.action`도 제약 없는 `String`에서 `AgentUpdateAction` enum 검증으로 바뀌었고, `AssistantView`의 `switch action`도 `default: break`가 아니라 명시적 에러 메시지를 남긴다 |
 | `propose_routine_update`/`propose_review_actions`의 확인 카드 | **미구현, Sprint 1 범위 밖** — 서버는 정상적으로 제안을 staging해서 `done` payload에 싣지만(§8), iOS `ScheduleAPI.swift`의 Decodable DTO에 해당 필드가 없어 조용히 무시된다. 지금 이 두 도구를 모델이 호출하면 화면에 아무 반응도 없다 |
 
-**v1에서 하지 않은 것**: `propose_routine_update`/`propose_review_actions` 확인 카드, Eval Dataset 구축(§14, **이후 Epic E/F-1/F-2로 부분적으로 해소** -- `agent-v0` 38-case 코퍼스 + 자동 러너는 생겼지만 §14의 100-case 목표 세트 자체는 여전히 없음), 모델 capability 기반 registry(§15, **이후 Epic G로 구현됨**), 완전한 `AgentIntent`/`CLARIFICATION_REQUIRED` union(Epic B의 B-03/B-05, `eval/agent-v0/README.md`도 이 라벨들을 "runtime enum 아님"으로 명시). 위 표의 나머지 항목은 Sprint 1(A-01~A-04, B-01/B-02/B-04)에서 실제로 고쳤다 — `memdo-backend`의 `_shared/agent-tool-contract.ts`, `apps/ios/Memdo/Memdo/AgentIntent.swift`가 그 결과물이다.
+**v1에서 하지 않은 것**: `propose_routine_update`/`propose_review_actions` 확인 카드, Eval Dataset 구축(§14, **이후 Epic E/F-1/F-2로 부분적으로 해소** -- `agent-v0` 38-case 코퍼스 + 자동 러너는 생겼지만 §14의 100-case 목표 세트 자체는 여전히 없음), 모델 capability 기반 registry(§15, **이후 Epic G로 구현됨**), 완전한 `AgentIntent`/`CLARIFICATION_REQUIRED` union(Epic B의 B-03/B-05, `eval/agent-v0/README.md`도 이 라벨들을 "runtime enum 아님"으로 명시). 위 표의 나머지 항목은 Sprint 1(A-01~A-04, B-01/B-02/B-04)에서 실제로 고쳤다 — `memdo-backend`의 `_shared/agent-tool-contract.ts`, `apps/ios/Memdo/Memdo/Agent/AgentIntent.swift`가 그 결과물이다.
 
 ## 6. 도구 네이밍
 

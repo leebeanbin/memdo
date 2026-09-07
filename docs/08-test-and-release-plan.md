@@ -103,7 +103,8 @@ MVP는 핵심 상태 전이와 실제 기기 위젯·알림 검증에 집중한�
 > **non-blocker**는 출시를 막지는 않지만 추적이 필요한 항목이다.
 
 - [x] PRD P0 요구사항 전부 구현 — **non-blocker** (표본 검증 결과 대부분 구현 확인 —
-  `apps/ios/Memdo/Memdo/ScheduleModel.swift`/`ScheduleAPI.swift`/`NotificationScheduler.swift`,
+  `apps/ios/Memdo/Memdo/Schedule/ScheduleModel.swift`/`ScheduleAPI.swift`,
+  `apps/ios/Memdo/Memdo/Core/NotificationScheduler.swift`,
   `memdo-backend/supabase/functions/todos`/`rules`/`reviews`/`days`. 전체 P0 항목의 line-by-line
   전수 검증은 아님 — 표본 검증)
 - [x] OpenAPI와 구현 일치 — **non-blocker, 완료**. `docs/05-api-spec.yaml`에 `x-implementation-status`

@@ -1,7 +1,7 @@
 # UI ↔ 백엔드 계약·구현 범위 감사
 
 상태: 2026-08-03 원격 통합 검증 반영  
-대상 UI: `apps/ios/Memdo/Memdo/*.swift`, `MemdoWidget/*.swift`  
+대상 UI: `apps/ios/Memdo/Memdo/**/*.swift`, `MemdoWidget/*.swift`  
 대상 백엔드: `../memdo-backend/supabase`  
 목적: 화면에 보이는 기능, 데이터 모델, OpenAPI, 물리 스키마, 단계별 구현의 불일치를 구현 전에 차단한다.
 
