@@ -452,7 +452,7 @@ enum ScheduleAPIError: Error, LocalizedError {
         case .invalidCalendar: "서버 캘린더를 먼저 선택해 주세요."
         case .invalidSchedule: "일정 기간을 확인해 주세요."
         case .invalidResponse: "서버 응답을 읽을 수 없습니다."
-        case .incompatibleValue(let value): "지원하지 않는 서버 값입니다: \(value)"
+        case .incompatibleValue: "지원하지 않는 서버 값이에요. 앱을 최신 버전으로 업데이트해주세요."
         case .server(_, _, let message, _): message
         case .offline: "오프라인 상태예요. 연결되면 자동으로 저장돼요."
         }
