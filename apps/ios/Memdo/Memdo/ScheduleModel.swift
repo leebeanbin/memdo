@@ -697,6 +697,10 @@ final class ScheduleStore {
         try await repository.googleCalendarStatus()
     }
 
+    func retryGoogleCalendarPush() async throws -> GoogleCalendarStatusResponseDTO {
+        try await repository.retryGoogleCalendarPush()
+    }
+
     /// Reloads afterward so the synthetic "Google Calendar" entry and any
     /// mirrored events disappear from the store immediately, rather than
     /// lingering until the next unrelated load().
