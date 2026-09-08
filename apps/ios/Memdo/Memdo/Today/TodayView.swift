@@ -22,6 +22,7 @@ struct TodayView: View {
     @State private var showAllSchedules = false
     @State private var autoExpandArmed = true
     @State private var weekDragOffset: CGFloat = 0
+    @State private var deleteTarget: ScheduleDetail?
 
     init(
         coachMarkTarget: CoachMarkTarget? = nil,
@@ -136,7 +137,8 @@ struct TodayView: View {
                                     onAdd: { openAddSchedule(selectedDate) },
                                     onToggleExpanded: toggleSchedules,
                                     onOpenSchedule: openSchedule,
-                                    onToggleDone: toggleDone
+                                    onToggleDone: toggleDone,
+                                    deleteTarget: $deleteTarget
                                 )
                             }
                         }
@@ -199,6 +201,7 @@ struct TodayView: View {
         .sensoryFeedback(.selection, trigger: selectedDate)
         .accessibilityAction(named: "이전 날짜") { moveDate(by: -1) }
         .accessibilityAction(named: "다음 날짜") { moveDate(by: 1) }
+        .scheduleDeleteConfirmation(target: $deleteTarget, scheduleStore: scheduleStore)
     }
 
     private var dateSubtitle: String {
@@ -246,11 +249,7 @@ struct TodayView: View {
     }
 
     private func toggleDone(_ schedule: ScheduleDetail) {
-        Task {
-            if let outcome = try? await scheduleStore.toggleDone(id: schedule.id) {
-                noticeCenter.reportWriteOutcome(outcome)
-            }
-        }
+        toggleScheduleDone(schedule, store: scheduleStore, noticeCenter: noticeCenter)
     }
 
     private func saveEdited(_ edited: ScheduleDetail) {

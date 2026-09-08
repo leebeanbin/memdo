@@ -264,6 +264,72 @@ struct ScheduleDetailSheet: View {
 
 }
 
+// MARK: - Shared swipe-action delete confirmation
+
+extension View {
+    /// Delete confirmation for swipe-action call sites (row swipe, not this
+    /// file's own ScheduleDetailSheet menu, which stays its own deliberate
+    /// always-confirm dialog above -- a menu tap is already a slower,
+    /// multi-step path where confirming every time makes sense; a swipe is
+    /// a quick gesture where the swipe-then-tap-delete-button sequence
+    /// itself already reads as the confirming action, matching Mail/
+    /// Reminders' own swipe-delete convention).
+    ///
+    /// Setting `target` to a non-recurring item deletes it immediately, no
+    /// dialog. Setting it to a recurring item (`scheduleRuleId != nil`)
+    /// shows the same "이 일정만 삭제"/"이후 반복 모두 삭제" choice this
+    /// file's own delete flow uses -- that choice is real, not a safety
+    /// confirmation, so it always shows regardless of gesture speed.
+    /// Callers only ever need to set `target`; this owns clearing it back
+    /// to nil once the delete (or cancel) resolves.
+    func scheduleDeleteConfirmation(
+        target: Binding<ScheduleDetail?>,
+        scheduleStore: ScheduleStore
+    ) -> some View {
+        modifier(ScheduleDeleteConfirmationModifier(target: target, scheduleStore: scheduleStore))
+    }
+}
+
+private struct ScheduleDeleteConfirmationModifier: ViewModifier {
+    @Binding var target: ScheduleDetail?
+    let scheduleStore: ScheduleStore
+
+    private var showsRecurringChoice: Bool { target?.scheduleRuleId != nil }
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: target) { _, newValue in
+                guard let schedule = newValue, schedule.scheduleRuleId == nil else { return }
+                Task { try? await scheduleStore.delete(id: schedule.id) }
+                target = nil
+            }
+            .confirmationDialog(
+                "일정을 삭제할까요?",
+                isPresented: Binding(
+                    get: { showsRecurringChoice },
+                    set: { isPresented in if !isPresented { target = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("이 일정만 삭제", role: .destructive) {
+                    if let id = target?.id {
+                        Task { try? await scheduleStore.delete(id: id) }
+                    }
+                    target = nil
+                }
+                Button("이후 반복 모두 삭제", role: .destructive) {
+                    if let ruleId = target?.scheduleRuleId {
+                        scheduleStore.deleteRecurring(ruleId: ruleId)
+                    }
+                    target = nil
+                }
+                Button("취소", role: .cancel) { target = nil }
+            } message: {
+                Text("반복 전체 삭제는 오늘 이후의 반복 일정을 모두 정리하고, 지난 기록은 남겨둡니다.")
+            }
+    }
+}
+
 private struct ScheduleDetailHeader: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let schedule: ScheduleDetail

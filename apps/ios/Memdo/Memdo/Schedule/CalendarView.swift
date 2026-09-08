@@ -17,6 +17,7 @@ struct CalendarView: View {
     @State private var calendarFilter = CalendarDisplayFilter.all
     @State private var monthDirection: Int = 0
     @State private var googleCalendarConnected = false
+    @State private var deleteTarget: ScheduleDetail?
 
     init(
         coachMarkTarget: CoachMarkTarget? = nil,
@@ -130,7 +131,9 @@ struct CalendarView: View {
                     schedules: selectedAgenda,
                     onAdd: { presentedSheet = .add(selectedDate, filterDefaultKind) },
                     onOpenDay: { presentedSheet = .day(selectedDate) },
-                    onOpenSchedule: { presentedSheet = .detail($0) }
+                    onOpenSchedule: { presentedSheet = .detail($0) },
+                    onToggleDone: toggleDone,
+                    deleteTarget: $deleteTarget
                 )
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: selectedDate)
             }
@@ -162,6 +165,7 @@ struct CalendarView: View {
             }
         }
         .task { googleCalendarConnected = (try? await scheduleStore.googleCalendarStatus())?.connected == true }
+        .scheduleDeleteConfirmation(target: $deleteTarget, scheduleStore: scheduleStore)
     }
 
     private func saveEdited(_ edited: ScheduleDetail) {
@@ -180,6 +184,10 @@ struct CalendarView: View {
     private func openDay(_ date: Date) {
         select(date)
         presentedSheet = .day(date)
+    }
+
+    private func toggleDone(_ schedule: ScheduleDetail) {
+        toggleScheduleDone(schedule, store: scheduleStore, noticeCenter: noticeCenter)
     }
 
     private func moveMonth(_ offset: Int) {
@@ -522,6 +530,8 @@ private struct CalendarAgendaSection: View {
     let onAdd: () -> Void
     let onOpenDay: () -> Void
     let onOpenSchedule: (ScheduleDetail) -> Void
+    let onToggleDone: (ScheduleDetail) -> Void
+    @Binding var deleteTarget: ScheduleDetail?
 
     private var visibleSchedules: [ScheduleDetail] {
         Array(schedules.prefix(Self.previewLimit))
@@ -546,10 +556,12 @@ private struct CalendarAgendaSection: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(visibleSchedules.enumerated()), id: \.element.id) { index, schedule in
-                        ScheduleRow(
+                        SwipeableScheduleRow(
                             schedule: schedule,
                             context: .timeline,
-                            onOpen: { onOpenSchedule(schedule) }
+                            onOpen: { onOpenSchedule(schedule) },
+                            onToggleDone: { onToggleDone(schedule) },
+                            deleteTarget: $deleteTarget
                         )
                         if index < visibleSchedules.count - 1 {
                             Divider().padding(.leading, MemdoMetrics.rowContentLeading)
@@ -603,6 +615,7 @@ private struct DayAgendaSheet: View {
     @State private var presentedSheet: DayAgendaDestination?
     @State private var selectedWorkout: WorkoutLog?
     @State private var viewMode: DayViewMode = .timeline
+    @State private var deleteTarget: ScheduleDetail?
 
     private var daySchedules: [ScheduleDetail] {
         scheduleStore.items(for: date)
@@ -618,6 +631,10 @@ private struct DayAgendaSheet: View {
                 noticeCenter.reportWriteOutcome(outcome)
             }
         }
+    }
+
+    private func toggleDone(_ schedule: ScheduleDetail) {
+        toggleScheduleDone(schedule, store: scheduleStore, noticeCenter: noticeCenter)
     }
 
     var body: some View {
@@ -670,6 +687,7 @@ private struct DayAgendaSheet: View {
                 .environment(workoutStore)
         }
         .memdoSheetPresentation()
+        .scheduleDeleteConfirmation(target: $deleteTarget, scheduleStore: scheduleStore)
     }
 
     private var listContent: some View {
@@ -699,6 +717,24 @@ private struct DayAgendaSheet: View {
                             .listRowInsets(EdgeInsets())
                             .alignmentGuide(.listRowSeparatorLeading) { _ in
                                 MemdoMetrics.rowContentLeading
+                            }
+                            .swipeActions(edge: .leading) {
+                                Button {
+                                    toggleDone(schedule)
+                                } label: {
+                                    Label(
+                                        schedule.isDone ? "완료 취소" : "완료",
+                                        systemImage: schedule.isDone ? "arrow.uturn.backward" : "checkmark"
+                                    )
+                                }
+                                .tint(MemdoTheme.activityAccent)
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    deleteTarget = schedule
+                                } label: {
+                                    Label("삭제", systemImage: "trash")
+                                }
                             }
                         }
                     }

@@ -217,6 +217,7 @@ struct TodayScheduleSection: View {
     let onToggleExpanded: () -> Void
     let onOpenSchedule: (ScheduleDetail) -> Void
     let onToggleDone: (ScheduleDetail) -> Void
+    @Binding var deleteTarget: ScheduleDetail?
 
     private var visibleSchedules: [ScheduleDetail] {
         Array(schedules.prefix(isExpanded ? schedules.count : 3))
@@ -231,11 +232,12 @@ struct TodayScheduleSection: View {
         ) {
             VStack(spacing: 0) {
                 ForEach(visibleSchedules) { schedule in
-                    ScheduleRow(
+                    SwipeableScheduleRow(
                         schedule: schedule,
                         context: .timeline,
                         onOpen: { onOpenSchedule(schedule) },
-                        onToggleDone: { onToggleDone(schedule) }
+                        onToggleDone: { onToggleDone(schedule) },
+                        deleteTarget: $deleteTarget
                     )
                     if schedule.id != visibleSchedules.last?.id {
                         Divider().padding(.leading, MemdoMetrics.rowContentLeading)
