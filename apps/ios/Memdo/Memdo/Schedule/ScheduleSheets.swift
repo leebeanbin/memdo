@@ -59,16 +59,22 @@ struct ScheduleDetailSheet: View {
                         ScheduleDetailHeader(schedule: draft)
                     }
 
-                    if draft.kind == .task {
-                        Section("상태") {
-                            Toggle("완료", isOn: Binding(
-                                get: { draft.isDone },
-                                set: { isDone in updateCompletion(isDone) }
-                            ))
-                            .memdoToggle()
-                            if let mins = draft.estimatedMinutes {
-                                LabeledContent("소요 시간", value: ScheduleDuration.label(for: mins))
-                            }
+                    // Shown for every kind, not just .task -- completion
+                    // (todos.status/completed_at) has never been tied to
+                    // entry_kind server-side; this UI gate was the only
+                    // thing actually blocking it. Left the list-view
+                    // checkbox (ScheduleRow.leadingMarker) exactly as-is --
+                    // it's the day-at-a-glance surface and stays kind-gated
+                    // there, so this only ever shows up when someone
+                    // deliberately opens an item's detail.
+                    Section("상태") {
+                        Toggle("완료", isOn: Binding(
+                            get: { draft.isDone },
+                            set: { isDone in updateCompletion(isDone) }
+                        ))
+                        .memdoToggle()
+                        if let mins = draft.estimatedMinutes {
+                            LabeledContent("소요 시간", value: ScheduleDuration.label(for: mins))
                         }
                     }
 
