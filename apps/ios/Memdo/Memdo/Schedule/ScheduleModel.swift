@@ -906,6 +906,14 @@ final class ScheduleStore {
 
     private func merge(_ fetched: [ScheduleDetail]) {
         for item in fetched {
+            // A save currently in flight for this id already holds the more-
+            // current optimistic value -- a server snapshot fetched before
+            // that write lands would otherwise stomp it, visibly reverting
+            // the UI mid-save (e.g. a completion toggle flipping back off)
+            // and prompting a re-tap that then collides with the still-
+            // in-flight write's pendingWriteIDs guard. Same pattern
+            // drainOutbox() already uses (founder-dogfooding fix, fe8).
+            guard !pendingWriteIDs.contains(item.id) else { continue }
             if let index = schedules.firstIndex(where: { $0.id == item.id }) {
                 schedules[index] = item
             } else {
@@ -945,12 +953,18 @@ final class ScheduleStore {
                     case "todo":
                         if item.operation == "delete" {
                             if let id = UUID(uuidString: item.id), schedules.contains(where: { $0.id == id }) {
+                                // Same fe8 pattern as merge(_:)/drainOutbox() --
+                                // a save in flight for this id owns the
+                                // authoritative next state, not a sync page
+                                // fetched before that write lands.
+                                guard !pendingWriteIDs.contains(id) else { continue }
                                 schedules.removeAll { $0.id == id }
                                 changed = true
                             }
                         } else if let dto = item.todoData,
                                   let calendar = calendarsByID[dto.calendarId],
                                   let mapped = try? ScheduleDetail(dto: dto, calendar: calendar) {
+                            guard !pendingWriteIDs.contains(mapped.id) else { continue }
                             if let index = schedules.firstIndex(where: { $0.id == mapped.id }) {
                                 schedules[index] = mapped
                             } else {
