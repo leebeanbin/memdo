@@ -617,7 +617,19 @@ func classifyStaleVersionResolution(
 @Observable
 final class ScheduleStore {
     private static let logger = Logger(subsystem: "com.memdo.ios", category: "schedule")
-    private(set) var schedules: [ScheduleDetail] = []
+    private(set) var schedules: [ScheduleDetail] = [] {
+        didSet { rebuildDayCache() }
+    }
+    /// Backs items(for:) -- day-by-day grouping over `schedules` is an O(n)
+    /// scan (occurs(on:) per item, per day), and TodayView alone reads it
+    /// ~15x per body evaluation (once per day in the visible week, for
+    /// `schedules`/`scheduleCounts`/`dayColors`) purely because SwiftUI
+    /// re-invokes computed properties on every diff pass. Rebuilt once here
+    /// whenever `schedules` actually changes (didSet above) instead of
+    /// re-filtering per read. Ignored by Observation since nothing outside
+    /// this file reads it directly -- only items(for:)'s return value
+    /// (already observed via `schedules`) is ever exposed.
+    @ObservationIgnored private var dayCache: [Date: [ScheduleDetail]] = [:]
     private(set) var calendars: [ScheduleCalendar] = []
     private(set) var state = ScheduleStoreState.idle
     private let repository: ScheduleRepository
@@ -716,8 +728,22 @@ final class ScheduleStore {
         try await repository.googleCalendarStart()
     }
 
+    /// CalendarView and SettingsView each independently `.task` this on
+    /// appear, close enough together at cold start that both fire before
+    /// either resolves -- dedup so a second near-simultaneous caller awaits
+    /// the same in-flight request instead of firing its own. Not a
+    /// standing cache: cleared the moment this call's task resolves, so a
+    /// later, non-overlapping call always gets a fresh fetch.
+    @ObservationIgnored private var googleCalendarStatusTask: Task<GoogleCalendarStatusResponseDTO, Error>?
+
     func googleCalendarStatus() async throws -> GoogleCalendarStatusResponseDTO {
-        try await repository.googleCalendarStatus()
+        if let inFlight = googleCalendarStatusTask {
+            return try await inFlight.value
+        }
+        let task = Task { try await repository.googleCalendarStatus() }
+        googleCalendarStatusTask = task
+        defer { googleCalendarStatusTask = nil }
+        return try await task.value
     }
 
     func retryGoogleCalendarPush() async throws -> GoogleCalendarStatusResponseDTO {
@@ -804,9 +830,41 @@ final class ScheduleStore {
     }
 
     func items(for date: Date) -> [ScheduleDetail] {
-        schedules
+        let day = Calendar.current.startOfDay(for: date)
+        if let cached = dayCache[day] { return cached }
+        // Cache miss (a date outside the currently-cached loadedFrom...loadedTo
+        // window, or called before the first rebuild) -- fall back to a direct
+        // scan rather than returning a possibly-wrong empty result.
+        return schedules
             .filter { $0.isActive && $0.occurs(on: date) }
             .sorted { $0.timeSortKey(on: date) < $1.timeSortKey(on: date) }
+    }
+
+    /// Rebuilds dayCache over the currently-loaded window (didSet above,
+    /// plus explicit calls after loadedFrom/loadedTo themselves change --
+    /// load() sets `schedules` before the loaded bounds are known, and
+    /// ensureLoaded widens the bounds without otherwise touching
+    /// `schedules` on every path, so neither is covered by the didSet
+    /// alone). Sorts each day's bucket once here instead of per read,
+    /// matching items(for:)'s existing sort contract.
+    private func rebuildDayCache() {
+        let calendar = Calendar.current
+        guard let loadedFrom, let loadedTo, loadedFrom < loadedTo else {
+            dayCache = [:]
+            return
+        }
+        let interval = DateInterval(start: loadedFrom, end: loadedTo)
+        let active = schedules.filter(\.isActive)
+        var result: [Date: [ScheduleDetail]] = [:]
+        var day = calendar.startOfDay(for: interval.start)
+        while day < interval.end {
+            let dayItems = active
+                .filter { $0.occurs(on: day) }
+                .sorted { $0.timeSortKey(on: day) < $1.timeSortKey(on: day) }
+            if !dayItems.isEmpty { result[day] = dayItems }
+            day = calendar.date(byAdding: .day, value: 1, to: day) ?? interval.end
+        }
+        dayCache = result
     }
 
     /// Groups `items` by every day they occur on within `interval` -- a
@@ -843,6 +901,10 @@ final class ScheduleStore {
             let calendar = Calendar.current
             loadedFrom = calendar.date(byAdding: .day, value: -30, to: .now)
             loadedTo = calendar.date(byAdding: .day, value: 60, to: .now)
+            // schedules' own didSet already fired above, before loadedFrom/
+            // loadedTo were known -- rebuild now that both are set so
+            // dayCache actually covers the loaded window.
+            rebuildDayCache()
             updateWidgetSnapshot()
             // Replays anything queued from a previous session that was killed
             // while offline. The network-monitor trigger alone can't cover
@@ -881,11 +943,18 @@ final class ScheduleStore {
             let newFrom = calendar.date(byAdding: .day, value: -padding, to: date) ?? date
             if await fetchRange(from: newFrom, to: loadedFrom) {
                 self.loadedFrom = newFrom
+                // fetchRange's merge(_:) already rebuilt dayCache against the
+                // OLD (narrower) loadedFrom -- rebuild again now that the
+                // window itself has widened, or the newly-fetched days at
+                // the edge would be missing from the cache despite being in
+                // `schedules`.
+                rebuildDayCache()
             }
         } else if date > loadedTo {
             let newTo = calendar.date(byAdding: .day, value: padding, to: date) ?? date
             if await fetchRange(from: loadedTo, to: newTo) {
                 self.loadedTo = newTo
+                rebuildDayCache()
             }
         }
     }

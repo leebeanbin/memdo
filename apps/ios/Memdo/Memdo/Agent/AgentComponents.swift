@@ -202,8 +202,18 @@ struct AgentResponse: View {
                     // as one abrupt block instead of reading as live
                     // typing. This animates height/content changes as
                     // message.text grows, matching the streaming that's
-                    // already happening underneath.
-                    .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: message.text)
+                    // already happening underneath -- but only once the
+                    // turn has actually finished. While isStreaming, deltas
+                    // can land many times a second, and animating every one
+                    // of them stacks a re-layout animation on top of
+                    // already-frequent updates for no visible benefit --
+                    // the rapid character-by-character growth already
+                    // reads as live typing on its own without an extra
+                    // easing pass per token.
+                    .animation(
+                        reduceMotion || message.isStreaming ? nil : .easeOut(duration: 0.15),
+                        value: message.text
+                    )
             }
 
             // Retry

@@ -183,10 +183,10 @@
 		6C8C80C6989638B08ED7607E /* AgentDebugTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDebugTrace.swift; sourceTree = "<group>"; };
 		6E959B5A777D4C5351CE3EF2 /* AgentRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRuntime.swift; sourceTree = "<group>"; };
 		6EA7F0220162635CC1A9E588 /* AgentToolActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentToolActivity.swift; sourceTree = "<group>"; };
-		72F40B29582C13FA7CF10006 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		72F40B29582C13FA7CF10006 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		75B6320ADF58513A2DCF71C9 /* MemdoWidgetSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoWidgetSchedule.swift; sourceTree = "<group>"; };
-		7687EBCFF670FFE2F6CA37D2 /* Memdo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Memdo.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		7E846EC17F4BCC9B7757596E /* MemdoShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MemdoShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7687EBCFF670FFE2F6CA37D2 /* Memdo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Memdo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7E846EC17F4BCC9B7757596E /* MemdoShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MemdoShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		81740148C9FB170E6125C238 /* AssistantView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantView.swift; sourceTree = "<group>"; };
 		83EC68D64631B324F171F399 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		844348F11EA03E4AC005D1BD /* SlackSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlackSettings.swift; sourceTree = "<group>"; };
@@ -201,9 +201,9 @@
 		A46BF0632FBAC7731A1BBF22 /* WorkoutModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutModel.swift; sourceTree = "<group>"; };
 		A5E2CE5E5C262F0187C2E3E0 /* HealthKitImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitImporter.swift; sourceTree = "<group>"; };
 		A5FCF0E385E87960B56A11F4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		A6F0561D5973698B66DB4119 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A6F0561D5973698B66DB4119 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AA8E9E99B2955B5F2A3FABD6 /* FakeAgentRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeAgentRuntime.swift; sourceTree = "<group>"; };
-		AE1B6FFACC369DADAFC99ADB /* MemdoWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MemdoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AE1B6FFACC369DADAFC99ADB /* MemdoWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MemdoWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B030D354180AB4FA9588ED73 /* AppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShortcuts.swift; sourceTree = "<group>"; };
 		B3B648549C951FDA6ABDA717 /* AgentTabBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTabBridge.swift; sourceTree = "<group>"; };
 		BC1EA1B96C5CAFC2AA18E481 /* MemdoLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemdoLiveActivity.swift; sourceTree = "<group>"; };
@@ -216,7 +216,7 @@
 		D66022FC2E2E56F7A2999F8A /* AgentDomainServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDomainServices.swift; sourceTree = "<group>"; };
 		D9B3823CB01B28F0EFA5C1AD /* MemdoWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MemdoWidget.entitlements; sourceTree = "<group>"; };
 		DA9BC3B0CEFE2D4C6854CE6D /* ShareWorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareWorkoutView.swift; sourceTree = "<group>"; };
-		DC46E17276DC090239774712 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		DC46E17276DC090239774712 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		DCAF96D165A397CF237CBB10 /* AgentCloudDTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCloudDTOs.swift; sourceTree = "<group>"; };
 		E03B3314406F919051B8F163 /* AppNoticeCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNoticeCenterTests.swift; sourceTree = "<group>"; };
 		E328A1A389F5FE46A7998702 /* ScheduleAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleAPI.swift; sourceTree = "<group>"; };
@@ -554,8 +554,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = 19005277C9F7D659B325E203 /* Build configuration list for PBXProject "Memdo" */;
 			developmentRegion = en;
@@ -746,6 +744,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = MemdoWidget/MemdoWidget.entitlements;
+				DEVELOPMENT_TEAM = A369VMR5YY;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MemdoWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -765,6 +764,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = MemdoWidget/MemdoWidget.entitlements;
+				DEVELOPMENT_TEAM = A369VMR5YY;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MemdoWidget/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -803,6 +803,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Memdo/Memdo.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = A369VMR5YY;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Memdo/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -906,6 +907,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Memdo/Memdo.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = A369VMR5YY;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Memdo/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -923,6 +925,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = MemdoShare/MemdoShare.entitlements;
+				DEVELOPMENT_TEAM = A369VMR5YY;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MemdoShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -942,6 +945,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = MemdoShare/MemdoShare.entitlements;
+				DEVELOPMENT_TEAM = A369VMR5YY;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MemdoShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

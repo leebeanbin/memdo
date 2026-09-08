@@ -46,20 +46,23 @@ struct CalendarView: View {
             .map { cal.component(.day, from: $0.startedAt) })
     }
 
-    private var scheduleCounts: [Int: Int] {
-        monthByDay.reduce(into: [:]) { counts, entry in
-            counts[entry.key] = entry.value.count
-        }
-    }
-
     // Each day's dots are colored by its items (see MemdoScheduleCountDots)
     // so a day mixing calendars -- e.g. a personal item and a Google-mirrored
     // one -- reads as such at a glance instead of every day looking
     // identical regardless of which calendars are on it.
-    private var dayColors: [Int: [Color]] {
-        monthByDay.reduce(into: [:]) { colors, entry in
-            colors[entry.key] = entry.value.map { $0.color?.swiftUIColor ?? MemdoTheme.brand }
+    //
+    // Combined into one pass over monthByDay (itself a full-month
+    // groupedByOccurrenceDay scan) instead of two independent computed
+    // properties each re-deriving it -- counts/colors were previously
+    // computed from two separate monthByDay evaluations per body render.
+    private var monthDayStats: (counts: [Int: Int], colors: [Int: [Color]]) {
+        var counts: [Int: Int] = [:]
+        var colors: [Int: [Color]] = [:]
+        for (day, items) in monthByDay {
+            counts[day] = items.count
+            colors[day] = items.map { $0.color?.swiftUIColor ?? MemdoTheme.brand }
         }
+        return (counts, colors)
     }
 
     private var monthByDay: [Int: [ScheduleDetail]] {
@@ -102,13 +105,14 @@ struct CalendarView: View {
                     ScheduleSearchView(query: $searchQuery, scope: searchScope)
                 }
             } else {
+                let dayStats = monthDayStats
                 Group {
                     CalendarMonthCard(
                         filter: $calendarFilter,
                         month: displayedMonth,
                         selectedDate: selectedDate,
-                        scheduleCounts: scheduleCounts,
-                        dayColors: dayColors,
+                        scheduleCounts: dayStats.counts,
+                        dayColors: dayStats.colors,
                         workoutDays: workoutDays,
                         googleCalendarConnected: googleCalendarConnected,
                         onSelect: select,
@@ -888,9 +892,7 @@ private struct TimelineEventBlock: View {
 
     private var timeLabel: String {
         guard let start = event.startAt else { return "" }
-        let f = DateFormatter()
-        f.dateFormat = "H:mm"
-        return f.string(from: start)
+        return DateFormatting.Cached.timelineHourMinute.string(from: start)
     }
 
     // Match ScheduleRow: blocks carry the schedule's category color so the same
@@ -988,27 +990,21 @@ extension Date {
     }
 
     /// "8월 12일 수요일"
+    @MainActor
     var memdoMonthDayWeekday: String {
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "ko_KR")
-        fmt.dateFormat = "M월 d일 EEEE"
-        return fmt.string(from: self)
+        DateFormatting.Cached.monthDayWeekday.string(from: self)
     }
 
     /// "9월 2일 오후 3:22" -- for a "마지막 동기화" style timestamp, where the
     /// exact time of day matters (unlike the date-only helpers above).
+    @MainActor
     var memdoMonthDayTime: String {
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "ko_KR")
-        fmt.dateFormat = "M월 d일 a h:mm"
-        return fmt.string(from: self)
+        DateFormatting.Cached.monthDayTime.string(from: self)
     }
 
     /// "2026년 8월 12일 수요일"
+    @MainActor
     var memdoFullDate: String {
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "ko_KR")
-        fmt.dateFormat = "yyyy년 M월 d일 EEEE"
-        return fmt.string(from: self)
+        DateFormatting.Cached.fullDate.string(from: self)
     }
 }
