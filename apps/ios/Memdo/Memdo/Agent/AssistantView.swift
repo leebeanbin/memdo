@@ -13,6 +13,17 @@ struct AgentMessage: Identifiable, Equatable {
     /// Set only from AgentCoordinatorEvent.toolCallStarted (D4) -- a real
     /// per-tool-call signal from either runtime, never a fabricated state.
     var toolHint: String? = nil
+    /// Real count of toolCallStarted events seen this turn -- not shown at
+    /// all for a single-tool turn (the common case), but once a turn
+    /// chains a second tool, the count itself is real progress information
+    /// (see AgentComponents.swift's headerLabel), unlike toolHint's text
+    /// which necessarily resets to whatever tool started most recently.
+    var toolCallCount: Int = 0
+    /// True once this turn's wait has gone on longer than usual with no
+    /// text and no tool call -- derived purely from elapsed wall-clock time
+    /// (send()'s 5s guarded Task below), not any claim about what the model
+    /// is actually doing. Never fires once text/a toolHint has appeared.
+    var isSlow: Bool = false
     /// Canonical classification of this turn (Epic J, AgentIntent.swift) --
     /// nil until classification runs (ingestCloudResult for a cloud turn, or
     /// handleCoordinatorEvent's .finished fallback for on-device). Never
@@ -334,6 +345,19 @@ struct AgentSheet: View {
         currentAssistantMessageID = messageID
         proposalRevisionAtTurnStart = proposal.revision
         updateProposalRevisionAtTurnStart = updateProposal.revision
+        // Purely a reassurance cue for a turn that's taking longer than
+        // usual -- derived from real elapsed time, not a claim about what's
+        // happening. The guard makes this safe with no cancellation needed:
+        // if the turn already finished or started streaming text/a tool
+        // hint by the time this fires, the write below is a no-op the view
+        // never renders.
+        Task {
+            try? await Task.sleep(for: .seconds(5))
+            if let index = messages.firstIndex(where: { $0.id == messageID }),
+               messages[index].isStreaming, messages[index].text.isEmpty {
+                messages[index].isSlow = true
+            }
+        }
         coordinator?.send(
             prompt: prompt,
             history: history,
@@ -458,6 +482,7 @@ struct AgentSheet: View {
             // clobbers text the user is already reading.
             if let index = messages.firstIndex(where: { $0.id == messageID }),
                messages[index].isStreaming, messages[index].text.isEmpty {
+                messages[index].toolCallCount += 1
                 messages[index].toolHint = toolHintText(for: capability)
             }
         case .toolCallFinished:

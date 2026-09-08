@@ -122,6 +122,11 @@ struct AgentResponse: View {
 
     private var headerLabel: String {
         if message.isError                              { return "오류" }
+        // toolCallCount is real progress (one real toolCallStarted event
+        // per increment, AssistantView.handleCoordinatorEvent) -- only
+        // shown once a turn genuinely chains a second tool, so the
+        // overwhelmingly common single-tool turn reads exactly as before.
+        if isToolPhase && message.toolCallCount >= 2    { return "실행 중 · \(message.toolCallCount)번째 작업" }
         if isToolPhase                                  { return "실행 중" }
         if message.isStreaming && message.text.isEmpty  { return "생각 중…" }
         // Distinct from every other intent -- there's nothing to approve
@@ -171,6 +176,15 @@ struct AgentResponse: View {
             // Tool hint
             if let hint = message.toolHint, message.text.isEmpty {
                 Text(hint)
+                    .font(MemdoTypography.caption)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+
+            // Slow-turn reassurance -- purely an elapsed-time cue (see
+            // AgentMessage.isSlow's doc comment), same guard as the tool
+            // hint above so it never lingers once text starts arriving.
+            if message.isSlow, message.isStreaming, message.text.isEmpty {
+                Text("평소보다 조금 걸리고 있어요")
                     .font(MemdoTypography.caption)
                     .foregroundStyle(MemdoTheme.secondaryInk)
             }
