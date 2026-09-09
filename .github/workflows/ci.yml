@@ -24,6 +24,14 @@ jobs:
 
       - run: xcodegen generate
 
+      - name: Cache SPM packages
+        uses: actions/cache@v4
+        with:
+          path: apps/ios/Memdo/.spm-cache
+          key: ${{ runner.os }}-spm-${{ hashFiles('apps/ios/Memdo/project.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
       - name: Pick a simulator
         run: |
           UDID=$(xcrun simctl list devices available -j \
@@ -35,10 +43,12 @@ jobs:
         run: >
           xcodebuild build -project Memdo.xcodeproj -scheme Memdo
           -destination "platform=iOS Simulator,id=$SIM_UDID"
+          -clonedSourcePackagesDirPath .spm-cache
           CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
       - name: Test
         run: >
           xcodebuild test -project Memdo.xcodeproj -scheme Memdo
           -destination "platform=iOS Simulator,id=$SIM_UDID"
+          -clonedSourcePackagesDirPath .spm-cache
           CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO

@@ -11,6 +11,7 @@ xcuserdata/
 # Swift Package Manager
 .build/
 .swiftpm/
+.spm-cache/
 
 # Local secrets
 .env
