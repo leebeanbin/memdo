@@ -996,20 +996,39 @@ actor ScheduleRepository {
         }
     }
 
-    func create(_ schedule: ScheduleDetail) async throws -> ScheduleDetail {
+    /// `calendars` resolves the response's authoritative `calendarId` to the
+    /// real `ScheduleCalendar` -- it must NOT default to `schedule.calendar`
+    /// (the *request's* calendar). Materializing a Google-mirrored item is
+    /// the case that matters: the client posts the synthetic "Google
+    /// Calendar" entry as calendarId (there's no real user_calendars row
+    /// behind it), and the server silently reroutes the actual insert to the
+    /// user's real personal calendar (see todos/index.ts). Reusing
+    /// `schedule.calendar` here previously built a `saved` value that
+    /// still carried that synthetic calendar -- invisible until a caller
+    /// (create()'s own follow-up status PATCH, for "materialize and
+    /// complete in one action") resent it as calendarId and hit
+    /// todos_calendar_user_fkey, since that synthetic id isn't a real
+    /// calendar row (found live).
+    func create(_ schedule: ScheduleDetail, calendars: [ScheduleCalendar]) async throws -> ScheduleDetail {
         let accessToken = try await accessToken()
         let dto = try await api.create(
             TodoCreateRequestDTO(schedule: schedule),
             idempotencyKey: schedule.id,
             accessToken: accessToken
         )
-        return try ScheduleDetail(dto: dto, calendar: schedule.calendar)
+        guard let calendar = calendars.first(where: { $0.id == dto.calendarId }) else {
+            throw ScheduleAPIError.incompatibleValue(dto.calendarId)
+        }
+        return try ScheduleDetail(dto: dto, calendar: calendar)
     }
 
-    func update(_ schedule: ScheduleDetail) async throws -> ScheduleDetail {
+    func update(_ schedule: ScheduleDetail, calendars: [ScheduleCalendar]) async throws -> ScheduleDetail {
         let accessToken = try await accessToken()
         let dto = try await api.update(schedule, accessToken: accessToken)
-        return try ScheduleDetail(dto: dto, calendar: schedule.calendar)
+        guard let calendar = calendars.first(where: { $0.id == dto.calendarId }) else {
+            throw ScheduleAPIError.incompatibleValue(dto.calendarId)
+        }
+        return try ScheduleDetail(dto: dto, calendar: calendar)
     }
 
     func delete(_ schedule: ScheduleDetail) async throws {

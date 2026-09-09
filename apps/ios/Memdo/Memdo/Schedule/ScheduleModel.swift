@@ -1106,9 +1106,9 @@ final class ScheduleStore {
             do {
                 switch entry.operation {
                 case .create(let schedule):
-                    replaceOrAppend(try await repository.create(schedule))
+                    replaceOrAppend(try await repository.create(schedule, calendars: calendars))
                 case .update(let schedule):
-                    replaceOrAppend(try await repository.update(schedule))
+                    replaceOrAppend(try await repository.update(schedule, calendars: calendars))
                 case .delete(let id, let version):
                     try await repository.delete(id: id, version: version)
                 case .reschedule(let original, let moved, let baseVersion):
@@ -1117,11 +1117,11 @@ final class ScheduleStore {
                     schedules.append(result.original)
                     schedules.append(result.replacement)
                 case .materializeThenDelete(let schedule):
-                    let real = try await repository.create(schedule)
+                    let real = try await repository.create(schedule, calendars: calendars)
                     try await repository.delete(real)
                     schedules.removeAll { $0.id == schedule.id }
                 case .materializeThenReschedule(let original, let moved):
-                    let real = try await repository.create(original)
+                    let real = try await repository.create(original, calendars: calendars)
                     let result = try await repository.reschedule(moved, baseVersion: real.version)
                     schedules.removeAll { $0.id == original.id }
                     schedules.append(result.original)
@@ -1328,7 +1328,7 @@ final class ScheduleStore {
     private func create(_ schedule: ScheduleDetail, notifyOnSuccess: Bool = false) async throws -> ScheduleWriteOutcome {
         let saved: ScheduleDetail
         do {
-            saved = try await repository.create(schedule)
+            saved = try await repository.create(schedule, calendars: calendars)
         } catch ScheduleAPIError.offline {
             // Keep the optimistic row as-is (it's already in `schedules`) and
             // queue the create for replay -- no rollback. Notifications stay
@@ -1392,7 +1392,7 @@ final class ScheduleStore {
         var desired = saved
         desired.status = schedule.status
         do {
-            let updated = try await repository.update(desired)
+            let updated = try await repository.update(desired, calendars: calendars)
             if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
                 schedules[index] = updated
             } else {
@@ -1424,7 +1424,7 @@ final class ScheduleStore {
 
     private func update(_ schedule: ScheduleDetail, replacing previous: ScheduleDetail) async throws -> ScheduleWriteOutcome {
         do {
-            let updated = try await repository.update(schedule)
+            let updated = try await repository.update(schedule, calendars: calendars)
             replace(schedule.id, with: updated)
             updateWidgetSnapshot()
             await NotificationScheduler.scheduleReminder(for: updated)
@@ -1662,7 +1662,7 @@ final class ScheduleStore {
         do {
             let baseVersion: Int
             if original.isVirtual || original.isExternal {
-                let real = try await repository.create(original)
+                let real = try await repository.create(original, calendars: calendars)
                 materialized = real
                 baseVersion = real.version
             } else {
@@ -1739,7 +1739,7 @@ final class ScheduleStore {
                 // No real row exists yet to delete -- materialize it first (so the
                 // series knows this date is spoken for, or so the Google-mirrored
                 // event has a real row to soft-delete/unlink) and delete that.
-                let real = try await repository.create(schedule)
+                let real = try await repository.create(schedule, calendars: calendars)
                 materialized = real
                 try await repository.delete(real)
             } else {
