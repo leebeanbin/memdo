@@ -2,9 +2,37 @@
 
 AI 일정 제안, 개인 캘린더, 하루 요약, 홈·잠금화면 위젯을 결합한 iOS 앱입니다.
 
+## 화면
+
+|                                        |                                          |                                       |
+| -------------------------------------- | ---------------------------------------- | ------------------------------------- |
+| ![Today](design/previews/01-today.png) | ![Calendar](design/previews/03-calendar.png) | ![Assistant](design/previews/05-assistant.png) |
+| Today                                  | Calendar                                 | Assistant                             |
+| ![New event](design/previews/08-new-event.png) | ![Widgets](design/previews/10-calendar-widgets.png) | ![Briefing](design/previews/02-briefing.png) |
+| 새 일정                                | 홈·잠금화면 위젯                          | 오늘의 브리핑                          |
+
+나머지 화면은 [`design/previews`](design/previews)에 전체 시안으로 보관합니다.
+
+## Tech Stack
+
+- **UI**: SwiftUI, Swift 6, iOS 17+ (`apps/ios/Memdo/project.yml`)
+- **프로젝트 생성**: [XcodeGen](https://github.com/yonaskolb/XcodeGen) — `project.yml`에서
+  `Memdo.xcodeproj`를 생성한다 (프로젝트 파일 자체는 커밋하지 않음)
+- **백엔드 연동**: [`supabase-swift`](https://github.com/supabase/supabase-swift) (Auth, 익명 세션),
+  YAML 파싱은 [`Yams`](https://github.com/jpsim/Yams)
+- **AI**: 온디바이스 Apple FoundationModels + 사용자 BYOK OpenRouter(클라우드, streaming)
+- **위젯/Live Activity**: WidgetKit, ActivityKit (Dynamic Island)
+- **오프라인**: 로컬 outbox 큐 + 재연결 시 자동 재전송
+- **백엔드 저장소**: [`../memdo-backend`](../memdo-backend) (Supabase Edge Functions, 별도 독립
+  git 저장소)
+
 ## 현재 상태
 
-이 시점(2026-08-17)에서 계획된 개발 범위를 마쳤다. 아래는 최종 상태다.
+2026-08-17 시점에 계획된 개발 범위(B0~B11)를 한 번 마쳤고, 이후 세 차례 재개됐다 — Agent 견고성·평가
+체계(2026-08-21~09-01, 47 PR), Google Calendar 양방향 동기화(2026-09-02), 보안/신뢰성 리뷰 + 배포
+인프라 복구(2026-09-07~09). 재개 이력의 자세한 내용은
+[`../memdo-backend/README.md`](../memdo-backend/README.md)의 "현재 상태"를 따른다. 아래는
+2026-08-17 시점 기준 범위다.
 
 - UI/UX 디자인 기준선: 확정
 - 기준 기기: iPhone 15 (`393×852pt`)
@@ -14,7 +42,10 @@ AI 일정 제안, 개인 캘린더, 하루 요약, 홈·잠금화면 위젯을 �
 - Apple·Google·GitHub 로그인: UI·callback 구현 완료, 자격 증명 구성 완료. 익명 세션 경로는 실제
   계정으로 검증됨; 세 provider 각각의 실기기 로그인 왕복은 출시 전 재확인 필요
   (`memdo-backend/docs/auth-social-login.md` 참고)
-- **Google Calendar 연동**: 읽기 전용 미러(연결·해제·재인증), Today/캘린더 통합 타임라인에 출처 배지로 표시
+- **Google Calendar 연동**: 양방향 동기화(연결·해제·재인증, 앱에서 만든 일정이 Google에도 반영,
+  Google 쪽 변경은 실시간 webhook으로 pull), Today/캘린더 통합 타임라인에 출처 배지로 표시 —
+  2026-09-02에 읽기 전용 mirror에서 확장됨, 자세한 내용은
+  [`../memdo-backend/docs/roadmap.md`](../memdo-backend/docs/roadmap.md)의 B8
 - **운동 기록**: Supabase 백엔드(workout_logs + Edge Function) 배포 완료, HealthKit 자동 가져오기, 새 일정 시트 분류에 통합
 - **Dynamic Island Live Activity**: 일정 시작 전(카운트다운) → 진행 중(종료까지) → 완료(체크) 3단계 표시, 운동 전용 Live Activity 별도 지원
 - **사용자 정의 카테고리**: 이름·이모지·색상으로 나만의 일정 분류 추가, 서버 동기화
@@ -57,8 +88,18 @@ apps/ios/Memdo/
 └── project.yml
 ```
 
-Xcode에서 `apps/ios/Memdo/Memdo.xcodeproj`를 열어 `Memdo` 스킴을 실행합니다.
+`Memdo.xcodeproj`는 `project.yml`에서 생성되며 커밋하지 않는다. 처음 받거나 `project.yml`이 바뀐
+뒤에는:
 
-## 최종 디자인 시안
+```bash
+brew install xcodegen
+cd apps/ios/Memdo
+xcodegen generate
+```
+
+그 다음 `apps/ios/Memdo/Memdo.xcodeproj`를 Xcode에서 열어 `Memdo` 스킴을 실행합니다. (CI도
+`.github/workflows/ci.yml`에서 같은 순서로 빌드·테스트한다.)
+
+## 디자인 시안
 
 최종 승인 시안은 [`design/previews`](design/previews)에만 보관합니다. `outputs`는 디자인 탐색 과정의 산출물이며 저장소에서 제외합니다.
