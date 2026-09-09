@@ -42,27 +42,25 @@ struct SwipeableScheduleRow: View {
 
     private var actionButtons: some View {
         HStack(spacing: 0) {
-            Button(action: complete) {
-                Image(systemName: schedule.isDone ? "arrow.uturn.backward" : "checkmark")
-                    .font(MemdoTypography.title3)
-                    .frame(width: revealWidth, height: MemdoMetrics.touchTarget)
-                    .foregroundStyle(MemdoTheme.onActivityAccent)
-            }
-            .buttonStyle(.plain)
-            .background(MemdoTheme.activityAccent)
+            SwipeActionButton(
+                systemImage: schedule.isDone ? "arrow.uturn.backward" : "checkmark",
+                tint: MemdoTheme.activityAccent,
+                onTint: MemdoTheme.onActivityAccent,
+                width: revealWidth,
+                action: complete
+            )
             .accessibilityHidden(true) // covered by the row-level accessibilityAction above
             .opacity(offset > 0 ? 1 : 0)
 
             Spacer(minLength: 0)
 
-            Button(role: .destructive, action: startDelete) {
-                Image(systemName: "trash")
-                    .font(MemdoTypography.title3)
-                    .frame(width: revealWidth, height: MemdoMetrics.touchTarget)
-                    .foregroundStyle(MemdoTheme.onDestructive)
-            }
-            .buttonStyle(.plain)
-            .background(MemdoTheme.destructive)
+            SwipeActionButton(
+                systemImage: "trash",
+                tint: MemdoTheme.destructive,
+                onTint: MemdoTheme.onDestructive,
+                width: revealWidth,
+                action: startDelete
+            )
             .accessibilityHidden(true)
             .opacity(offset < 0 ? 1 : 0)
         }
@@ -111,5 +109,53 @@ struct SwipeableScheduleRow: View {
         } else {
             withAnimation(.spring(duration: 0.25)) { body() }
         }
+    }
+}
+
+/// The revealed swipe action's tint used to fill only a fixed `touchTarget`
+/// height, centered inside `SwipeableScheduleRow`'s full (usually taller,
+/// two-line) row -- a floating colored box with visible background showing
+/// above and below it instead of a solid fill. This fills the whole
+/// available height instead, and adds the press feedback
+/// (`MemdoActivityAccentButtonStyle`/`MemdoPrimaryActionButtonStyle`'s
+/// opacity+scale convention) the bare Image-in-a-Button version had none of.
+private struct SwipeActionButton: View {
+    let systemImage: String
+    let tint: Color
+    let onTint: Color
+    let width: CGFloat
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(MemdoTypography.title2)
+                .fontWeight(.semibold)
+        }
+        .buttonStyle(SwipeActionButtonStyle(tint: tint, onTint: onTint, width: width))
+    }
+}
+
+/// Same press feedback convention as `MemdoActivityAccentButtonStyle`
+/// (Workout) / `MemdoPrimaryActionButtonStyle` -- opacity dim + slight
+/// scale on press, respecting reduceMotion -- applied here via
+/// `ButtonStyle.configuration.isPressed` rather than a manual gesture,
+/// consistent with how every other button-press effect in this app is done.
+private struct SwipeActionButtonStyle: ButtonStyle {
+    let tint: Color
+    let onTint: Color
+    let width: CGFloat
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(onTint)
+            .frame(width: width)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .background(tint)
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.94 : 1)
+            .animation(reduceMotion ? nil : .spring(duration: 0.15), value: configuration.isPressed)
     }
 }
