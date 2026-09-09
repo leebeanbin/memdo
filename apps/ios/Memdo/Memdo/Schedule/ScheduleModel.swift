@@ -1363,34 +1363,36 @@ final class ScheduleStore {
             // there's nothing to undo here.
             throw error
         }
+        // POST /todos (create) doesn't accept a status -- new rows always start
+        // "planned" server-side, so `saved` itself is never done even when the
+        // caller's intent (e.g. completing a virtual/Google-mirrored occurrence
+        // in one action) was to create-and-complete. `desired` is what the UI
+        // should show right away: showing raw `saved` here first (as this used
+        // to) flickered a just-checked checkbox back to unchecked for the
+        // entire round-trip of the follow-up PATCH below -- and if that PATCH
+        // failed (found live, see todos/index.ts's materialize fixes), it
+        // stayed stuck unchecked, reading as "the tap didn't register."
+        var desired = saved
+        desired.status = schedule.status
         // The row is real now regardless of what happens below -- keep it that
         // way even if the follow-up fails, so a retry goes through update()'s
         // PATCH path rather than create() again (which would now 409 on the id
         // it already owns).
         if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
-            schedules[index] = saved
+            schedules[index] = desired
         } else {
-            schedules.append(saved)
+            schedules.append(desired)
         }
         updateWidgetSnapshot()
-        await NotificationScheduler.scheduleReminder(for: saved)
-        await NotificationScheduler.scheduleEndNotification(for: saved)
+        await NotificationScheduler.scheduleReminder(for: desired)
+        await NotificationScheduler.scheduleEndNotification(for: desired)
         // Fires only now that the row is confirmed persisted -- not
         // optimistically at the start of save(), which could announce a
         // schedule that then fails validation or a conflict and never exists.
         if notifyOnSuccess {
-            await SlackNotifier.notify(schedule: saved, event: .created)
+            await SlackNotifier.notify(schedule: desired, event: .created)
         }
-        // POST /todos (create) doesn't accept a status -- new rows always start
-        // "planned" server-side. If the caller's intent was e.g. completing a
-        // virtual occurrence in one action, follow up with the real row's status
-        // now that it has a real version to optimistically-lock against. `saved`
-        // (the real "planned" row, notification already scheduled for it above)
-        // stays in `schedules` regardless of what happens to this follow-up --
-        // it's genuinely real server-side now, unlike the create step above.
         guard saved.status != schedule.status else { return .committed }
-        var desired = saved
-        desired.status = schedule.status
         do {
             let updated = try await repository.update(desired, calendars: calendars)
             if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
@@ -1406,17 +1408,26 @@ final class ScheduleStore {
             }
             return .committed
         } catch ScheduleAPIError.offline {
-            // The row itself is committed (saved, notification already set
-            // above); only the desired-status half is queued. `schedules`
-            // still shows `saved` (not `desired`) -- nothing further to
-            // schedule, the existing notification for `saved` is already
-            // consistent with what's actually stored locally.
+            // The row itself is committed (created, real); only the
+            // desired-status half is queued. `schedules` keeps showing
+            // `desired` -- same optimistic-stays-as-is philosophy as every
+            // other offline path in this file (see create()'s own top-level
+            // offline catch) -- and its notification (set above) is already
+            // consistent with that.
             await outbox.enqueue(.update(desired), scheduleID: schedule.id)
             return .createdStatusQueuedOffline
         } catch {
-            // Real failure on just the status half -- `saved` stays as-is in
-            // `schedules` (correct, it's real), and its notification (set
-            // above) is already consistent with that -- nothing to undo.
+            // Real failure on the status half -- the item is genuinely still
+            // `saved`'s status server-side, so revert the optimistic `desired`
+            // (and its notification, scheduled above) back to that, rather
+            // than leaving the UI showing a status that was never actually
+            // committed.
+            if let index = schedules.firstIndex(where: { $0.id == schedule.id }) {
+                schedules[index] = saved
+                updateWidgetSnapshot()
+            }
+            await NotificationScheduler.scheduleReminder(for: saved)
+            await NotificationScheduler.scheduleEndNotification(for: saved)
             noticeCenter.error(error.localizedDescription)
             throw ScheduleWriteError.partialFailure(underlying: error)
         }
