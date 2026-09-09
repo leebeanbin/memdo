@@ -92,7 +92,8 @@ struct CalendarView: View {
             headerActionIcon: isSearchPresented ? "xmark" : "magnifyingglass",
             headerActionLabel: isSearchPresented ? "검색 닫기" : "일정 검색",
             headerAction: toggleSearch,
-            scrollTarget: coachMarkTarget == .calendarOverview ? .calendarOverview : nil
+            scrollTarget: coachMarkTarget == .calendarOverview ? .calendarOverview : nil,
+            onRefresh: { await scheduleStore.load() }
         ) {
             if isSearchPresented {
                 CalendarSearchControls(query: $searchQuery, scope: $searchScope)
@@ -338,8 +339,6 @@ private struct CalendarMonthCard: View {
     var body: some View {
         VStack(spacing: MemdoMetrics.sectionContentSpacing) {
             monthControls
-            .contentShape(Rectangle())
-            .highPriorityGesture(monthSwipeGesture)
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
                 ForEach(weekdays, id: \.self) { weekday in
@@ -362,6 +361,15 @@ private struct CalendarMonthCard: View {
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
         .memdoRowGroup()
+        // Was only on monthControls (the header row) -- a user swiping
+        // anywhere on the visible day grid, not just the header, got no
+        // response and had to find the small arrow buttons instead.
+        // minimumDistance: 44 means this never intercepts a plain tap on a
+        // day cell or the header's own buttons; only a real horizontal drag
+        // wins here (highPriorityGesture over dayButton's tap, same as it
+        // already coexisted with monthControls' buttons before this change).
+        .contentShape(Rectangle())
+        .highPriorityGesture(monthSwipeGesture)
         .accessibilityAction(named: "이전 달") { onMoveMonth(-1) }
         .accessibilityAction(named: "다음 달") { onMoveMonth(1) }
     }

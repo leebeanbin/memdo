@@ -17,7 +17,7 @@ AI 일정 제안, 개인 캘린더, 하루 요약, 홈·잠금화면 위젯을 �
 
 - **UI**: SwiftUI, Swift 6, iOS 17+ (`apps/ios/Memdo/project.yml`)
 - **프로젝트 생성**: [XcodeGen](https://github.com/yonaskolb/XcodeGen) — `project.yml`에서
-  `Memdo.xcodeproj`를 생성한다 (프로젝트 파일 자체는 커밋하지 않음)
+  `Memdo.xcodeproj`를 생성한다 (생성된 `.xcodeproj`도 커밋함 — 아래 "iOS 프로젝트" 참고)
 - **백엔드 연동**: [`supabase-swift`](https://github.com/supabase/supabase-swift) (Auth, 익명 세션),
   YAML 파싱은 [`Yams`](https://github.com/jpsim/Yams)
 - **AI**: 온디바이스 Apple FoundationModels + 사용자 BYOK OpenRouter(클라우드, streaming)
@@ -88,8 +88,9 @@ apps/ios/Memdo/
 └── project.yml
 ```
 
-`Memdo.xcodeproj`는 `project.yml`에서 생성되며 커밋하지 않는다. 처음 받거나 `project.yml`이 바뀐
-뒤에는:
+`Memdo.xcodeproj`는 `project.yml`에서 [XcodeGen](https://github.com/yonaskolb/XcodeGen)으로
+생성하고, 생성 결과 자체도 커밋한다 (CI가 매번 `xcodegen generate`부터 다시 실행하긴 하지만, 로컬에서
+바로 `.xcodeproj`를 열 수 있어야 한다). `project.yml`을 바꿨다면:
 
 ```bash
 brew install xcodegen
@@ -97,8 +98,11 @@ cd apps/ios/Memdo
 xcodegen generate
 ```
 
-그 다음 `apps/ios/Memdo/Memdo.xcodeproj`를 Xcode에서 열어 `Memdo` 스킴을 실행합니다. (CI도
-`.github/workflows/ci.yml`에서 같은 순서로 빌드·테스트한다.)
+그 다음 `git diff`로 실제 의도한 변경만 반영됐는지 확인하고 커밋한다 — xcodegen 버전이 다르면
+`DEVELOPMENT_TEAM` 같이 `project.yml`에 없는, 로컬에서만 의미 있는 서명 설정이 결과물에서
+빠지는 등 관련 없는 diff가 섞여 나올 수 있다. 그 다음 `apps/ios/Memdo/Memdo.xcodeproj`를 Xcode에서
+열어 `Memdo` 스킴을 실행합니다. (CI도 `.github/workflows/ci.yml`에서 같은 `xcodegen generate` 순서로
+빌드·테스트한다.)
 
 ## 디자인 시안
 

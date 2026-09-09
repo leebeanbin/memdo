@@ -24,6 +24,11 @@ struct MemdoPage<Content: View>: View {
     let headerAction: () -> Void
     let bottomClearance: CGFloat
     let scrollTarget: CoachMarkTarget?
+    /// Pull-to-refresh handler -- nil (the default) shows no refresh control
+    /// at all, since most MemdoPage screens have nothing worth reloading on
+    /// demand. Pass one on screens backed by a server fetch a user might
+    /// reasonably want to force (e.g. CalendarView -> scheduleStore.load()).
+    let onRefresh: (() async -> Void)?
     @ViewBuilder let content: Content
 
     init(
@@ -35,6 +40,7 @@ struct MemdoPage<Content: View>: View {
         headerAction: @escaping () -> Void = {},
         bottomClearance: CGFloat = MemdoMetrics.tabBarClearance,
         scrollTarget: CoachMarkTarget? = nil,
+        onRefresh: (() async -> Void)? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
@@ -45,6 +51,7 @@ struct MemdoPage<Content: View>: View {
         self.headerAction = headerAction
         self.bottomClearance = bottomClearance
         self.scrollTarget = scrollTarget
+        self.onRefresh = onRefresh
         self.content = content()
     }
 
@@ -69,6 +76,7 @@ struct MemdoPage<Content: View>: View {
                         .padding(.bottom, bottomClearance)
                     }
                     .scrollIndicators(.hidden)
+                    .memdoRefreshable(onRefresh)
                     .onChange(of: scrollTarget, initial: true) { _, target in
                         guard let target else { return }
                         Task { @MainActor in
@@ -492,5 +500,18 @@ extension View {
         presentationDetents(detents)
             .presentationDragIndicator(.visible)
             .presentationBackground(MemdoTheme.background)
+    }
+
+    /// `.refreshable` only when `action` is non-nil -- MemdoPage's `onRefresh`
+    /// is opt-in per screen, and unconditionally attaching `.refreshable`
+    /// would show a pull-to-refresh spinner even on screens (Settings,
+    /// DailySummaryView) that have nothing meaningful to reload.
+    @ViewBuilder
+    func memdoRefreshable(_ action: (() async -> Void)?) -> some View {
+        if let action {
+            refreshable { await action() }
+        } else {
+            self
+        }
     }
 }

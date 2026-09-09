@@ -111,6 +111,20 @@ struct TodayView: View {
                         )
                         .id(CoachMarkTarget.todayOverview)
                         .coachMarkTarget(.todayOverview)
+                        // Same day-swipe as TodayWeekIndex below, on the date
+                        // header itself -- previously only the small week-strip
+                        // responded to a horizontal swipe, not the "오늘"/date
+                        // title area most people would naturally try first.
+                        // Not extended further down into the schedule list:
+                        // SwipeableScheduleRow's own row-level swipe-to-
+                        // complete/delete lives there, and a second
+                        // highPriorityGesture at that level would contend
+                        // with it for the same horizontal drag.
+                        .offset(x: weekDragOffset)
+                        .highPriorityGesture(
+                            dateSwipeGesture,
+                            including: dynamicTypeSize.isAccessibilitySize ? .subviews : .all
+                        )
                         TodayWeekIndex(
                             dates: weekDates,
                             selectedDate: selectedDate,
@@ -178,6 +192,14 @@ struct TodayView: View {
                             showAllSchedules = true
                         }
                     }
+                    // Pull-down refresh -- reloads from the backend, which
+                    // already reflects whatever Google Calendar sync (webhook
+                    // or the 1-minute push/15-minute pull cron) has landed by
+                    // now. Doesn't force a new Google-side sync (there's no
+                    // per-user "sync now" endpoint); it's a reassurance/
+                    // fallback affordance for "did my change actually go
+                    // through", same as any mail/calendar app's pull-to-refresh.
+                    .refreshable { await scheduleStore.load() }
                 }
             }
             .sheet(item: $presentedSheet) { destination in
