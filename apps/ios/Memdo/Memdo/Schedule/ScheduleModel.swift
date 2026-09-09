@@ -538,8 +538,16 @@ enum ScheduleWriteError: Error, LocalizedError {
             "해당 일정을 찾을 수 없어요."
         case .invalidInput:
             "요청하신 날짜/시간을 처리하지 못했어요."
-        case .partialFailure(let underlying):
-            "일부만 반영됐어요: \(underlying.localizedDescription)"
+        case .partialFailure:
+            // `underlying` is deliberately not interpolated here -- it's
+            // whatever repository.update(_:) threw for the follow-up status
+            // PATCH, which for an unrecognized error type could be raw,
+            // developer-facing text (see ScheduleStore.report(_:), the
+            // single place that's actually shown -- this case's own
+            // errorDescription is used verbatim there, so it must already be
+            // user-safe). The underlying error is logged there before this
+            // is ever displayed.
+            "일부만 반영됐어요. 잠시 후 다시 확인해 주세요."
         case .staleVersion(let resolution):
             switch resolution {
             case .refreshedAndFound:
@@ -664,9 +672,34 @@ final class ScheduleStore {
     /// for these two cases. Posts here, at the single point both cases are
     /// thrown from, rather than touching every call site.
     private func fail(_ error: ScheduleWriteError) -> ScheduleWriteError {
-        noticeCenter.error(error.localizedDescription)
+        report(error)
         return error
     }
+
+    /// Single choke point for every "a write failed, tell the user" site in
+    /// this file (12+ call sites used to each do `noticeCenter.error(error.
+    /// localizedDescription)` directly). `ScheduleWriteError`/`ScheduleAPIError`
+    /// already carry hand-written, user-safe Korean text (including
+    /// `.server`'s message, which is the backend's own already-friendly
+    /// apiError() string -- see memdo-backend's withCrudErrors) -- shown as-is.
+    /// Anything else (a raw Foundation/URLSession/decode error, an
+    /// unrecognized Supabase SDK error) is exactly what shouldn't reach a
+    /// user as-is: their `.localizedDescription` is written for a developer
+    /// console, not a "일정을 완료하지 못했어요" toast, and can be in English
+    /// or reference implementation details. The real error is always logged
+    /// via `Self.logger` first regardless of which branch fires, so nothing
+    /// is actually lost -- only what the user sees changes.
+    private func report(_ error: Error) {
+        Self.logger.error("write failed: \(String(describing: error), privacy: .public)")
+        let message: String = switch error {
+        case let writeError as ScheduleWriteError: writeError.errorDescription ?? Self.genericWriteFailureMessage
+        case let apiError as ScheduleAPIError: apiError.errorDescription ?? Self.genericWriteFailureMessage
+        default: Self.genericWriteFailureMessage
+        }
+        noticeCenter.error(message)
+    }
+
+    private static let genericWriteFailureMessage = "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요."
 
     init(
         repository: ScheduleRepository,
@@ -968,7 +1001,7 @@ final class ScheduleStore {
             merge(fetched)
             return true
         } catch {
-            noticeCenter.error(error.localizedDescription)
+            report(error)
             return false
         }
     }
@@ -1138,14 +1171,14 @@ final class ScheduleStore {
                 // *any* non-offline failure, including ones that would have
                 // succeeded a moment later (founder-dogfooding fix, fe8).
                 if case .server(let status, _, _, _) = error, status >= 500 {
-                    noticeCenter.error(error.localizedDescription)
+                    report(error)
                     continue
                 }
                 await outbox.remove(entry.scheduleID)
-                noticeCenter.error(error.localizedDescription)
+                report(error)
             } catch {
                 await outbox.remove(entry.scheduleID)
-                noticeCenter.error(error.localizedDescription)
+                report(error)
             }
         }
         updateWidgetSnapshot()
@@ -1252,7 +1285,7 @@ final class ScheduleStore {
             try await repository.createRule(schedule)
             await load()
         } catch {
-            noticeCenter.error(error.localizedDescription)
+            report(error)
         }
     }
 
@@ -1264,7 +1297,7 @@ final class ScheduleStore {
                 try await repository.deleteRule(id: ruleId)
                 await load()
             } catch {
-                noticeCenter.error(error.localizedDescription)
+                report(error)
             }
         }
     }
@@ -1357,7 +1390,7 @@ final class ScheduleStore {
                 schedules.removeAll { $0.id == schedule.id }
             }
             updateWidgetSnapshot()
-            noticeCenter.error(error.localizedDescription)
+            report(error)
             // No notification was ever scheduled for this attempt (create()
             // only schedules on a real commit/offline-queue below), so
             // there's nothing to undo here.
@@ -1428,7 +1461,7 @@ final class ScheduleStore {
             }
             await NotificationScheduler.scheduleReminder(for: saved)
             await NotificationScheduler.scheduleEndNotification(for: saved)
-            noticeCenter.error(error.localizedDescription)
+            report(error)
             throw ScheduleWriteError.partialFailure(underlying: error)
         }
     }
@@ -1459,7 +1492,7 @@ final class ScheduleStore {
         } catch {
             replace(schedule.id, with: previous)
             updateWidgetSnapshot()
-            noticeCenter.error(error.localizedDescription)
+            report(error)
             // No notification was scheduled for the edited value before this
             // request (see create()/update() -- scheduling only ever happens
             // inside a commit/offline branch), so nothing needs restoring
@@ -1716,7 +1749,7 @@ final class ScheduleStore {
                 schedules[index] = materialized ?? original
             }
             updateWidgetSnapshot()
-            noticeCenter.error(error.localizedDescription)
+            report(error)
             // Notifications were never touched before this request (only the
             // success/offline branches above schedule anything), so nothing
             // needs restoring -- whatever was scheduled for `original` before
@@ -1782,7 +1815,7 @@ final class ScheduleStore {
                 schedules.append(materialized ?? schedule)
             }
             updateWidgetSnapshot()
-            noticeCenter.error(error.localizedDescription)
+            report(error)
             // Notifications were never cancelled before this request (see
             // above -- only commit/offline cancel), so nothing needs
             // rescheduling here; the restored row's notification was never
