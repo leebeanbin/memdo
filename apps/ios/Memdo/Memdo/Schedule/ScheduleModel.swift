@@ -652,12 +652,24 @@ final class ScheduleStore {
     private let noticeCenter: AppNoticeCenter
     private var lastWidgetDays: [MemdoWidgetDay]?
     private var lastSyncCursor: String?
-    /// IDs with a create/update/delete/reschedule in flight. A re-entrant call for
-    /// the same id (e.g. a double-tapped completion toggle, or a different action
-    /// racing in from another entry point) throws `ScheduleWriteError.busy` rather
-    /// than firing a second request that's guaranteed to lose the optimistic-lock
-    /// race -- it used to return silently, which a caller could misread as success.
-    private var pendingWriteIDs: Set<UUID> = []
+    /// IDs with a create/update/delete/reschedule in flight, each paired with
+    /// when the guard was taken. A re-entrant call for the same id (e.g. a
+    /// double-tapped completion toggle, or a different action racing in from
+    /// another entry point) throws `ScheduleWriteError.busy` rather than
+    /// firing a second request that's guaranteed to lose the optimistic-lock
+    /// race -- it used to return silently, which a caller could misread as
+    /// success. Timestamped (not a bare Set) so a guard held implausibly
+    /// long is treated as abandoned rather than blocking that id forever
+    /// with no recovery but a full relaunch -- found live: the app's scene
+    /// briefly losing foreground mid-request (a spurious scenePhase flicker,
+    /// see AppShellView's debounce) can suspend the in-flight Task before
+    /// its `defer { pendingWriteIDs.removeValue(...) }` ever runs, and every
+    /// subsequent tap on that same item then silently no-ops forever -- no
+    /// error shown (the same guard blocks `fail(.busy)`'s own notice from
+    /// being anything but "try again," which every `try?`-swallowing call
+    /// site then discards).
+    private var pendingWriteIDs: [UUID: Date] = [:]
+    private static let maxPendingWriteAge: TimeInterval = 20
     private var loadedFrom: Date?
     private var loadedTo: Date?
     private(set) var isLoadingRange = false
@@ -665,8 +677,22 @@ final class ScheduleStore {
     private var networkMonitor: NetworkMonitor?
     private var isDraining = false
 
+    /// True while a real (not stale/abandoned) write guard is held for `id`.
+    /// The single choke point for every pendingWriteIDs read -- evicts a
+    /// guard older than `maxPendingWriteAge` as a side effect, so the very
+    /// next check (whether a blocking guard or a read-only skip-merge check)
+    /// after one goes stale sees it as free again.
+    private func isPendingWrite(_ id: UUID) -> Bool {
+        guard let startedAt = pendingWriteIDs[id] else { return false }
+        guard Date.now.timeIntervalSince(startedAt) <= Self.maxPendingWriteAge else {
+            pendingWriteIDs.removeValue(forKey: id)
+            return false
+        }
+        return true
+    }
+
     func isPending(_ id: UUID) -> Bool {
-        pendingWriteIDs.contains(id)
+        isPendingWrite(id)
     }
 
     /// fe6: every ScheduleWriteError case except .busy/.notFound already posted
@@ -1020,7 +1046,7 @@ final class ScheduleStore {
             // and prompting a re-tap that then collides with the still-
             // in-flight write's pendingWriteIDs guard. Same pattern
             // drainOutbox() already uses (founder-dogfooding fix, fe8).
-            guard !pendingWriteIDs.contains(item.id) else { continue }
+            guard !isPendingWrite(item.id) else { continue }
             if let index = schedules.firstIndex(where: { $0.id == item.id }) {
                 schedules[index] = item
             } else {
@@ -1064,14 +1090,14 @@ final class ScheduleStore {
                                 // a save in flight for this id owns the
                                 // authoritative next state, not a sync page
                                 // fetched before that write lands.
-                                guard !pendingWriteIDs.contains(id) else { continue }
+                                guard !isPendingWrite(id) else { continue }
                                 schedules.removeAll { $0.id == id }
                                 changed = true
                             }
                         } else if let dto = item.todoData,
                                   let calendar = calendarsByID[dto.calendarId],
                                   let mapped = try? ScheduleDetail(dto: dto, calendar: calendar) {
-                            guard !pendingWriteIDs.contains(mapped.id) else { continue }
+                            guard !isPendingWrite(mapped.id) else { continue }
                             if let index = schedules.firstIndex(where: { $0.id == mapped.id }) {
                                 schedules[index] = mapped
                             } else {
@@ -1140,7 +1166,7 @@ final class ScheduleStore {
             // version. Leave it queued; the next drain (or the guarded
             // write's own outbox.enqueue on failure) picks it up (founder-
             // dogfooding fix, fe8).
-            guard !pendingWriteIDs.contains(entry.scheduleID) else { continue }
+            guard !isPendingWrite(entry.scheduleID) else { continue }
             do {
                 switch entry.operation {
                 case .create(let schedule):
@@ -1314,9 +1340,9 @@ final class ScheduleStore {
     /// immediately; only the async network write and its outcome moved to
     /// being awaited instead of fired into a background `Task`.
     func save(_ schedule: ScheduleDetail) async throws -> ScheduleWriteOutcome {
-        guard !pendingWriteIDs.contains(schedule.id) else { throw fail(.busy) }
-        pendingWriteIDs.insert(schedule.id)
-        defer { pendingWriteIDs.remove(schedule.id) }
+        guard !isPendingWrite(schedule.id) else { throw fail(.busy) }
+        pendingWriteIDs[schedule.id] = Date.now
+        defer { pendingWriteIDs.removeValue(forKey: schedule.id) }
         return try await performSave(schedule)
     }
 
@@ -1518,7 +1544,7 @@ final class ScheduleStore {
         // fe9: previously called the full load() -> drainOutbox(), re-entering
         // the outbox drain while pendingWriteIDs still holds the guard for
         // idBeingWritten (this catch block runs before save()/move()/delete()'s
-        // own `defer { pendingWriteIDs.remove(...) }` executes) -- the exact
+        // own `defer { pendingWriteIDs.removeValue(...) }` executes) -- the exact
         // race fe8 fixed for the general retry path. A version conflict only
         // needs the truth about THIS ONE item, not the whole store, so
         // fetchRange narrowly around its own date instead -- fetchRange never
@@ -1642,7 +1668,7 @@ final class ScheduleStore {
     /// guard-free `performSave(_:)` (not public `save(_:)`), so that
     /// fallback doesn't re-take a guard this function already holds.
     func move(id: UUID, to date: Date, startAt: Date? = nil, endAt: Date? = nil) async throws -> ScheduleWriteOutcome {
-        guard !pendingWriteIDs.contains(id) else { throw fail(.busy) }
+        guard !isPendingWrite(id) else { throw fail(.busy) }
         guard let index = schedules.firstIndex(where: { $0.id == id }) else {
             throw fail(.notFound)
         }
@@ -1688,8 +1714,8 @@ final class ScheduleStore {
         }
         assert(calendar.isDate(moved.scheduledDate, inSameDayAs: date))
 
-        pendingWriteIDs.insert(id)
-        defer { pendingWriteIDs.remove(id) }
+        pendingWriteIDs[id] = Date.now
+        defer { pendingWriteIDs.removeValue(forKey: id) }
 
         // The backend only reschedules live entries (preserving the original as
         // history); completed/cancelled ones fall back to a plain in-place update.
@@ -1767,14 +1793,14 @@ final class ScheduleStore {
     }
 
     func delete(id: UUID) async throws -> ScheduleWriteOutcome {
-        guard !pendingWriteIDs.contains(id) else { throw fail(.busy) }
+        guard !isPendingWrite(id) else { throw fail(.busy) }
         guard let index = schedules.firstIndex(where: { $0.id == id }) else {
             throw fail(.notFound)
         }
         let schedule = schedules.remove(at: index)
         updateWidgetSnapshot()
-        pendingWriteIDs.insert(id)
-        defer { pendingWriteIDs.remove(id) }
+        pendingWriteIDs[id] = Date.now
+        defer { pendingWriteIDs.removeValue(forKey: id) }
         return try await performDelete(schedule)
     }
 
