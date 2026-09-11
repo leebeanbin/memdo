@@ -49,6 +49,19 @@ struct AppShellView: View {
     @State private var agentTabFrame = CGRect.zero
     @State private var scheduleSheet: ScheduleDetail?
     @AppStorage("has-seen-guide") private var hasSeenGuide = false
+    /// Debounces the scenePhase-triggered refresh below -- found live: a
+    /// system edge gesture (App Switcher/Control Center swiping near the
+    /// screen edge, plausible given how much of this app's own interaction
+    /// is swipe-based) can briefly toggle scenePhase away from and back to
+    /// .active without the app ever really leaving foreground, and each
+    /// toggle re-ran a full /sync fetch + merge + dayCache rebuild + widget
+    /// snapshot cycle -- easily every few seconds during active use, which
+    /// is real, repeated main-thread cost sitting in the middle of whatever
+    /// the user was actually doing. A genuine background/foreground cycle
+    /// is never this frequent, so requiring some minimum gap between actual
+    /// refreshes doesn't cost real staleness -- only spurious re-triggers.
+    @State private var lastActiveRefreshAt: Date?
+    private static let minActiveRefreshInterval: TimeInterval = 20
 
     var body: some View {
         appTabs
@@ -85,6 +98,11 @@ struct AppShellView: View {
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
+                    let now = Date.now
+                    if let last = lastActiveRefreshAt, now.timeIntervalSince(last) < Self.minActiveRefreshInterval {
+                        return
+                    }
+                    lastActiveRefreshAt = now
                     Task { await scheduleStore.refresh() }
                     // bd26: workout_logs now participates in the same /sync
                     // stream (see WorkoutStore.refresh()).
