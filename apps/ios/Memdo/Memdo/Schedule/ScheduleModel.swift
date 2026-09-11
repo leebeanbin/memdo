@@ -1836,7 +1836,31 @@ final class ScheduleStore {
         await NotificationScheduler.reconcileScheduleNotifications(schedules: schedules)
     }
 
+    /// Called synchronously from ~20 sites in every write path, always
+    /// between the optimistic `schedules` mutation and the `await` that
+    /// starts the actual network request -- so its own cost sat directly in
+    /// the critical path between a tap and the UI reflecting it, on every
+    /// single edit, regardless of network speed (found while investigating
+    /// "the front-end doesn't respond right away" -- this runs before the
+    /// network call even starts). The real work -- an O(days) scan building
+    /// `MemdoWidgetDay`s, JSON-encoding the snapshot, a UserDefaults write,
+    /// and `WidgetCenter.shared.reloadAllTimelines()` (an XPC round-trip
+    /// Apple's own docs warn against calling excessively) -- doesn't need to
+    /// block the caller's continuation at all; deferring it to a fresh Task
+    /// lets the current call stack (and the SwiftUI render pass reacting to
+    /// the optimistic update) run first. `schedules`/`lastWidgetDays` are
+    /// read inside the deferred closure, not captured here, so if several
+    /// calls stack up before their Tasks run, they naturally converge on
+    /// whatever `schedules` holds by then -- fine for a widget snapshot,
+    /// which only needs to reflect the latest state, never a history of
+    /// every transient one.
     private func updateWidgetSnapshot() {
+        Task { @MainActor [weak self] in
+            self?.computeAndPersistWidgetSnapshot()
+        }
+    }
+
+    private func computeAndPersistWidgetSnapshot() {
         let calendar = Calendar.current
         let now = Date.now
         let start = calendar.dateInterval(of: .month, for: now)?.start ?? calendar.startOfDay(for: now)
