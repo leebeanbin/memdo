@@ -366,6 +366,15 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
     /// Any valid URL stored in the dedicated link field (meetings, docs, any URL).
     var linkURL: URL? { meetingURLString.flatMap(URL.init(string:)) }
 
+    /// `meetingProvider` reads this on every ScheduleRow render (rowContent's
+    /// meeting-icon check), so a fresh NSDataDetector per call -- regex
+    /// compilation, not free -- was redone for every visible row on every
+    /// re-render, exactly the "cache the thing that does real work" mistake
+    /// this file's DateFormatter caching already fixed elsewhere. A plain
+    /// NSDataDetector is immutable/stateless after creation, so one shared
+    /// instance is safe to reuse across every ScheduleDetail.
+    private static let linkDetector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+
     /// First recognised video-meeting link. Checks the dedicated field first so MCP
     /// and future integrations can write a clean URL; falls back to scanning memo/location.
     var meetingURL: URL? {
@@ -373,9 +382,7 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
             return url
         }
         let text = [memo, location].filter { !$0.isEmpty }.joined(separator: "\n")
-        guard !text.isEmpty,
-              let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
-        else { return nil }
+        guard !text.isEmpty, let detector = Self.linkDetector else { return nil }
         let range = NSRange(text.startIndex..., in: text)
         for match in detector.matches(in: text, range: range) {
             if let url = match.url, MeetingProvider.recognized(url) != nil {
@@ -388,9 +395,7 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
     /// Non-meeting web links found in the note/location, surfaced as attachments.
     var attachedLinks: [URL] {
         let text = [memo, location].filter { !$0.isEmpty }.joined(separator: "\n")
-        guard !text.isEmpty,
-              let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
-        else { return [] }
+        guard !text.isEmpty, let detector = Self.linkDetector else { return [] }
         let range = NSRange(text.startIndex..., in: text)
         let meeting = meetingURL
         var seen = Set<String>()
