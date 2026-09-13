@@ -435,8 +435,13 @@ struct CloudAgentConnectionSheet: View {
         "$" + String(format: "%.*f", locale: Locale(identifier: "en_US_POSIX"), digits, value)
     }
 
+    // Built fresh per usage row otherwise; every call site is this view's
+    // own body (MainActor), matching WorkoutAPI.swift's WorkoutDate.iso
+    // convention for the same non-Sendable-formatter tradeoff.
+    nonisolated(unsafe) private static let usageDateFormatter = ISO8601DateFormatter()
+
     private func usageDate(_ value: String) -> String {
-        guard let date = ISO8601DateFormatter().date(from: value) else { return value }
+        guard let date = Self.usageDateFormatter.date(from: value) else { return value }
         return date.formatted(.dateTime.month().day().hour().minute())
     }
 }

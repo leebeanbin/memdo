@@ -172,12 +172,15 @@ actor BriefingRepository {
         let publishedAt: Date?
         let matchedKeyword: String?
 
+        // Read twice per rendered row (TodayComponents.swift: an emptiness
+        // check, then the label itself) -- every read built a fresh
+        // RelativeDateTimeFormatter. @MainActor since RelativeDateTimeFormatter
+        // isn't Sendable; both call sites already run in SwiftUI view code,
+        // matching DateFormatting.Cached's existing convention.
+        @MainActor
         var relativeTime: String {
             guard let date = publishedAt else { return "" }
-            let f = RelativeDateTimeFormatter()
-            f.unitsStyle = .short
-            f.locale = Locale(identifier: "ko_KR")
-            return f.localizedString(for: date, relativeTo: .now)
+            return DateFormatting.Cached.relativeShortKorean.localizedString(for: date, relativeTo: .now)
         }
     }
 

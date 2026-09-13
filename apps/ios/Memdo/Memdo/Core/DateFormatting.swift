@@ -39,6 +39,12 @@ enum DateFormatting {
         static let monthDayTime = DateFormatting.korean("M월 d일 a h:mm")
         static let fullDate = DateFormatting.korean("yyyy년 M월 d일 EEEE")
         static let timelineHourMinute = DateFormatter.build("H:mm")
+        static let relativeShortKorean: RelativeDateTimeFormatter = {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .short
+            formatter.locale = Locale(identifier: "ko_KR")
+            return formatter
+        }()
     }
 }
 

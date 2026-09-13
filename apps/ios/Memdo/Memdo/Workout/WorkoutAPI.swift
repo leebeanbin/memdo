@@ -5,12 +5,24 @@ import Supabase
 
 private enum WorkoutDate {
     nonisolated(unsafe) private static let iso = ISO8601DateFormatter()
+    // Server responses carry fractional seconds; this app's own instant(_:)
+    // output above doesn't. Cached alongside `iso` instead of both being
+    // rebuilt per parse call -- toWorkoutLog() calls this twice per row.
+    nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
 
     static func instant(_ date: Date) -> String { iso.string(from: date) }
 
     static func day(_ date: Date) -> String {
         let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
+
+    static func parse(_ s: String) -> Date? {
+        isoFractional.date(from: s) ?? iso.date(from: s)
     }
 }
 
@@ -96,12 +108,7 @@ struct WorkoutLogResponseDTO: Decodable {
 
     func toWorkoutLog() -> WorkoutLog? {
         guard let id = UUID(uuidString: id) else { return nil }
-        func parse(_ s: String) -> Date? {
-            let f = ISO8601DateFormatter()
-            f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            return f.date(from: s) ?? ISO8601DateFormatter().date(from: s)
-        }
-        guard let start = parse(startedAt), let end = parse(endedAt) else { return nil }
+        guard let start = WorkoutDate.parse(startedAt), let end = WorkoutDate.parse(endedAt) else { return nil }
         return WorkoutLog(
             id: id, hkUUID: hkUuid,
             source: WorkoutLog.Source(rawValue: source) ?? .manual,

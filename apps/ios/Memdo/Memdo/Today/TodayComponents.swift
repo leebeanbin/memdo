@@ -837,6 +837,7 @@ private extension BriefingRepository.FetchedItem {
     /// Full provenance (source, time, category) -- used for accessibility
     /// labels, where category is worth saying even though sighted users
     /// already see it via the row's category badge.
+    @MainActor
     var metadata: String {
         [sourceName, relativeTime, category.rawValue]
             .filter { !$0.isEmpty }
@@ -846,6 +847,7 @@ private extension BriefingRepository.FetchedItem {
     /// Same as `metadata` without category -- every briefing row already
     /// shows category via its badge, so repeating the name a second time
     /// in the visible metadata line was redundant.
+    @MainActor
     var metadataWithoutCategory: String {
         [sourceName, relativeTime]
             .filter { !$0.isEmpty }

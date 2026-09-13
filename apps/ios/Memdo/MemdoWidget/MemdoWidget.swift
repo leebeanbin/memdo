@@ -58,11 +58,15 @@ private struct MemdoWidgetEntry: TimelineEntry {
     var nextDay: MemdoWidgetDay? { snapshot.nextDay(after: date) }
 }
 
+// Reused across every widget timeline refresh instead of building a fresh
+// (identically unconfigured) decoder per call.
+private let widgetSnapshotDecoder = JSONDecoder()
+
 private func loadWidgetEntry(at date: Date = .now) -> MemdoWidgetEntry {
     let defaults = UserDefaults(suiteName: MemdoWidgetStorage.suiteName)
     let snapshot = defaults
         .flatMap { $0.data(forKey: MemdoWidgetStorage.snapshotKey) }
-        .flatMap { try? JSONDecoder().decode(MemdoWidgetSnapshot.self, from: $0) }
+        .flatMap { try? widgetSnapshotDecoder.decode(MemdoWidgetSnapshot.self, from: $0) }
         ?? .empty(at: date)
     return MemdoWidgetEntry(
         date: date,
