@@ -63,6 +63,16 @@ struct AgentTabBridge: UIViewRepresentable {
         private weak var tabBarController: UITabBarController?
         private weak var forwardedDelegate: (any UITabBarControllerDelegate)?
         private let overlay = AgentHitControl()
+        // findTabBar(in:) and findTabBarController(in:) each recurse the
+        // *entire* window's view/controller tree -- and installOverlay ran
+        // both, unconditionally, on every layoutSubviews() pass (keyboard,
+        // sheet, rotation, dynamic type, scroll -- any layout change
+        // anywhere in the app). The resolved tab bar doesn't move to a
+        // different window or get torn down on every such pass, so cache
+        // it per-window and only re-walk when the window changed or the
+        // cached reference was deallocated (a real hierarchy rebuild).
+        private weak var cachedWindow: UIWindow?
+        private weak var cachedTabBar: UITabBar?
 
         init(targetFrame: Binding<CGRect>, onTap: @escaping () -> Void) {
             self.targetFrame = targetFrame
@@ -76,9 +86,17 @@ struct AgentTabBridge: UIViewRepresentable {
         }
 
         func installOverlay(relativeTo probe: UIView) {
-            guard let window = probe.window,
-                  let tabBar = findTabBar(in: window)
-            else { return }
+            guard let window = probe.window else { return }
+            let tabBar: UITabBar
+            if let cached = cachedTabBar, cachedWindow === window {
+                tabBar = cached
+            } else if let found = findTabBar(in: window) {
+                tabBar = found
+                cachedTabBar = found
+                cachedWindow = window
+            } else {
+                return
+            }
             installSelectionInterceptor(in: window)
 
             let resolved: CGRect
@@ -154,8 +172,15 @@ struct AgentTabBridge: UIViewRepresentable {
         }
 
         private func installSelectionInterceptor(in window: UIWindow) {
-            guard let controller = findTabBarController(in: window.rootViewController) else { return }
-            tabBarController = controller
+            let controller: UITabBarController
+            if let cached = tabBarController, cached.view.window === window {
+                controller = cached
+            } else if let found = findTabBarController(in: window.rootViewController) {
+                controller = found
+                tabBarController = found
+            } else {
+                return
+            }
             guard controller.delegate !== self else { return }
             forwardedDelegate = controller.delegate
             controller.delegate = self
