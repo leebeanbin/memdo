@@ -376,14 +376,22 @@ enum NotificationScheduler {
     // that iOS displays as a thumbnail on the trailing edge of the banner.
     private static func colorAttachment(for color: ScheduleColor?) -> UNNotificationAttachment? {
         guard let color else { return nil }
-        let size = CGSize(width: 60, height: 60)
-        let image = UIGraphicsImageRenderer(size: size).image { _ in
-            colorUIColor(for: color).setFill()
-            UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: MemdoMetrics.contentRadius).fill()
-        }
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("memdo-color-\(color.rawValue).png")
-        guard let data = image.pngData(), (try? data.write(to: url)) != nil else { return nil }
+        // The rendered PNG is fully determined by `color` alone, so an
+        // existing file for this color is never stale -- skip the render
+        // (UIGraphicsImageRenderer + PNG encode) and disk write entirely
+        // once it's been done once. Was previously redone on every single
+        // call to this function, and this runs once per notification
+        // scheduled -- up to 48 times per reconciliation pass.
+        if !FileManager.default.fileExists(atPath: url.path) {
+            let size = CGSize(width: 60, height: 60)
+            let image = UIGraphicsImageRenderer(size: size).image { _ in
+                colorUIColor(for: color).setFill()
+                UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: MemdoMetrics.contentRadius).fill()
+            }
+            guard let data = image.pngData(), (try? data.write(to: url)) != nil else { return nil }
+        }
         return try? UNNotificationAttachment(identifier: color.rawValue, url: url)
     }
 

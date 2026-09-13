@@ -10,6 +10,16 @@ struct MemdoApp: App {
     @State private var noticeCenter: AppNoticeCenter
     @State private var session: MemdoSession
     @Environment(\.scenePhase) private var scenePhase
+    /// Debounces the reconciliation call below -- same fix, same reason,
+    /// as AppShellView.swift's own (separate) scenePhase observer: a
+    /// system edge gesture can briefly toggle scenePhase away from and
+    /// back to .active without the app truly leaving foreground, and this
+    /// one's downstream cost is worse than AppShellView's -- see
+    /// NotificationScheduler.reconcileScheduleNotifications, which does
+    /// dozens of UNUserNotificationCenter round-trips plus synchronous
+    /// PNG rendering per call.
+    @State private var lastReconcileAt: Date?
+    private static let minReconcileInterval: TimeInterval = 20
 
     init() {
         let noticeCenter = AppNoticeCenter()
@@ -49,7 +59,14 @@ struct MemdoApp: App {
                     // Rolling-window reconciliation (docs/07 §10) at app
                     // activation -- the same trigger this session's Epic L
                     // plan named as the reuse target, rather than inventing
-                    // a new lifecycle hook.
+                    // a new lifecycle hook. Debounced (see lastReconcileAt)
+                    // -- the workout drain above stays undebounced since
+                    // it's cheap and benefits from running promptly.
+                    let now = Date.now
+                    if let last = lastReconcileAt, now.timeIntervalSince(last) < Self.minReconcileInterval {
+                        return
+                    }
+                    lastReconcileAt = now
                     Task { await session.scheduleStore?.reconcileNotifications() }
                 }
         }
@@ -68,7 +85,19 @@ final class MemdoSession {
     }
 
     private(set) var phase = Phase.loading
-    private(set) var isBusy = false
+    /// Timestamped (not a bare Bool) so a stalled sign-in/out call (a
+    /// network stall that never errors, e.g. inside the ASWebAuthentication
+    /// OAuth round-trip) can't disable the ENTIRE auth screen -- every
+    /// social sign-in button plus Apple sign-in, via `.disabled(isBusy)` --
+    /// forever with no recovery but a full relaunch. Same self-evicting-
+    /// guard fix as ScheduleStore.pendingWriteIDs, scoped to auth instead
+    /// of per-item writes.
+    private var busyStartedAt: Date?
+    private static let maxBusyDuration: TimeInterval = 20
+    var isBusy: Bool {
+        guard let startedAt = busyStartedAt else { return false }
+        return Date.now.timeIntervalSince(startedAt) <= Self.maxBusyDuration
+    }
     private(set) var accountLabel = ""
     private(set) var providerLabel = ""
     let scheduleStore: ScheduleStore?
@@ -190,8 +219,8 @@ final class MemdoSession {
 
     func signIn(with provider: Provider) async {
         guard let client, let redirectURL = URL(string: "memdo://auth/callback") else { return }
-        isBusy = true
-        defer { isBusy = false }
+        busyStartedAt = Date.now
+        defer { busyStartedAt = nil }
 
         do {
             // be18: signInWithOAuth authenticates into whatever account this
@@ -215,8 +244,8 @@ final class MemdoSession {
 
     func signInWithApple(idToken: String, nonce: String, authorizationCode: String?) async {
         guard let client else { return }
-        isBusy = true
-        defer { isBusy = false }
+        busyStartedAt = Date.now
+        defer { busyStartedAt = nil }
 
         do {
             // be18: same reasoning as signIn(with:) above -- link to the
@@ -255,8 +284,8 @@ final class MemdoSession {
 
     func signInAnonymously() async {
         guard let client else { return }
-        isBusy = true
-        defer { isBusy = false }
+        busyStartedAt = Date.now
+        defer { busyStartedAt = nil }
         do {
             try await client.auth.signInAnonymously()
         } catch {
@@ -266,8 +295,8 @@ final class MemdoSession {
 
     func signOut() async {
         guard let client else { return }
-        isBusy = true
-        defer { isBusy = false }
+        busyStartedAt = Date.now
+        defer { busyStartedAt = nil }
 
         do {
             try await client.auth.signOut()
