@@ -1454,7 +1454,11 @@ final class ScheduleStore {
         // optimistically at the start of save(), which could announce a
         // schedule that then fails validation or a conflict and never exists.
         if notifyOnSuccess {
-            await SlackNotifier.notify(schedule: desired, event: .created)
+            // Genuinely fire-and-forget (matches SlackNotifier's own doc
+            // comment) -- awaiting this inline added up to its 8s
+            // timeoutInterval of real latency to completing a schedule
+            // whenever the Slack webhook was slow or unreachable.
+            Task { await SlackNotifier.notify(schedule: desired, event: .created) }
         }
         guard saved.status != schedule.status else { return .committed }
         do {
@@ -1468,7 +1472,8 @@ final class ScheduleStore {
             await NotificationScheduler.scheduleReminder(for: updated)
             await NotificationScheduler.scheduleEndNotification(for: updated)
             if updated.isDone && !saved.isDone {
-                await SlackNotifier.notify(schedule: updated, event: .completed)
+                // Fire-and-forget -- see the .created call site above.
+                Task { await SlackNotifier.notify(schedule: updated, event: .completed) }
             }
             return .committed
         } catch ScheduleAPIError.offline {
@@ -1508,7 +1513,8 @@ final class ScheduleStore {
             // optimistically when the toggle was tapped, which could announce a
             // completion that a validation/conflict error then rolls back.
             if schedule.isDone && !previous.isDone {
-                await SlackNotifier.notify(schedule: updated, event: .completed)
+                // Fire-and-forget -- see create()'s .created call site above.
+                Task { await SlackNotifier.notify(schedule: updated, event: .completed) }
             }
             return .committed
         } catch ScheduleAPIError.offline {
