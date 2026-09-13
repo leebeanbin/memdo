@@ -311,12 +311,39 @@ struct AgentMarkdownText: View {
         }
     }
 
+    // Every SSE delta re-renders this view with the *entire* accumulated
+    // message, and body re-evaluates inlineAttributed(_:) for every line on
+    // every delta -- including lines whose content already finished
+    // streaming and hasn't changed since the last delta. Since
+    // AttributedString(markdown:) is a real parser (not a cheap string
+    // op), that's O(n^2) parsing work over the length of a streamed
+    // response. Caching by exact line content means an unchanged line is
+    // parsed once, not once per delta. Locked (not @MainActor) so the
+    // "exposed for testing" call sites below keep compiling as plain
+    // synchronous calls.
+    private final class InlineAttributedCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storage: [String: AttributedString] = [:]
+
+        func value(for key: String, orInsert make: () -> AttributedString) -> AttributedString {
+            lock.lock()
+            defer { lock.unlock() }
+            if let cached = storage[key] { return cached }
+            let value = make()
+            storage[key] = value
+            return value
+        }
+    }
+    private static let inlineAttributedCache = InlineAttributedCache()
+
     /// Exposed for testing inline-markdown parsing independent of the view body.
     static func inlineAttributed(_ s: String) -> AttributedString {
-        (try? AttributedString(
-            markdown: s,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        )) ?? AttributedString(s)
+        inlineAttributedCache.value(for: s) {
+            (try? AttributedString(
+                markdown: s,
+                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+            )) ?? AttributedString(s)
+        }
     }
 
     private var lines: [Line] { Self.lines(for: text) }
