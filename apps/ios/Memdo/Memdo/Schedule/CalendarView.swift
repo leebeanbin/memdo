@@ -33,10 +33,15 @@ struct CalendarView: View {
         scheduleStore.schedules.filter { $0.isActive && calendarFilter.includes($0) }
     }
 
+    // scheduleStore.items(for:) reads ScheduleModel's dayCache -- already
+    // isActive-filtered, occurs(on:)-filtered, and sorted for this one day
+    // (O(1) dictionary lookup on the happy path) -- instead of filteredSchedules'
+    // full-array filter+sort over the whole (unbounded, never-evicted)
+    // store, redone on every render. calendarFilter is this view's own
+    // local state, so it's applied after the cached lookup instead of
+    // before; .filter doesn't reorder, so the cache's sort order still holds.
     private var selectedAgenda: [ScheduleDetail] {
-        filteredSchedules
-            .filter { $0.occurs(on: selectedDate) }
-            .sorted { $0.timeSortKey(on: selectedDate) < $1.timeSortKey(on: selectedDate) }
+        scheduleStore.items(for: selectedDate).filter { calendarFilter.includes($0) }
     }
 
     private var workoutDays: Set<Int> {
