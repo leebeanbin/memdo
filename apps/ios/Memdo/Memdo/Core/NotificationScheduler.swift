@@ -64,12 +64,14 @@ enum NotificationScheduler {
             logger.notice(
                 "schedule(for:) skipped -- notificationsEnabled=\(preferences.notificationsEnabled), authorizationStatus=\(status.rawValue)"
             )
+            // Notifications are fully off here, so wiping every memdo.*
+            // request (including per-schedule reminders) is the correct
+            // converged state, not the bug reconcileRoutineNotifications
+            // below exists to avoid.
             await cancelAll()
             return
         }
-        await cancelAll()
-        await schedulePlanningPrompt(preferences, center: center)
-        await scheduleDailyReview(preferences, center: center)
+        await reconcileRoutineNotifications(preferences, center: center)
         let pending = await center.pendingNotificationRequests()
             .filter { $0.identifier.hasPrefix("memdo.") }
         logger.notice("schedule(for:) finished -- \(pending.count) memdo.* requests now pending")
@@ -85,6 +87,81 @@ enum NotificationScheduler {
     }
 
     // MARK: Private
+
+    /// Rebuilds the routine planning-prompt/daily-review notifications,
+    /// diffing pending vs. desired identifiers+trigger times instead of an
+    /// unconditional cancel+recreate -- same diffing principle
+    /// reconcileScheduleNotifications already applies to per-schedule
+    /// reminders. Matters beyond raw efficiency: the old code called
+    /// cancelAll() (which matches every "memdo."-prefixed identifier,
+    /// including memdo.reminder-*/memdo.end-* per-schedule notifications)
+    /// from schedule(for:)'s enabled path -- and that path runs on every
+    /// single preferences change, not just notification-related ones
+    /// (SettingsView's `.task(id: session.preferencesStore?.preferences)`
+    /// fires whenever the whole preferences object changes). That silently
+    /// wiped every upcoming per-schedule reminder on, say, toggling
+    /// hideWidgetContent, with nothing here to re-add them -- only the
+    /// next full reconciliation pass (app activation or a full schedule
+    /// load) would restore them. Scoping this to only the two routine
+    /// identifier families fixes that: memdo.reminder-*/memdo.end-* are
+    /// never touched here.
+    private static func reconcileRoutineNotifications(
+        _ preferences: UserPreferences,
+        center: UNUserNotificationCenter
+    ) async {
+        let desired = desiredRoutineSignatures(for: preferences)
+
+        let pending = await center.pendingNotificationRequests()
+            .filter { $0.identifier == planningID || $0.identifier.hasPrefix(reviewPrefix) }
+        var pendingSignatures: [String: [Int]] = [:]
+        for request in pending {
+            guard let trigger = request.trigger as? UNCalendarNotificationTrigger else { continue }
+            pendingSignatures[request.identifier] = routineSignature(for: trigger.dateComponents)
+        }
+
+        // Nothing in the routine set actually changed -- skip the rebuild
+        // (and its XPC round trips) entirely.
+        guard pendingSignatures != desired else { return }
+
+        let toCancel = pending.map(\.identifier).filter { desired[$0] == nil }
+        if !toCancel.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: toCancel)
+        }
+        // add(...) with an identifier that's already pending replaces it,
+        // so re-adding an unchanged entry here is harmless -- simpler than
+        // threading which specific day changed through scheduleDailyReview.
+        await schedulePlanningPrompt(preferences, center: center)
+        await scheduleDailyReview(preferences, center: center)
+    }
+
+    /// The desired (identifier -> trigger signature) map for the routine
+    /// notifications -- mirrors exactly what schedulePlanningPrompt/
+    /// scheduleDailyReview below would produce, without actually calling
+    /// center.add(...) yet.
+    private static func desiredRoutineSignatures(for preferences: UserPreferences) -> [String: [Int]] {
+        var result: [String: [Int]] = [:]
+        if let time = ClockString.date(preferences.planningPromptTime) {
+            let c = Calendar.current.dateComponents([.hour, .minute], from: time)
+            result[planningID] = [c.hour ?? -1, c.minute ?? -1]
+        }
+        if preferences.dailyReviewEnabled, let time = ClockString.date(preferences.dailyReviewTime) {
+            let c = Calendar.current.dateComponents([.hour, .minute], from: time)
+            let days = preferences.dailyReviewDays.isEmpty ? UserPreferences.allWeekdays : preferences.dailyReviewDays
+            for day in days {
+                guard let weekday = weekdayIndex(day) else { continue }
+                result["\(reviewPrefix)\(day)"] = [c.hour ?? -1, c.minute ?? -1, weekday]
+            }
+        }
+        return result
+    }
+
+    /// Matches desiredRoutineSignatures' shape: [hour, minute] for the
+    /// planning prompt, [hour, minute, weekday] for a daily-review day.
+    private static func routineSignature(for components: DateComponents) -> [Int] {
+        var signature = [components.hour ?? -1, components.minute ?? -1]
+        if let weekday = components.weekday { signature.append(weekday) }
+        return signature
+    }
 
     private static func schedulePlanningPrompt(
         _ preferences: UserPreferences,
