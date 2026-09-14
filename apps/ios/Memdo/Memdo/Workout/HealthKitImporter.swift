@@ -56,11 +56,29 @@ actor HealthKitImporter {
         }
 
         let newWorkouts = hkWorkouts.filter { !knownUUIDs.contains($0.uuid.uuidString) }
-        var logs: [WorkoutLog] = []
         for workout in newWorkouts {
             workoutCache[workout.uuid.uuidString] = workout
-            let hr = await fetchAverageHeartRate(for: workout)
-            logs.append(WorkoutLog(
+        }
+
+        // Each fetchAverageHeartRate is its own independent HKStatisticsQuery
+        // round trip -- awaiting them one at a time inside a loop sat on
+        // HealthKitImportSheet's loading spinner for N sequential round
+        // trips (20-50+ on a first connect, or after any gap) instead of
+        // one batch. Run concurrently and reassemble by original index
+        // (startDate-descending, from the query above) since TaskGroup
+        // child completion order isn't guaranteed to match submission order.
+        var heartRates = [Double?](repeating: nil, count: newWorkouts.count)
+        await withTaskGroup(of: (Int, Double?).self) { group in
+            for (index, workout) in newWorkouts.enumerated() {
+                group.addTask { (index, await self.fetchAverageHeartRate(for: workout)) }
+            }
+            for await (index, hr) in group {
+                heartRates[index] = hr
+            }
+        }
+
+        return newWorkouts.enumerated().map { index, workout in
+            WorkoutLog(
                 hkUUID: workout.uuid.uuidString,
                 source: .healthkit,
                 activityType: WorkoutActivityType(hkType: workout.workoutActivityType),
@@ -69,10 +87,9 @@ actor HealthKitImporter {
                 durationSeconds: Int(workout.duration),
                 distanceMeters: workout.totalDistance?.doubleValue(for: .meter()),
                 calories: workout.totalEnergyBurned?.doubleValue(for: .kilocalorie()),
-                avgHeartRate: hr
-            ))
+                avgHeartRate: heartRates[index]
+            )
         }
-        return logs
     }
 
     func cachedWorkout(for hkUUID: String) -> HKWorkout? { workoutCache[hkUUID] }
