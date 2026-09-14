@@ -250,8 +250,7 @@ final class WorkoutStore {
         guard await importer.requestAuthorization() else { return }
 
         let known = Set(workouts.compactMap(\.hkUUID))
-        let newLogs = await importer.fetchNewWorkouts(excluding: known)
-        guard !newLogs.isEmpty else { return }
+        let (newLogs, newAnchor) = await importer.fetchNewWorkouts(excluding: known)
 
         for var log in newLogs {
             // 경로 이미지 렌더 (GPS 운동만)
@@ -271,6 +270,11 @@ final class WorkoutStore {
                 upsertLocally(log)  // 백엔드 없을 때 로컬만
             }
         }
+        // Committed only now that every returned log has actually been
+        // upserted locally (see fetchNewWorkouts(_:)'s doc comment) --
+        // safe to call even when newLogs was empty, since the underlying
+        // HealthKit-side checkpoint still legitimately advanced.
+        await importer.commitFetchProgress(newAnchor)
     }
 
     func save(_ workout: WorkoutLog) {
@@ -313,7 +317,11 @@ final class WorkoutStore {
     func fetchPendingFromHealthKit() async -> [WorkoutLog] {
         guard await importer.requestAuthorization() else { return [] }
         let known = Set(workouts.compactMap(\.hkUUID))
-        return await importer.fetchNewWorkouts(excluding: known)
+        // Deliberately never calls commitFetchProgress(_:) -- this is a
+        // peek (nothing gets saved here), so the checkpoint must stay
+        // where it was or a workout the user saw but declined to import
+        // would never be offered again.
+        return await importer.fetchNewWorkouts(excluding: known).logs
     }
 
     func delete(_ workout: WorkoutLog) {

@@ -11,6 +11,7 @@ actor HealthKitImporter {
     private let store = HKHealthStore()
     private var workoutCache: [String: HKWorkout] = [:]
     private static let logger = Logger(subsystem: "com.memdo.ios", category: "healthkit")
+    private static let anchorDefaultsKey = "memdo.v1.healthKitWorkoutAnchor"
 
     private static var readTypes: Set<HKObjectType> {
         var types: Set<HKObjectType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute()]
@@ -38,24 +39,41 @@ actor HealthKitImporter {
 
     // MARK: Fetch
 
-    /// HK에서 최근 100개 운동 조회 → `excluding`에 없는 것만 WorkoutLog로 변환
-    func fetchNewWorkouts(excluding knownUUIDs: Set<String>) async -> [WorkoutLog] {
+    /// HK에서 마지막 체크포인트 이후 새 운동 조회 → `excluding`에 없는 것만 WorkoutLog로 변환.
+    /// Returns the query's new anchor alongside the logs -- pass it to
+    /// commitFetchProgress(_:) only once every returned log has actually
+    /// been consumed (locally upserted). A caller that's only peeking
+    /// (fetchPendingFromHealthKit, which doesn't save anything) must never
+    /// commit, or a workout the user saw but declined to import would
+    /// never be offered again -- HKAnchoredObjectQuery only returns a
+    /// given sample once per anchor advance.
+    func fetchNewWorkouts(excluding knownUUIDs: Set<String>) async -> (logs: [WorkoutLog], anchor: HKQueryAnchor?) {
         let predicate = HKQuery.predicateForWorkouts(with: .greaterThanOrEqualTo, duration: 60)
-        let sort = [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
 
-        let hkWorkouts: [HKWorkout] = await withCheckedContinuation { cont in
-            let q = HKSampleQuery(
-                sampleType: HKObjectType.workoutType(),
+        // HKAnchoredObjectQuery narrows HealthKit's own scan to samples
+        // added/changed since the last committed checkpoint, instead of
+        // re-pulling and client-side-filtering the last 100 workouts on
+        // every call regardless of how many were already seen -- for a
+        // long-time user, most calls in steady state now have nothing new
+        // to scan at all.
+        let (hkWorkouts, newAnchor): ([HKWorkout], HKQueryAnchor?) = await withCheckedContinuation { cont in
+            let q = HKAnchoredObjectQuery(
+                type: HKObjectType.workoutType(),
                 predicate: predicate,
-                limit: 100,
-                sortDescriptors: sort
-            ) { _, samples, _ in
-                cont.resume(returning: (samples as? [HKWorkout]) ?? [])
+                anchor: loadAnchor(),
+                limit: 100
+            ) { _, samples, _, resultAnchor, _ in
+                cont.resume(returning: ((samples as? [HKWorkout]) ?? [], resultAnchor))
             }
             store.execute(q)
         }
 
-        let newWorkouts = hkWorkouts.filter { !knownUUIDs.contains($0.uuid.uuidString) }
+        // HKAnchoredObjectQuery has no sortDescriptors parameter (unlike
+        // HKSampleQuery) -- sort here to keep the existing most-recent-
+        // first ordering.
+        let newWorkouts = hkWorkouts
+            .sorted { $0.startDate > $1.startDate }
+            .filter { !knownUUIDs.contains($0.uuid.uuidString) }
         for workout in newWorkouts {
             workoutCache[workout.uuid.uuidString] = workout
         }
@@ -77,7 +95,7 @@ actor HealthKitImporter {
             }
         }
 
-        return newWorkouts.enumerated().map { index, workout in
+        let logs = newWorkouts.enumerated().map { index, workout in
             WorkoutLog(
                 hkUUID: workout.uuid.uuidString,
                 source: .healthkit,
@@ -90,6 +108,32 @@ actor HealthKitImporter {
                 avgHeartRate: heartRates[index]
             )
         }
+        return (logs, newAnchor)
+    }
+
+    /// Commits the checkpoint from a fetchNewWorkouts(_:) call. Only the
+    /// auto-import path (WorkoutModel.syncHealthKit) calls this, and only
+    /// after its per-log processing loop has fully finished -- not right
+    /// after the query returns -- so a mid-loop cancellation (backgrounding,
+    /// termination) leaves the checkpoint uncommitted and the next sync
+    /// naturally retries the same items instead of silently losing them.
+    func commitFetchProgress(_ anchor: HKQueryAnchor?) {
+        persistAnchor(anchor)
+    }
+
+    private func loadAnchor() -> HKQueryAnchor? {
+        guard let data = UserDefaults.standard.data(forKey: Self.anchorDefaultsKey) else { return nil }
+        return try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
+    }
+
+    private func persistAnchor(_ anchor: HKQueryAnchor?) {
+        guard let anchor,
+              let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true)
+        else {
+            UserDefaults.standard.removeObject(forKey: Self.anchorDefaultsKey)
+            return
+        }
+        UserDefaults.standard.set(data, forKey: Self.anchorDefaultsKey)
     }
 
     func cachedWorkout(for hkUUID: String) -> HKWorkout? { workoutCache[hkUUID] }
