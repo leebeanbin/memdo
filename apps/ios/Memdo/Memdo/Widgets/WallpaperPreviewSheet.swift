@@ -27,6 +27,13 @@ struct WallpaperPreviewSheet: View {
     ) private var glassStrength = WallpaperGlassStrength.balanced
     @State private var showsDensitySample = true
     @State private var saveState = SaveState.idle
+    // Computed by recomputePreviewTitles() below, not as a body-read
+    // computed property -- WallpaperCanvas.titles(from:month:) is a full
+    // O(days x schedules) month scan, and this used to re-run it on every
+    // render of the sheet, including purely cosmetic toggles
+    // (calendarStyle/backdrop/glassStrength, or saveState's
+    // .idle/.saving/.saved animation) that don't change its input at all.
+    @State private var previewTitles: [Date: [String]] = [:]
 
     private enum SaveState: Equatable {
         case idle
@@ -37,16 +44,16 @@ struct WallpaperPreviewSheet: View {
 
     // The density sample is a preview-only aid; the saved image uses real
     // schedules only.
-    private var previewTitles: [Date: [String]] {
+    private func recomputePreviewTitles() {
         var titles = WallpaperCanvas.titles(from: scheduleStore.schedules, month: .now)
-        guard showsDensitySample else { return titles }
-        let calendar = Calendar.current
-        guard let interval = calendar.dateInterval(of: .month, for: .now) else { return titles }
-        for (dayNumber, samples) in Self.sampleTitles {
-            guard let day = calendar.date(byAdding: .day, value: dayNumber - 1, to: interval.start) else { continue }
-            titles[day, default: []].append(contentsOf: samples)
+        if showsDensitySample, let interval = Calendar.current.dateInterval(of: .month, for: .now) {
+            let calendar = Calendar.current
+            for (dayNumber, samples) in Self.sampleTitles {
+                guard let day = calendar.date(byAdding: .day, value: dayNumber - 1, to: interval.start) else { continue }
+                titles[day, default: []].append(contentsOf: samples)
+            }
         }
-        return titles
+        previewTitles = titles
     }
 
     var body: some View {
@@ -76,6 +83,8 @@ struct WallpaperPreviewSheet: View {
         .ignoresSafeArea()
         .background(.black)
         .statusBarHidden(true)
+        .task(id: scheduleStore.schedules) { recomputePreviewTitles() }
+        .task(id: showsDensitySample) { recomputePreviewTitles() }
     }
 
     @ViewBuilder
