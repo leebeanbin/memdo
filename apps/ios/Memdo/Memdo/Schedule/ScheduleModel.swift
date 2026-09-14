@@ -1038,6 +1038,13 @@ final class ScheduleStore {
     }
 
     private func merge(_ fetched: [ScheduleDetail]) {
+        // Mutate a local copy and assign `schedules` once at the end --
+        // `schedules`'s didSet triggers a full O(loaded-window-days x
+        // active-schedule-count) rebuildDayCache() scan, and assigning
+        // per item inside this loop used to pay that full rebuild
+        // `fetched.count` times instead of once.
+        var updated = schedules
+        var changed = false
         for item in fetched {
             // A save currently in flight for this id already holds the more-
             // current optimistic value -- a server snapshot fetched before
@@ -1047,12 +1054,14 @@ final class ScheduleStore {
             // in-flight write's pendingWriteIDs guard. Same pattern
             // drainOutbox() already uses (founder-dogfooding fix, fe8).
             guard !isPendingWrite(item.id) else { continue }
-            if let index = schedules.firstIndex(where: { $0.id == item.id }) {
-                schedules[index] = item
+            if let index = updated.firstIndex(where: { $0.id == item.id }) {
+                updated[index] = item
             } else {
-                schedules.append(item)
+                updated.append(item)
             }
+            changed = true
         }
+        if changed { schedules = updated }
         updateWidgetSnapshot()
     }
 
@@ -1063,6 +1072,13 @@ final class ScheduleStore {
         let calendarsByID = Dictionary(uniqueKeysWithValues: calendars.map { ($0.id, $0) })
         var cursor = lastSyncCursor
         var changed = false
+        // Mutated locally across every page/item and assigned to `schedules`
+        // once at the end -- `schedules`'s didSet triggers a full O(loaded-
+        // window-days x active-schedule-count) rebuildDayCache() scan, and
+        // this loop used to assign into `schedules` directly per item
+        // across every page, paying that full rebuild once per changed item
+        // instead of once per refresh() call.
+        var updatedSchedules = schedules
         // bd26: /sync now also merges user_categories -- loaded once up
         // front rather than re-reading UserDefaults per item, persisted once
         // at the end if anything actually changed. syncUserCategories()'s
@@ -1085,23 +1101,23 @@ final class ScheduleStore {
                     switch item.entityType {
                     case "todo":
                         if item.operation == "delete" {
-                            if let id = UUID(uuidString: item.id), schedules.contains(where: { $0.id == id }) {
+                            if let id = UUID(uuidString: item.id), updatedSchedules.contains(where: { $0.id == id }) {
                                 // Same fe8 pattern as merge(_:)/drainOutbox() --
                                 // a save in flight for this id owns the
                                 // authoritative next state, not a sync page
                                 // fetched before that write lands.
                                 guard !isPendingWrite(id) else { continue }
-                                schedules.removeAll { $0.id == id }
+                                updatedSchedules.removeAll { $0.id == id }
                                 changed = true
                             }
                         } else if let dto = item.todoData,
                                   let calendar = calendarsByID[dto.calendarId],
                                   let mapped = try? ScheduleDetail(dto: dto, calendar: calendar) {
                             guard !isPendingWrite(mapped.id) else { continue }
-                            if let index = schedules.firstIndex(where: { $0.id == mapped.id }) {
-                                schedules[index] = mapped
+                            if let index = updatedSchedules.firstIndex(where: { $0.id == mapped.id }) {
+                                updatedSchedules[index] = mapped
                             } else {
-                                schedules.append(mapped)
+                                updatedSchedules.append(mapped)
                             }
                             changed = true
                         }
@@ -1129,7 +1145,10 @@ final class ScheduleStore {
                 hasMore = page.hasMore
             }
             lastSyncCursor = cursor
-            if changed { updateWidgetSnapshot() }
+            if changed {
+                schedules = updatedSchedules
+                updateWidgetSnapshot()
+            }
             if categoriesChanged { ScheduleUserCategory.persist(cachedCategories) }
         } catch {
             // Refresh is best-effort; leave current data intact on failure.
