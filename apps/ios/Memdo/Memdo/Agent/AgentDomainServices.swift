@@ -194,6 +194,15 @@ func conflictRevalidationDecision(
 enum ScheduleProposalStagingResult: Equatable {
     case staged(ProposedScheduleDraft, conflict: AgentConflictSnapshot?, conflictCheckFailed: Bool)
     case invalidDate
+    /// bd4: an event (isTask: false) has a start time but the model left
+    /// endTime empty, AND the default-duration logic below can't produce a
+    /// valid same-day end for this specific start (only possible when
+    /// startTime is exactly "23:59" -- one-minute granularity leaves zero
+    /// representable minutes after it on the same day). Staging anyway with
+    /// endTimeString nil would recreate the exact "approved but can't be
+    /// saved" bug this fix exists to eliminate, so nothing is staged at all
+    /// -- the caller shows a targeted clarifying question instead.
+    case needsEndTime
 }
 
 func stageScheduleProposal(
@@ -209,11 +218,36 @@ func stageScheduleProposal(
     // Reject before staging anything -- an unparseable date must never
     // silently become "today" (Issue A-04).
     guard AgentDateExpression(token: date) != nil else { return .invalidDate }
+
+    // bd4: an event proposal with a start time but no end time used to
+    // stage with endTimeString nil -- ProposedScheduleCard's displayTime
+    // then showed just the bare start time with no end at all, the user
+    // approved exactly that, and toScheduleDetail() silently defaulted
+    // endAt to start+1h only at *save* time (a value the user never saw or
+    // approved). Defaulting here instead, before ProposedScheduleDraft is
+    // ever constructed, means the draft/card/save all read the same
+    // resolved value -- informed consent, not a same-time coincidence.
+    var resolvedEndTime = endTime
+    if !isTask, !startTime.isEmpty, endTime.isEmpty {
+        guard let proposalDate = AgentDateExpression(token: date)?.resolvedDate(),
+              let start = parseAgentTime(startTime, on: proposalDate)
+        else { return .invalidDate }
+        let endOfDay = Calendar.current.date(
+            bySettingHour: 23, minute: 59, second: 0, of: proposalDate
+        ) ?? proposalDate
+        let candidateEnd = min(start.addingTimeInterval(3_600), endOfDay)
+        // Only possible when start == 23:59 -- see .needsEndTime's doc
+        // comment. Every start before 23:59 (including 23:58) clamps to a
+        // valid, non-zero duration.
+        guard candidateEnd > start else { return .needsEndTime }
+        resolvedEndTime = formatAgentTime(candidateEnd)
+    }
+
     let draft = ProposedScheduleDraft(
         title: title,
         dateString: date,
         startTimeString: startTime.isEmpty ? nil : startTime,
-        endTimeString: endTime.isEmpty ? nil : endTime,
+        endTimeString: resolvedEndTime.isEmpty ? nil : resolvedEndTime,
         isTask: isTask,
         note: note.isEmpty ? nil : note
     )
