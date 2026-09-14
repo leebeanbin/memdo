@@ -251,6 +251,11 @@ enum NotificationScheduler {
         let scheduleID: UUID
         let kind: Kind
         let fireAt: Date
+        // Carried through from the scan below so reconcileScheduleNotifications
+        // doesn't have to rebuild a second full O(schedules) dictionary
+        // afterward just to re-look-up a ScheduleDetail this scan already
+        // had in hand.
+        let schedule: ScheduleDetail
     }
 
     /// Pure candidate builder for §10's rolling window: 7-day-including-today
@@ -282,11 +287,11 @@ enum NotificationScheduler {
             if let offsetMinutes = schedule.reminderOffsetMinutes, let startAt = schedule.startAt {
                 let fireAt = startAt.addingTimeInterval(-Double(offsetMinutes) * 60)
                 if fireAt > now, fireAt < windowEnd {
-                    candidates.append(.init(scheduleID: schedule.id, kind: .reminder, fireAt: fireAt))
+                    candidates.append(.init(scheduleID: schedule.id, kind: .reminder, fireAt: fireAt, schedule: schedule))
                 }
             }
             if let endAt = schedule.endAt, endAt > now, endAt < windowEnd {
-                candidates.append(.init(scheduleID: schedule.id, kind: .end, fireAt: endAt))
+                candidates.append(.init(scheduleID: schedule.id, kind: .end, fireAt: endAt, schedule: schedule))
             }
         }
 
@@ -339,13 +344,12 @@ enum NotificationScheduler {
         }
 
         let alreadyPending = Set(pendingScheduleIDs)
-        let schedulesByID = Dictionary(uniqueKeysWithValues: schedules.map { ($0.id, $0) })
         for candidate in candidates {
             let id = identifier(for: candidate)
-            guard !alreadyPending.contains(id), let schedule = schedulesByID[candidate.scheduleID] else { continue }
+            guard !alreadyPending.contains(id) else { continue }
             switch candidate.kind {
-            case .reminder: await scheduleReminder(for: schedule)
-            case .end: await scheduleEndNotification(for: schedule)
+            case .reminder: await scheduleReminder(for: candidate.schedule)
+            case .end: await scheduleEndNotification(for: candidate.schedule)
             }
         }
     }
