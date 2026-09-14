@@ -358,7 +358,15 @@ actor BriefingRepository {
         return text
     }
 
-    private static let cleanupCacheKey = "briefing-cleanup-cache-v1"
+    // One UserDefaults key per article id instead of a single growing
+    // [String: String] blob keyed by every article id ever opened (unlike
+    // BriefingCache/SummaryCache above, which are day-keyed and naturally
+    // stay at one entry) -- that blob was never evicted, so every article
+    // open decoded and every new entry re-encoded the ENTIRE accumulated
+    // history just to read/write one string.
+    private static func cleanupCacheKey(for itemID: String) -> String {
+        "briefing-cleanup-cache-v1-item-\(itemID)"
+    }
 
     /// On-demand, per-article version of the same idea as `summarize()`
     /// above, but rewriting rather than distilling: some source feeds glue
@@ -372,9 +380,8 @@ actor BriefingRepository {
     func cleanUpSummary(for item: FetchedItem) async -> String? {
         guard !item.summary.isEmpty else { return nil }
 
-        var cache = (UserDefaults.standard.data(forKey: Self.cleanupCacheKey))
-            .flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
-        if let cached = cache[item.id] { return cached }
+        let key = Self.cleanupCacheKey(for: item.id)
+        if let cached = UserDefaults.standard.string(forKey: key) { return cached }
 
         guard case .available = SystemLanguageModel.default.availability else { return nil }
 
@@ -385,10 +392,7 @@ actor BriefingRepository {
         let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
 
-        cache[item.id] = text
-        if let data = try? JSONEncoder().encode(cache) {
-            UserDefaults.standard.set(data, forKey: Self.cleanupCacheKey)
-        }
+        UserDefaults.standard.set(text, forKey: key)
         return text
     }
 }
