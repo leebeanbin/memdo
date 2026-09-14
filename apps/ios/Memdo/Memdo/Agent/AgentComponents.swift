@@ -36,7 +36,7 @@ struct AgentSheetHeader: View {
     }
 }
 
-struct AgentUserBubble: View {
+struct AgentUserBubble: View, Equatable {
     let text: String
 
     var body: some View {
@@ -107,10 +107,20 @@ struct AgentQuickActions: View {
     }
 }
 
-struct AgentResponse: View {
+struct AgentResponse: View, Equatable {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let message: AgentMessage
     var onRetry: (() -> Void)? = nil
+
+    // Every call site derives onRetry purely from message.isError
+    // (`message.isError ? { retry() } : nil`), so it never causes two
+    // otherwise-equal messages to render differently -- comparing just
+    // `message` here is enough, and lets .equatable() at the call site
+    // skip re-invoking body for every OTHER row in the conversation on
+    // every SSE delta, not just the one actually changing.
+    nonisolated static func == (lhs: AgentResponse, rhs: AgentResponse) -> Bool {
+        lhs.message == rhs.message
+    }
 
     private var accentColor: Color {
         message.isError ? .red : MemdoTheme.brandInk

@@ -166,7 +166,13 @@ struct AgentSheet: View {
         NavigationStack {
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
+                    // LazyVStack (not VStack) + .equatable() on each message
+                    // row below -- every streamed delta mutated one message
+                    // in place, but a plain VStack has no way to skip
+                    // re-invoking body for the OTHER rows in the
+                    // conversation, so a long conversation paid
+                    // O(messages) SwiftUI work per delta instead of O(1).
+                    LazyVStack(alignment: .leading, spacing: MemdoMetrics.sectionSpacing) {
                         AgentSheetHeader(context: context, hasStarted: !messages.isEmpty)
 
                         messageList
@@ -240,9 +246,9 @@ struct AgentSheet: View {
             if showSessionGapNotice { sessionGapBanner }
             ForEach(messages) { message in
                 if message.role == .user {
-                    AgentUserBubble(text: message.text)
+                    AgentUserBubble(text: message.text).equatable()
                 } else {
-                    AgentResponse(message: message, onRetry: message.isError ? { retry() } : nil)
+                    AgentResponse(message: message, onRetry: message.isError ? { retry() } : nil).equatable()
                 }
             }
             if let draft = proposal.draft {
