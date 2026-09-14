@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import ImageIO
 
 /// Same shape/motion as MemdoPrimaryActionButtonStyle (MemdoComponents.swift)
 /// but with MemdoTheme.activityAccent instead of the brand color -- a
@@ -380,6 +381,12 @@ struct WorkoutLogEditorSheet: View {
     @State private var draft: WorkoutLog
     @State private var photoPicker: PhotosPickerItem?
     @State private var photoData: Data?
+    // Downsampled once when photoData is set, not re-decoded via
+    // UIImage(data:) inside body -- the picked photo can be 12MP+/several
+    // MB straight from Photos, and body re-evaluates on every unrelated
+    // @State change in this sheet (typing notes, toggling isTracking, ...)
+    // even though the display target is a fixed 160pt-tall thumbnail.
+    @State private var photoThumbnail: UIImage?
     @State private var isUploading = false
     @State private var isTracking = false
 
@@ -473,10 +480,14 @@ struct WorkoutLogEditorSheet: View {
                             Label(photoLabel, systemImage: "photo.badge.plus")
                         }
                         .onChange(of: photoPicker) { _, item in
-                            Task { photoData = try? await item?.loadTransferable(type: Data.self) }
+                            Task {
+                                let data = try? await item?.loadTransferable(type: Data.self)
+                                photoData = data
+                                photoThumbnail = data.flatMap { Self.downsampledImage(from: $0, maxDimensionPoints: 160) }
+                            }
                         }
-                        if let data = photoData, let uiImage = UIImage(data: data) {
-                            Image(uiImage: uiImage)
+                        if let photoThumbnail {
+                            Image(uiImage: photoThumbnail)
                                 .resizable().scaledToFill()
                                 .frame(height: 160).clipped()
                                 .clipShape(RoundedRectangle(cornerRadius: MemdoMetrics.iconRadius))
@@ -644,6 +655,22 @@ struct WorkoutLogEditorSheet: View {
             if isNew { workoutStore.save(draft) } else { workoutStore.update(draft) }
             dismiss()
         }
+    }
+
+    // ImageIO's thumbnail generator decodes directly to the target size
+    // instead of UIImage(data:)'s full-resolution decode -- avoids holding
+    // a full 12MP+ bitmap in memory just to display a 160pt-tall preview.
+    private static func downsampledImage(from data: Data, maxDimensionPoints: CGFloat) -> UIImage? {
+        let maxDimensionPixels = maxDimensionPoints * UIScreen.main.scale
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxDimensionPixels,
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 }
 
