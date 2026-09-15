@@ -200,6 +200,10 @@ struct TodoResponseDTO: Decodable {
     let location: LocationDTO?
     let timeBucket: String
     let reminderOffsetMinutes: Int?
+    // R1-4: both present during the bridge window -- reminderOffsetsMinutes
+    // is the canonical field once populated; the scalar is a fallback for a
+    // response from a backend build that predates it.
+    let reminderOffsetsMinutes: [Int]?
     let sortOrder: Int
     let status: String
     // bd13/be16: required, not optional -- backend and iOS ship together
@@ -241,6 +245,7 @@ struct TodoCreateRequestDTO: Encodable {
     let timeBucket: String
     let sortOrder: Int
     let reminderOffsetMinutes: Int?
+    let reminderOffsetsMinutes: [Int]
     let version: Int?
     let status: String?
     let progress: Int?
@@ -280,7 +285,12 @@ struct TodoCreateRequestDTO: Encodable {
         }
         timeBucket = schedule.timeBucket.rawValue
         sortOrder = schedule.sortOrder
-        reminderOffsetMinutes = schedule.reminderOffsetMinutes
+        // R1-4: reminderOffsetsMinutes is the source of truth sent to the
+        // backend; the scalar is kept in sync (the array's minimum) so a
+        // backend build that hasn't deployed the array-aware read path yet
+        // still gets a correct single reminder.
+        reminderOffsetsMinutes = schedule.reminderOffsetsMinutes
+        reminderOffsetMinutes = schedule.nearestReminderOffsetMinutes
         version = includeVersion ? schedule.version : nil
         status = includeVersion ? schedule.status.rawValue : nil
         // bd13/be16: only present on an update (PATCH) to one of the two
@@ -420,6 +430,7 @@ struct ScheduleRuleRequestDTO: Encodable {
     let endTime: String?
     let timeBucket: String
     let reminderOffsetMinutes: Int?
+    let reminderOffsetsMinutes: [Int]
     let frequency: String
     let interval: Int
     let anchorDate: String
@@ -439,7 +450,8 @@ struct ScheduleRuleRequestDTO: Encodable {
         startTime = schedule.startAt.map(Self.clock)
         endTime = schedule.endAt.map(Self.clock)
         timeBucket = schedule.timeBucket.rawValue
-        reminderOffsetMinutes = schedule.reminderOffsetMinutes
+        reminderOffsetsMinutes = schedule.reminderOffsetsMinutes
+        reminderOffsetMinutes = schedule.nearestReminderOffsetMinutes
         frequency = schedule.repeatRule.rawValue
         interval = 1
         anchorDate = APIDate.day(schedule.scheduledDate)
@@ -1304,7 +1316,7 @@ extension ScheduleDetail {
             )
         }
         memo = dto.note ?? ""
-        reminderOffsetMinutes = dto.reminderOffsetMinutes
+        reminderOffsetsMinutes = dto.reminderOffsetsMinutes ?? (dto.reminderOffsetMinutes.map { [$0] } ?? [])
         repeatRule = .never
         self.kind = kind
         self.calendar = calendar

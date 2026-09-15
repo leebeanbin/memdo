@@ -253,7 +253,11 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
     var status: ScheduleStatus
     var locationValue: ScheduleLocation?
     var memo: String
-    var reminderOffsetMinutes: Int?
+    /// R1-4: canonical multi-reminder storage (0-5 offsets, minutes before
+    /// startAt/dueAt). `reminderOffsetMinutes` below is a bridge-window
+    /// compat shim over this array for call sites not yet migrated to the
+    /// full array (the editor UI is R1-5, NotificationScheduler is R1-6).
+    var reminderOffsetsMinutes: [Int]
     var repeatRule: ScheduleRepeatRule
     var kind: ScheduleKind
     var calendar: ScheduleCalendar
@@ -305,6 +309,7 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         locationValue: ScheduleLocation? = nil,
         memo: String = "",
         reminderOffsetMinutes: Int? = 30,
+        reminderOffsetsMinutes: [Int]? = nil,
         repeatRule: ScheduleRepeatRule = .never,
         kind: ScheduleKind = .event,
         calendar: ScheduleCalendar,
@@ -331,7 +336,10 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         self.status = status
         self.locationValue = locationValue
         self.memo = memo
-        self.reminderOffsetMinutes = reminderOffsetMinutes
+        // reminderOffsetsMinutes wins when explicitly provided (e.g. decoding
+        // a server DTO); otherwise derived from the legacy scalar -- same
+        // precedence as the backend's own reminderOffsetsMinutesFor helper.
+        self.reminderOffsetsMinutes = reminderOffsetsMinutes ?? (reminderOffsetMinutes.map { [$0] } ?? [])
         self.repeatRule = repeatRule
         self.kind = kind
         self.calendar = calendar
@@ -350,6 +358,17 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
         self.meetingURLString = meetingURLString.flatMap { $0.isEmpty ? nil : $0 }
         self.isVirtual = isVirtual
         self.googleEventId = googleEventId
+    }
+
+    /// The soonest-before-event reminder, or nil if none set.
+    var nearestReminderOffsetMinutes: Int? { reminderOffsetsMinutes.min() }
+    /// R1-4 bridge-window compat shim: get returns the nearest reminder, set
+    /// replaces the whole array with a single value. Kept so existing
+    /// single-reminder call sites (the reminder Picker, NotificationScheduler)
+    /// keep compiling unchanged until R1-5/R1-6 migrate them to the array.
+    var reminderOffsetMinutes: Int? {
+        get { nearestReminderOffsetMinutes }
+        set { reminderOffsetsMinutes = newValue.map { [$0] } ?? [] }
     }
 
     var source: String { calendar.provider.displayName }

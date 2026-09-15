@@ -32,6 +32,44 @@ final class ScheduleModelTests: XCTestCase {
         XCTAssertFalse(event.occurs(on: followingDay))
     }
 
+    // R1-4: reminderOffsetsMinutes is now the canonical storage;
+    // reminderOffsetMinutes/nearestReminderOffsetMinutes are a bridge-window
+    // compat shim over it until R1-5's multi-reminder editor lands.
+
+    func testReminderOffsetsMinutesDefaultsFromTheLegacyScalarInit() {
+        let schedule = ScheduleDetail(scheduledDate: Date(), title: "일정", reminderOffsetMinutes: 15, calendar: calendar)
+        XCTAssertEqual(schedule.reminderOffsetsMinutes, [15])
+        XCTAssertEqual(schedule.nearestReminderOffsetMinutes, 15)
+        XCTAssertEqual(schedule.reminderOffsetMinutes, 15)
+    }
+
+    func testReminderOffsetsMinutesExplicitArrayWinsOverTheLegacyScalar() {
+        let schedule = ScheduleDetail(
+            scheduledDate: Date(),
+            title: "일정",
+            reminderOffsetMinutes: 15,
+            reminderOffsetsMinutes: [5, 60],
+            calendar: calendar
+        )
+        XCTAssertEqual(schedule.reminderOffsetsMinutes, [5, 60])
+        XCTAssertEqual(schedule.nearestReminderOffsetMinutes, 5)
+    }
+
+    func testReminderOffsetMinutesSetterReplacesTheWholeArray() {
+        var schedule = ScheduleDetail(
+            scheduledDate: Date(),
+            title: "일정",
+            reminderOffsetsMinutes: [5, 60],
+            calendar: calendar
+        )
+        schedule.reminderOffsetMinutes = 30
+        XCTAssertEqual(schedule.reminderOffsetsMinutes, [30])
+
+        schedule.reminderOffsetMinutes = nil
+        XCTAssertEqual(schedule.reminderOffsetsMinutes, [])
+        XCTAssertNil(schedule.nearestReminderOffsetMinutes)
+    }
+
     func testTaskDoesNotSpillIntoAnotherDay() throws {
         let systemCalendar = Calendar(identifier: .gregorian)
         let day = try XCTUnwrap(systemCalendar.date(from: DateComponents(year: 2026, month: 8, day: 9)))
