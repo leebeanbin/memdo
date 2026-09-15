@@ -118,7 +118,7 @@ struct ScheduleDetailSheet: View {
                         if draft.isExternal {
                             LabeledContent("출처", value: draft.calendar.title)
                         }
-                        LabeledContent("알림", value: draft.reminder)
+                        LabeledContent("알림", value: draft.reminderSummary)
                         if !draft.isExternal {
                             // repeatRule isn't round-tripped from the server (the todo
                             // response only carries scheduleRuleId, not the rule's

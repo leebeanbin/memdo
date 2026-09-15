@@ -14,7 +14,7 @@
 | PRD-006 사용자만 완료 확정 | 완료 확인 | Todo.status | /responses, /status | ADR-002 | TEST-006 |
 | PRD-007 응답 선택지 | 하루 요약 | ReviewResponse | POST /responses | 상태 전이표 | TEST-007 |
 | PRD-008 반복 일정 | 일정 편집 | ScheduleRule | /schedule-rules | RRULE·30일 생성 | TEST-008 |
-| PRD-009 일정 알림 | 일정 편집 | Todo.reminderOffsetMinutes | TodoInput reminder 필드 | 로컬 알림 | TEST-009 |
+| PRD-009 일정 알림 | 일정 편집 | Todo.reminderOffsetsMinutes (R1, 최대 5개) | TodoInput reminderOffsetsMinutes 필드 | 로컬 알림 (schedule당 최대 5건) | TEST-009 |
 | PRD-010 위젯 딥링크 | 잠금화면 위젯 | WidgetSnapshot ID | DayView | Universal Link | TEST-010 |
 | PRD-011 앱·위젯 일치 | Today·위젯 | WidgetSnapshot | DayView | App Group | TEST-011 |
 | PRD-012 알림 거절 허용 | 권한 안내 | 설정 상태 | 해당 없음 | 권한 상태 분기 | TEST-012 |
@@ -59,7 +59,7 @@ planned·in_progress·partial만 포함되고 completed·skipped·rescheduled·c
 
 ### TEST-009 알림 변경
 
-일정 시간 수정 시 기존 알림이 취소되고 새 알림이 등록된다.
+일정 시간 수정 시 기존 알림이 모두 취소되고 새 알림 목록(최대 5개)이 다시 등록된다. Task는 시작 시각이 없으면 마감 시각을 기준으로 알림이 계산된다(둘 다 없으면 알림 불가).
 
 ### TEST-010 잠금화면 이동
 

@@ -272,10 +272,8 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
     var status: ScheduleStatus
     var locationValue: ScheduleLocation?
     var memo: String
-    /// R1-4: canonical multi-reminder storage (0-5 offsets, minutes before
-    /// startAt/dueAt). `reminderOffsetMinutes` below is a bridge-window
-    /// compat shim over this array for call sites not yet migrated to the
-    /// full array (the editor UI is R1-5, NotificationScheduler is R1-6).
+    /// Canonical multi-reminder storage (0-5 offsets, minutes before
+    /// reminderAnchor's date).
     var reminderOffsetsMinutes: [Int]
     var repeatRule: ScheduleRepeatRule
     var kind: ScheduleKind
@@ -381,14 +379,6 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
 
     /// The soonest-before-event reminder, or nil if none set.
     var nearestReminderOffsetMinutes: Int? { reminderOffsetsMinutes.min() }
-    /// R1-4 bridge-window compat shim: get returns the nearest reminder, set
-    /// replaces the whole array with a single value. Kept so existing
-    /// single-reminder call sites (the reminder Picker, NotificationScheduler)
-    /// keep compiling unchanged until R1-5/R1-6 migrate them to the array.
-    var reminderOffsetMinutes: Int? {
-        get { nearestReminderOffsetMinutes }
-        set { reminderOffsetsMinutes = newValue.map { [$0] } ?? [] }
-    }
 
     /// R1-5: what a reminder counts down to. Event → startAt (events always
     /// have one, enforced by isTimeRangeValid). Task with a scheduled time →
@@ -503,7 +493,16 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
                 : ScheduleLocation(name: newValue, provider: .manual)
         }
     }
-    var reminder: String { ScheduleReminderOption.label(for: reminderOffsetMinutes) }
+    /// R1-8: the read-only detail view's reminder summary -- previously
+    /// derived from the single-value bridge shim (`reminder`, now unused),
+    /// which understated a multi-reminder schedule down to just its
+    /// nearest one. Lists every reminder ascending, matching the editor's
+    /// own ordering.
+    var reminderSummary: String {
+        reminderOffsetsMinutes.isEmpty
+            ? "알림 없음"
+            : reminderOffsetsMinutes.sorted().map { ScheduleReminderOption.label(for: $0) }.joined(separator: ", ")
+    }
     var day: Int { Calendar.current.component(.day, from: scheduledDate) }
     var time: String { startAt.map(Self.clockText) ?? "" }
     var hasScheduledTime: Bool { startAt != nil && endAt != nil }

@@ -32,15 +32,16 @@ final class ScheduleModelTests: XCTestCase {
         XCTAssertFalse(event.occurs(on: followingDay))
     }
 
-    // R1-4: reminderOffsetsMinutes is now the canonical storage;
-    // reminderOffsetMinutes/nearestReminderOffsetMinutes are a bridge-window
-    // compat shim over it until R1-5's multi-reminder editor lands.
+    // R1-4: reminderOffsetsMinutes is the canonical storage; the
+    // reminderOffsetMinutes init parameter is a construction-time
+    // convenience that seeds it from a single legacy value (still used by
+    // e.g. decoding an old cached/DTO value), superseded by an explicit
+    // reminderOffsetsMinutes argument when both are given.
 
     func testReminderOffsetsMinutesDefaultsFromTheLegacyScalarInit() {
         let schedule = ScheduleDetail(scheduledDate: Date(), title: "일정", reminderOffsetMinutes: 15, calendar: calendar)
         XCTAssertEqual(schedule.reminderOffsetsMinutes, [15])
         XCTAssertEqual(schedule.nearestReminderOffsetMinutes, 15)
-        XCTAssertEqual(schedule.reminderOffsetMinutes, 15)
     }
 
     func testReminderOffsetsMinutesExplicitArrayWinsOverTheLegacyScalar() {
@@ -55,19 +56,38 @@ final class ScheduleModelTests: XCTestCase {
         XCTAssertEqual(schedule.nearestReminderOffsetMinutes, 5)
     }
 
-    func testReminderOffsetMinutesSetterReplacesTheWholeArray() {
+    func testAddAndRemoveReminderOffsetOnAScheduleBuiltFromTheArrayInit() {
         var schedule = ScheduleDetail(
             scheduledDate: Date(),
             title: "일정",
             reminderOffsetsMinutes: [5, 60],
             calendar: calendar
         )
-        schedule.reminderOffsetMinutes = 30
-        XCTAssertEqual(schedule.reminderOffsetsMinutes, [30])
+        schedule.addReminderOffset(30)
+        XCTAssertEqual(schedule.reminderOffsetsMinutes, [5, 30, 60])
 
-        schedule.reminderOffsetMinutes = nil
+        schedule.removeReminderOffset(5)
+        schedule.removeReminderOffset(30)
+        schedule.removeReminderOffset(60)
         XCTAssertEqual(schedule.reminderOffsetsMinutes, [])
         XCTAssertNil(schedule.nearestReminderOffsetMinutes)
+    }
+
+    // R1-8: the read-only detail view's reminder summary must list every
+    // reminder, not just the nearest one -- a real gap found in this
+    // regression pass (the detail view still read the single-value bridge
+    // shim after the editor itself had already moved to the full array).
+
+    func testReminderSummaryListsEveryReminderAscending() {
+        let schedule = ScheduleDetail(
+            scheduledDate: Date(), title: "일정", reminderOffsetsMinutes: [60, 10, 30], calendar: calendar
+        )
+        XCTAssertEqual(schedule.reminderSummary, "10분 전, 30분 전, 1시간 전")
+    }
+
+    func testReminderSummaryIsNoneWhenEmpty() {
+        let schedule = ScheduleDetail(scheduledDate: Date(), title: "일정", reminderOffsetsMinutes: [], calendar: calendar)
+        XCTAssertEqual(schedule.reminderSummary, "알림 없음")
     }
 
     // R1-5: reminderAnchor -- event/task-with-start use startAt, a

@@ -104,6 +104,7 @@ erDiagram
         integer estimated_minutes
         text meeting_url
         integer reminder_offset_minutes
+        integer[] reminder_offsets_minutes
         integer sort_order
         text status
         integer progress
@@ -199,7 +200,8 @@ erDiagram
 | locationProviderId | String? | 아니오 | 공급자 장소 식별자; 외부 API 재조회에 사용 |
 | timeBucket | Enum | 예 | morning/afternoon/evening/anytime |
 | estimatedMinutes | Int? | 아니오 | 1~1440 |
-| reminderOffsetMinutes | Int? | 아니오 | 시작 전 로컬 알림 분; 0~10080 |
+| reminderOffsetMinutes | Int? | 아니오 | (R1, deprecated) 하위 호환용 스칼라 -- reminderOffsetsMinutes의 최솟값과 항상 동기화됨; 0~10080 |
+| reminderOffsetsMinutes | Int[] | 예 (기본 `[]`) | 시작(Event)/마감(Task, 시작 시각 없을 때) 전 로컬 알림 분 목록; 항목당 0~10080, 최대 5개, 중복 불가, 오름차순 정렬 |
 | sortOrder | Int | 예 | 같은 구간 안의 사용자 정렬 |
 | status | Enum | 예 | 아래 상태표 |
 | progress | Int? | 아니오 | 0~100 |
@@ -262,6 +264,7 @@ check (entry_kind in ('event', 'task'))
 check (entry_kind = 'task' or due_at is null)
 check (estimated_minutes is null or estimated_minutes between 1 and 1440)
 check (reminder_offset_minutes is null or reminder_offset_minutes between 0 and 10080)
+check (cardinality(reminder_offsets_minutes) <= 5 and 0 <= all(reminder_offsets_minutes) and 10080 >= all(reminder_offsets_minutes)) -- no-duplicates/ascending-order enforced in Zod, not expressible as a subquery-free CHECK
 ```
 
 ## 6. 조회·쓰기 최적화
