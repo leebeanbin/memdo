@@ -476,7 +476,16 @@ enum NotificationScheduler {
         return try? UNNotificationAttachment(identifier: color.rawValue, url: url)
     }
 
-    private static func reminderOffsetText(offset: Int) -> String {
+    // R0-3: `default` used to unconditionally return "내일 시작해요" for
+    // ANY offset >=1440 minutes -- a 2-day and a 7-day reminder read
+    // identically. `days` via integer division: [1440, 2880) -> 1,
+    // [2880, 4320) -> 2, etc., so a non-exact-day offset (e.g. 1500 min =
+    // 1 day 1 hour) still rounds to the nearest whole day rather than
+    // needing a third time unit -- this app's offsets are day-aligned in
+    // practice (UI presets), so exactness beyond whole days isn't needed.
+    /// Exposed (internal, not private) for testing independent of a live
+    /// notification round trip.
+    static func reminderOffsetText(offset: Int) -> String {
         switch offset {
         case 0: return "지금 시작해요"
         case 1..<60: return "\(offset)분 후 시작해요"
@@ -484,7 +493,9 @@ enum NotificationScheduler {
         case 61..<1440:
             let h = offset / 60, m = offset % 60
             return m == 0 ? "\(h)시간 후 시작해요" : "\(h)시간 \(m)분 후 시작해요"
-        default: return "내일 시작해요"
+        default:
+            let days = offset / 1440
+            return days == 1 ? "내일 시작해요" : "\(days)일 후 시작해요"
         }
     }
 }

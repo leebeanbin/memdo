@@ -151,4 +151,29 @@ final class NotificationSchedulerTests: XCTestCase {
         XCTAssertEqual(candidates.count, 3)
         XCTAssertEqual(candidates.map(\.scheduleID), schedules.prefix(3).map(\.id))
     }
+
+    // MARK: - R0-3: reminderOffsetText must distinguish day counts, not
+    // collapse every offset >=1440 minutes into "내일"
+
+    func test_reminderOffsetText_minutesAndHours() {
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 0), "지금 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 30), "30분 후 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 60), "1시간 후 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 120), "2시간 후 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 90), "1시간 30분 후 시작해요")
+    }
+
+    func test_reminderOffsetText_distinctDayCounts_notAllTomorrow() {
+        // The exact bug: every one of these used to return "내일 시작해요".
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 1440), "내일 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 2880), "2일 후 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 10080), "7일 후 시작해요")
+    }
+
+    func test_reminderOffsetText_nonExactDayOffsetRoundsDownToWholeDays() {
+        // 1500 min = 1 day 1 hour -- still within the "내일" day, not a
+        // third time unit.
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 1500), "내일 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 3000), "2일 후 시작해요")
+    }
 }
