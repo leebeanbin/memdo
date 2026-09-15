@@ -80,7 +80,7 @@
 | PRD-103 | 시스템 Light/Dark를 존중하고 위젯 표시 스타일을 선택한다. |
 | PRD-104 | 여러 기기 간 일정과 설정을 동기화한다. |
 | PRD-105 | 주간 완료 패턴을 보여주되 평가하거나 꾸짖지 않는다. |
-| PRD-106 | Google Calendar를 최소 권한으로 연결하고 읽기 전용 미러를 동기화한다. |
+| PRD-106 | Google Calendar를 최소 권한(calendar.events, calendar.calendarlist.readonly)으로 연결하고 Memdo↔Google 양방향으로 일정을 동기화한다(생성·수정·삭제·실시간 pull 포함). |
 | PRD-107 | Memdo·Google·Apple·AI 제안의 출처와 소유권을 UI에서 구분한다. |
 | PRD-108 | 외부 AI 변경은 제안 링크에서 사용자가 승인한 뒤 실행한다. |
 

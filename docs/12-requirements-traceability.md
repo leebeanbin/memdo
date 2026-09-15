@@ -98,7 +98,7 @@ planned·in_progress·partial만 포함되고 completed·skipped·rescheduled·c
 | PRD-103 외형 | 설정·위젯 | iOS semantic color + widgetStyle | /preferences | ADR-058 | TEST-103 |
 | PRD-104 여러 기기 | 로그인·동기화 | version·tombstone | /sync | ADR-038·043 | TEST-104 |
 | PRD-105 주간 기록 | 주간 기록 | 집계 projection | /insights/weekly | 평가 금지 | TEST-105 |
-| PRD-106 Google 연결 | 외부 연결 | DataConnection·mirror | /connections, /calendar | OAuth 최소 scope | TEST-106 |
+| PRD-106 Google 연결 | 외부 연결(양방향) | DataConnection·push queue·mirror | /connections, /calendar | calendar.events + calendar.calendarlist.readonly | TEST-106 |
 | PRD-107 출처 인덱스 | 통합 캘린더 | CalendarEntry axes | /calendar/entries | ADR-021 | TEST-107 |
 | PRD-108 외부 AI 승인 | 승인 웹 | ChangeProposal | /change-proposals | ADR-022 | TEST-108 |
 
@@ -126,7 +126,7 @@ Light/Dark 전환 시 semantic background·label·separator가 갱신되고 브�
 
 ### TEST-106 Google 연결
 
-OAuth state·PKCE를 검증하고 선택한 access level 밖의 scope를 요청하지 않으며 연결 해제 후 token을 사용할 수 없다.
+OAuth state를 검증하고 calendar.events·calendar.calendarlist.readonly 밖의 scope를 요청하지 않는다. 연결 후: 캘린더 목록 pull, Memdo→Google 일정 생성·수정·삭제 push, Google→Memdo 실시간 pull(webhook), 연결 해제 후 token 사용 불가를 모두 검증한다. 읽기 전용 미러가 아니라 양방향 동기화 전체 lifecycle이 대상이다.
 
 ### TEST-107 출처 표시
 
