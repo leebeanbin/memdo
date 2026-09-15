@@ -228,25 +228,37 @@ enum NotificationScheduler {
 
     // MARK: - Per-schedule reminders
 
-    /// Cancels any existing reminder for `schedule` and schedules a fresh one
-    /// when the schedule has a future start time and a reminder offset.
-    /// Idempotent — safe to call on every save.
+    /// Cancels every existing reminder for `schedule` (one per offset it used
+    /// to have -- see reminderID's -{offset} suffix) and schedules a fresh
+    /// one per entry in reminderOffsetsMinutes, when the schedule has a
+    /// future reminder anchor. Idempotent — safe to call on every save; a
+    /// reschedule (new anchor date) naturally replaces every old reminder
+    /// since this always cancels-then-rebuilds the full set, never patches
+    /// one in place.
     static func scheduleReminder(for schedule: ScheduleDetail) async {
-        let center = UNUserNotificationCenter.current()
-        let id = reminderID(for: schedule.id)
-        center.removePendingNotificationRequests(withIdentifiers: [id])
+        await cancelReminder(for: schedule.id)
 
-        guard let offsetMinutes = schedule.reminderOffsetMinutes,
-              let anchor = schedule.reminderAnchor,
+        guard let anchor = schedule.reminderAnchor,
               schedule.isActive,
-              !schedule.isDone
+              !schedule.isDone,
+              !schedule.reminderOffsetsMinutes.isEmpty
         else { return }
 
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        guard status == .authorized || status == .provisional else { return }
+
+        for offsetMinutes in schedule.reminderOffsetsMinutes {
+            await scheduleOneReminder(for: schedule, anchor: anchor, offsetMinutes: offsetMinutes)
+        }
+    }
+
+    private static func scheduleOneReminder(
+        for schedule: ScheduleDetail,
+        anchor: ScheduleDetail.ReminderAnchor,
+        offsetMinutes: Int
+    ) async {
         let fireAt = anchor.date.addingTimeInterval(-Double(offsetMinutes) * 60)
         guard fireAt > .now else { return }
-
-        let status = await center.notificationSettings().authorizationStatus
-        guard status == .authorized || status == .provisional else { return }
 
         let content = UNMutableNotificationContent()
         content.title = schedule.emoji.map { "\($0) \(schedule.title)" } ?? schedule.title
@@ -256,7 +268,7 @@ enum NotificationScheduler {
         case .due(let due):
             content.subtitle = "마감 " + DateFormatting.korean("a h:mm").string(from: due)
         }
-        content.body = reminderOffsetText(offset: offsetMinutes)
+        content.body = reminderOffsetText(offset: offsetMinutes, anchor: anchor)
         content.sound = .default
         content.userInfo = ["memdo_link": "schedule/\(schedule.id.uuidString.lowercased())"]
         content.categoryIdentifier = reminderCategoryID
@@ -269,17 +281,29 @@ enum NotificationScheduler {
             from: fireAt
         )
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        let id = reminderID(for: schedule.id, offset: offsetMinutes)
         do {
-            try await center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+            try await UNUserNotificationCenter.current().add(
+                UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+            )
         } catch {
-            logger.error("scheduleReminder(\(schedule.id)) failed: \(error.localizedDescription)")
+            logger.error("scheduleReminder(\(schedule.id), offset: \(offsetMinutes)) failed: \(error.localizedDescription)")
         }
     }
 
-    /// Removes the pending reminder for a specific schedule.
-    static func cancelReminder(for scheduleID: UUID) {
-        UNUserNotificationCenter.current()
-            .removePendingNotificationRequests(withIdentifiers: [reminderID(for: scheduleID)])
+    /// Removes every pending reminder for a specific schedule -- one per
+    /// offset it may have had (reminderID's -{offset} suffix), which is why
+    /// this has to query pending requests by prefix rather than remove a
+    /// single fixed identifier the way it did back when each schedule had
+    /// at most one reminder.
+    static func cancelReminder(for scheduleID: UUID) async {
+        let center = UNUserNotificationCenter.current()
+        let prefix = reminderIDPrefix(for: scheduleID)
+        let ids = await center.pendingNotificationRequests()
+            .map(\.identifier)
+            .filter { $0.hasPrefix(prefix) }
+        guard !ids.isEmpty else { return }
+        center.removePendingNotificationRequests(withIdentifiers: ids)
     }
 
     /// Schedules a completion notification at the schedule's endAt time.
@@ -329,7 +353,7 @@ enum NotificationScheduler {
     // MARK: - Rolling-window reconciliation (docs/07-notification-and-daily-review.md §10)
 
     struct ScheduleNotificationCandidate: Equatable {
-        enum Kind: Equatable { case reminder, end }
+        enum Kind: Equatable { case reminder(offsetMinutes: Int), end }
         let scheduleID: UUID
         let kind: Kind
         let fireAt: Date
@@ -366,10 +390,17 @@ enum NotificationScheduler {
         for schedule in schedules {
             guard schedule.isActive, !schedule.isDone else { continue }
 
-            if let offsetMinutes = schedule.reminderOffsetMinutes, let anchor = schedule.reminderAnchor {
-                let fireAt = anchor.date.addingTimeInterval(-Double(offsetMinutes) * 60)
-                if fireAt > now, fireAt < windowEnd {
-                    candidates.append(.init(scheduleID: schedule.id, kind: .reminder, fireAt: fireAt, schedule: schedule))
+            if let anchor = schedule.reminderAnchor {
+                for offsetMinutes in schedule.reminderOffsetsMinutes {
+                    let fireAt = anchor.date.addingTimeInterval(-Double(offsetMinutes) * 60)
+                    if fireAt > now, fireAt < windowEnd {
+                        candidates.append(.init(
+                            scheduleID: schedule.id,
+                            kind: .reminder(offsetMinutes: offsetMinutes),
+                            fireAt: fireAt,
+                            schedule: schedule
+                        ))
+                    }
                 }
             }
             if let endAt = schedule.endAt, endAt > now, endAt < windowEnd {
@@ -386,7 +417,7 @@ enum NotificationScheduler {
 
     private static func identifier(for candidate: ScheduleNotificationCandidate) -> String {
         switch candidate.kind {
-        case .reminder: reminderID(for: candidate.scheduleID)
+        case .reminder(let offsetMinutes): reminderID(for: candidate.scheduleID, offset: offsetMinutes)
         case .end: endNotificationID(for: candidate.scheduleID)
         }
     }
@@ -426,12 +457,20 @@ enum NotificationScheduler {
         }
 
         let alreadyPending = Set(pendingScheduleIDs)
+        // scheduleReminder(for:) rebuilds every offset for a schedule in one
+        // call (it cancels-then-recreates the whole set) -- a schedule with
+        // several new reminder candidates in this pass must still only
+        // trigger that once, not once per offset.
+        var remindersScheduledFor: Set<UUID> = []
         for candidate in candidates {
             let id = identifier(for: candidate)
             guard !alreadyPending.contains(id) else { continue }
             switch candidate.kind {
-            case .reminder: await scheduleReminder(for: candidate.schedule)
-            case .end: await scheduleEndNotification(for: candidate.schedule)
+            case .reminder:
+                guard remindersScheduledFor.insert(candidate.scheduleID).inserted else { continue }
+                await scheduleReminder(for: candidate.schedule)
+            case .end:
+                await scheduleEndNotification(for: candidate.schedule)
             }
         }
     }
@@ -440,8 +479,16 @@ enum NotificationScheduler {
         "memdo.end-\(id.uuidString.lowercased())"
     }
 
-    private static func reminderID(for id: UUID) -> String {
-        "memdo.reminder-\(id.uuidString.lowercased())"
+    /// R1-6: one reminder identifier per offset (a schedule can have up to
+    /// 5, see ScheduleDetail.maxReminderCount) -- duplicate offsets are
+    /// already forbidden by the domain (R1-1's DB constraint + R1-2's Zod
+    /// schema), so no two of a schedule's own reminders ever collide here.
+    private static func reminderID(for id: UUID, offset: Int) -> String {
+        "\(reminderIDPrefix(for: id))\(offset)"
+    }
+
+    private static func reminderIDPrefix(for id: UUID) -> String {
+        "memdo.reminder-\(id.uuidString.lowercased())-"
     }
 
     private static func reminderTimeRange(start: Date, end: Date?) -> String {
@@ -488,19 +535,27 @@ enum NotificationScheduler {
     // 1 day 1 hour) still rounds to the nearest whole day rather than
     // needing a third time unit -- this app's offsets are day-aligned in
     // practice (UI presets), so exactness beyond whole days isn't needed.
-    /// Exposed (internal, not private) for testing independent of a live
+    /// R1-6: anchor-aware -- a reminder counting down to a due time reads
+    /// "...마감이에요", not "...시작해요" (previously always the latter,
+    /// wrong for the R1-5 due-anchor fallback this pairs with). Exposed
+    /// (internal, not private) for testing independent of a live
     /// notification round trip.
-    static func reminderOffsetText(offset: Int) -> String {
+    static func reminderOffsetText(offset: Int, anchor: ScheduleDetail.ReminderAnchor) -> String {
+        let verb: String
+        switch anchor {
+        case .start: verb = "시작해요"
+        case .due: verb = "마감이에요"
+        }
         switch offset {
-        case 0: return "지금 시작해요"
-        case 1..<60: return "\(offset)분 후 시작해요"
-        case 60: return "1시간 후 시작해요"
+        case 0: return "지금 \(verb)"
+        case 1..<60: return "\(offset)분 후 \(verb)"
+        case 60: return "1시간 후 \(verb)"
         case 61..<1440:
             let h = offset / 60, m = offset % 60
-            return m == 0 ? "\(h)시간 후 시작해요" : "\(h)시간 \(m)분 후 시작해요"
+            return m == 0 ? "\(h)시간 후 \(verb)" : "\(h)시간 \(m)분 후 \(verb)"
         default:
             let days = offset / 1440
-            return days == 1 ? "내일 시작해요" : "\(days)일 후 시작해요"
+            return days == 1 ? "내일 \(verb)" : "\(days)일 후 \(verb)"
         }
     }
 }

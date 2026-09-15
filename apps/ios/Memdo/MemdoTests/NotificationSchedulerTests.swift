@@ -74,7 +74,7 @@ final class NotificationSchedulerTests: XCTestCase {
             schedules: [schedule], now: now, calendar: utc
         )
         XCTAssertEqual(candidates.count, 1)
-        XCTAssertEqual(candidates[0].kind, .reminder)
+        XCTAssertEqual(candidates[0].kind, .reminder(offsetMinutes: 0))
     }
 
     func test_producesBothReminderAndEndCandidatesForOneEvent() throws {
@@ -86,7 +86,7 @@ final class NotificationSchedulerTests: XCTestCase {
             schedules: [schedule], now: now, calendar: utc
         )
         XCTAssertEqual(candidates.count, 2)
-        XCTAssertTrue(candidates.contains { $0.kind == .reminder })
+        XCTAssertTrue(candidates.contains { $0.kind == .reminder(offsetMinutes: 10) })
         XCTAssertTrue(candidates.contains { $0.kind == .end })
     }
 
@@ -121,7 +121,7 @@ final class NotificationSchedulerTests: XCTestCase {
             schedules: [task], now: now, calendar: utc
         )
         XCTAssertEqual(candidates.count, 1)
-        XCTAssertEqual(candidates[0].kind, .reminder)
+        XCTAssertEqual(candidates[0].kind, .reminder(offsetMinutes: 10))
         XCTAssertEqual(candidates[0].fireAt, due.addingTimeInterval(-600))
     }
 
@@ -190,28 +190,170 @@ final class NotificationSchedulerTests: XCTestCase {
         XCTAssertEqual(candidates.map(\.scheduleID), schedules.prefix(3).map(\.id))
     }
 
-    // MARK: - R0-3: reminderOffsetText must distinguish day counts, not
-    // collapse every offset >=1440 minutes into "내일"
+    // MARK: - R0-3/R1-6: reminderOffsetText must distinguish day counts, not
+    // collapse every offset >=1440 minutes into "내일", and must read
+    // differently for a due-anchored reminder ("마감이에요") than a
+    // start-anchored one ("시작해요").
+
+    private let anyStart = ScheduleDetail.ReminderAnchor.start(Date())
+    private let anyDue = ScheduleDetail.ReminderAnchor.due(Date())
 
     func test_reminderOffsetText_minutesAndHours() {
-        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 0), "지금 시작해요")
-        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 30), "30분 후 시작해요")
-        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 60), "1시간 후 시작해요")
-        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 120), "2시간 후 시작해요")
-        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 90), "1시간 30분 후 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 0, anchor: anyStart), "지금 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 30, anchor: anyStart), "30분 후 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 60, anchor: anyStart), "1시간 후 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 120, anchor: anyStart), "2시간 후 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 90, anchor: anyStart), "1시간 30분 후 시작해요")
     }
 
     func test_reminderOffsetText_distinctDayCounts_notAllTomorrow() {
         // The exact bug: every one of these used to return "내일 시작해요".
-        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 1440), "내일 시작해요")
-        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 2880), "2일 후 시작해요")
-        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 10080), "7일 후 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 1440, anchor: anyStart), "내일 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 2880, anchor: anyStart), "2일 후 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 10080, anchor: anyStart), "7일 후 시작해요")
     }
 
     func test_reminderOffsetText_nonExactDayOffsetRoundsDownToWholeDays() {
         // 1500 min = 1 day 1 hour -- still within the "내일" day, not a
         // third time unit.
-        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 1500), "내일 시작해요")
-        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 3000), "2일 후 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 1500, anchor: anyStart), "내일 시작해요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 3000, anchor: anyStart), "2일 후 시작해요")
+    }
+
+    func test_twoDayReminderTextIsNotTomorrow() {
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 2880, anchor: anyStart), "2일 후 시작해요")
+        XCTAssertNotEqual(NotificationScheduler.reminderOffsetText(offset: 2880, anchor: anyStart), "내일 시작해요")
+    }
+
+    func test_sevenDayReminderText() {
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 10080, anchor: anyStart), "7일 후 시작해요")
+    }
+
+    func test_reminderOffsetText_dueAnchorUsesMagamVerb() {
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 0, anchor: anyDue), "지금 마감이에요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 30, anchor: anyDue), "30분 후 마감이에요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 120, anchor: anyDue), "2시간 후 마감이에요")
+        XCTAssertEqual(NotificationScheduler.reminderOffsetText(offset: 2880, anchor: anyDue), "2일 후 마감이에요")
+    }
+
+    // MARK: - R1-6: multi-reminder candidate generation
+
+    func test_producesTwoReminderCandidatesForOneSchedule() throws {
+        let now = try now()
+        let start = now.addingTimeInterval(7200)
+        let schedule = ScheduleDetail(
+            scheduledDate: start, startAt: start, endAt: start.addingTimeInterval(1800),
+            title: "일정", reminderOffsetsMinutes: [10, 30], calendar: testCalendarEntity
+        )
+        let candidates = NotificationScheduler.reconciledNotificationCandidates(
+            schedules: [schedule], now: now, calendar: utc
+        )
+        let reminderCandidates = candidates.filter { $0.kind != .end }
+        XCTAssertEqual(reminderCandidates.count, 2)
+        XCTAssertEqual(Set(reminderCandidates.map(\.fireAt)), [
+            start.addingTimeInterval(-600), start.addingTimeInterval(-1800)
+        ])
+    }
+
+    func test_eachReminderGetsUniqueIdentifier() throws {
+        let now = try now()
+        let start = now.addingTimeInterval(7200)
+        let schedule = ScheduleDetail(
+            scheduledDate: start, startAt: start, title: "일정",
+            reminderOffsetsMinutes: [10, 30, 60], calendar: testCalendarEntity
+        )
+        let candidates = NotificationScheduler.reconciledNotificationCandidates(
+            schedules: [schedule], now: now, calendar: utc
+        )
+        let offsets: [Int] = candidates.compactMap {
+            if case .reminder(let offsetMinutes) = $0.kind { return offsetMinutes }
+            return nil
+        }
+        XCTAssertEqual(Set(offsets), [10, 30, 60])
+    }
+
+    func test_taskUsesStartAtAsReminderAnchor() throws {
+        let now = try now()
+        let start = now.addingTimeInterval(3600)
+        let due = start.addingTimeInterval(7200)
+        let task = ScheduleDetail(
+            scheduledDate: start, startAt: start, endAt: start.addingTimeInterval(1800), dueAt: due,
+            title: "할 일", reminderOffsetsMinutes: [10], kind: .task, calendar: testCalendarEntity
+        )
+        let candidates = NotificationScheduler.reconciledNotificationCandidates(
+            schedules: [task], now: now, calendar: utc
+        )
+        let reminder = try XCTUnwrap(candidates.first { $0.kind != .end })
+        XCTAssertEqual(reminder.fireAt, start.addingTimeInterval(-600))
+    }
+
+    func test_taskFallsBackToDueAt() throws {
+        let now = try now()
+        let due = now.addingTimeInterval(3600)
+        let task = ScheduleDetail(
+            scheduledDate: due, dueAt: due, title: "할 일",
+            reminderOffsetsMinutes: [10], kind: .task, calendar: testCalendarEntity
+        )
+        let candidates = NotificationScheduler.reconciledNotificationCandidates(
+            schedules: [task], now: now, calendar: utc
+        )
+        XCTAssertEqual(candidates.count, 1)
+        XCTAssertEqual(candidates[0].fireAt, due.addingTimeInterval(-600))
+    }
+
+    func test_taskWithoutStartOrDueProducesNoReminder() throws {
+        let now = try now()
+        let task = ScheduleDetail(
+            scheduledDate: now, title: "할 일", reminderOffsetsMinutes: [10], kind: .task,
+            calendar: testCalendarEntity
+        )
+        let candidates = NotificationScheduler.reconciledNotificationCandidates(
+            schedules: [task], now: now, calendar: utc
+        )
+        XCTAssertTrue(candidates.isEmpty)
+    }
+
+    func test_multipleRemindersStillRespectSevenDayWindow() throws {
+        let now = try now()
+        // windowEnd = startOfDay(now) + 7 days.
+        let start = utc.date(byAdding: .day, value: 9, to: now)!
+        let schedule = ScheduleDetail(
+            scheduledDate: start, startAt: start, title: "일정",
+            reminderOffsetsMinutes: [10, 30], calendar: testCalendarEntity
+        )
+        let candidates = NotificationScheduler.reconciledNotificationCandidates(
+            schedules: [schedule], now: now, calendar: utc
+        )
+        XCTAssertTrue(candidates.isEmpty)
+    }
+
+    func test_multipleRemindersAndEndNotificationsShare48Cap() throws {
+        let now = try now()
+        // 3 reminders + 1 end candidate per schedule -- 13 schedules would
+        // produce 52 candidates uncapped, well past the 48 cap.
+        let schedules = (0..<13).map { i -> ScheduleDetail in
+            let start = now.addingTimeInterval(Double(3600 * (i + 1)))
+            return ScheduleDetail(
+                scheduledDate: start, startAt: start, endAt: start.addingTimeInterval(1800),
+                title: "일정", reminderOffsetsMinutes: [5, 10, 30], calendar: testCalendarEntity
+            )
+        }
+        let candidates = NotificationScheduler.reconciledNotificationCandidates(
+            schedules: schedules, now: now, calendar: utc
+        )
+        XCTAssertEqual(candidates.count, 48)
+    }
+
+    func test_completedScheduleProducesNoReminderCandidates() throws {
+        let now = try now()
+        let start = now.addingTimeInterval(3600)
+        let schedule = ScheduleDetail(
+            scheduledDate: start, startAt: start, title: "일정", status: .completed,
+            reminderOffsetsMinutes: [10, 30], calendar: testCalendarEntity
+        )
+        let candidates = NotificationScheduler.reconciledNotificationCandidates(
+            schedules: [schedule], now: now, calendar: utc
+        )
+        XCTAssertTrue(candidates.isEmpty)
     }
 }

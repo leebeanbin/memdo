@@ -1860,7 +1860,7 @@ final class ScheduleStore {
             updateWidgetSnapshot()
             // Original is now "rescheduled" status — cancel its reminder.
             // Replacement is a new entry on the new date — schedule its reminder.
-            NotificationScheduler.cancelReminder(for: original.id)
+            await NotificationScheduler.cancelReminder(for: original.id)
             NotificationScheduler.cancelEndNotification(for: original.id)
             await NotificationScheduler.scheduleReminder(for: result.replacement)
             await NotificationScheduler.scheduleEndNotification(for: result.replacement)
@@ -1880,7 +1880,7 @@ final class ScheduleStore {
             // Notification matches the optimistic `moved` state -- cancel the
             // old time's, schedule the new one's, same as the committed path
             // but against the optimistic value rather than a server result.
-            NotificationScheduler.cancelReminder(for: original.id)
+            await NotificationScheduler.cancelReminder(for: original.id)
             NotificationScheduler.cancelEndNotification(for: original.id)
             await NotificationScheduler.scheduleReminder(for: moved)
             await NotificationScheduler.scheduleEndNotification(for: moved)
@@ -1930,7 +1930,7 @@ final class ScheduleStore {
             } else {
                 try await repository.delete(schedule)
             }
-            NotificationScheduler.cancelReminder(for: schedule.id)
+            await NotificationScheduler.cancelReminder(for: schedule.id)
             NotificationScheduler.cancelEndNotification(for: schedule.id)
             return .committed
         } catch ScheduleAPIError.offline {
@@ -1946,7 +1946,7 @@ final class ScheduleStore {
             } else {
                 await outbox.enqueue(.materializeThenDelete(schedule), scheduleID: schedule.id)
             }
-            NotificationScheduler.cancelReminder(for: schedule.id)
+            await NotificationScheduler.cancelReminder(for: schedule.id)
             NotificationScheduler.cancelEndNotification(for: schedule.id)
             return .queuedOffline
         } catch {
