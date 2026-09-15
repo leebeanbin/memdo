@@ -31,18 +31,19 @@ includeReflection
 
 ### TODO_REMINDER
 
-문구:
+세 줄 구성(title / subtitle / body):
 
 ```text
-곧 시작해요
-20:00 운동하기
+🏃 운동하기          ← title: 이모지(있으면) + 일정 제목
+20:00 – 21:00        ← subtitle: 시작–종료 시각
+30분 후 시작해요      ← body: 오프셋 기반 문구 (분/시간/일 단위, R0-3에서 일 단위 문구 수정)
 ```
 
 액션:
 
-- 시작했어요
-- 10분 뒤
-- 건너뛰기
+- 완료 (`memdo.action.complete` — 탭하면 `memdo://complete/{id}` 딥링크로 앱을 열어 완료 처리)
+
+v1.0 product decision (2026-09-15): 이전에 문서화됐던 시작했어요 / 10분 뒤 / 건너뛰기 3-액션 플로우는 v1.0 제품 범위에 포함하지 않는다. 완료 단일 액션이 실제 계약이다.
 
 ### DAILY_REVIEW
 
