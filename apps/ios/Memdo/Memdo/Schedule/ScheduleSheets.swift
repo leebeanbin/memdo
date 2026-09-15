@@ -503,12 +503,7 @@ struct ScheduleEditorFields: View {
                 } label: {
                     LabeledContent("장소", value: schedule.location.nilFallback)
                 }
-                Picker("미리 알림", selection: $schedule.reminderOffsetMinutes) {
-                    ForEach(ScheduleReminderOption.options) { option in
-                        Text(option.label).tag(option.offsetMinutes)
-                    }
-                }
-                .pickerStyle(.menu)
+                ReminderOffsetsEditor(schedule: $schedule)
                 if schedule.kind == .task {
                     Picker("소요 시간", selection: $schedule.estimatedMinutes) {
                         Text("없음").tag(nil as Int?)
@@ -758,6 +753,82 @@ struct ScheduleEditorFields: View {
         case .completed: 100
         case .inProgress, .partial: storedProgress
         case .planned, .skipped, .rescheduled, .cancelled: 0
+        }
+    }
+}
+
+// MARK: - Multi-reminder editor (R1-5)
+
+/// Replaces the old single-value reminder Picker with a list + "+ 알림 추가"
+/// flow, backed by schedule.reminderOffsetsMinutes (up to
+/// ScheduleDetail.maxReminderCount). Also surfaces the R1-5 anchor bug fix
+/// to the user: a task's reminder counts down to its due time when it has
+/// no scheduled start (schedule.reminderAnchor), and this shows which one
+/// is active -- previously a due-only task silently got no reminder at all,
+/// with no explanation in the UI either.
+private struct ReminderOffsetsEditor: View {
+    @Binding var schedule: ScheduleDetail
+
+    private var canAddMore: Bool {
+        schedule.reminderAnchor != nil && schedule.reminderOffsetsMinutes.count < ScheduleDetail.maxReminderCount
+    }
+
+    private var availablePresets: [Int] {
+        ScheduleReminderOption.addPresets.filter { !schedule.reminderOffsetsMinutes.contains($0) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("미리 알림")
+                .font(MemdoTypography.footnote)
+                .foregroundStyle(MemdoTheme.secondaryInk)
+
+            ForEach(schedule.reminderOffsetsMinutes, id: \.self) { offset in
+                HStack {
+                    Text(ScheduleReminderOption.label(for: offset))
+                        .font(MemdoTypography.subtitle)
+                        .foregroundStyle(MemdoTheme.ink)
+                    Spacer()
+                    Button {
+                        schedule.removeReminderOffset(offset)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(MemdoTheme.secondaryInk)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(ScheduleReminderOption.label(for: offset)) 알림 제거")
+                }
+            }
+
+            if schedule.reminderAnchor == nil {
+                Text("알림을 사용하려면 시간 또는 마감을 설정하세요.")
+                    .font(MemdoTypography.footnote)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            } else if schedule.kind == .task {
+                Text(anchorCaption)
+                    .font(MemdoTypography.footnote)
+                    .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+
+            Menu {
+                ForEach(availablePresets, id: \.self) { offset in
+                    Button(ScheduleReminderOption.label(for: offset)) {
+                        schedule.addReminderOffset(offset)
+                    }
+                }
+            } label: {
+                Label("알림 추가", systemImage: "plus.circle")
+            }
+            .disabled(!canAddMore || availablePresets.isEmpty)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var anchorCaption: String {
+        switch schedule.reminderAnchor {
+        case .start: "알림 · 시작 기준"
+        case .due: "알림 · 마감 기준"
+        case nil: ""
         }
     }
 }

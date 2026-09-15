@@ -237,12 +237,12 @@ enum NotificationScheduler {
         center.removePendingNotificationRequests(withIdentifiers: [id])
 
         guard let offsetMinutes = schedule.reminderOffsetMinutes,
-              let startAt = schedule.startAt,
+              let anchor = schedule.reminderAnchor,
               schedule.isActive,
               !schedule.isDone
         else { return }
 
-        let fireAt = startAt.addingTimeInterval(-Double(offsetMinutes) * 60)
+        let fireAt = anchor.date.addingTimeInterval(-Double(offsetMinutes) * 60)
         guard fireAt > .now else { return }
 
         let status = await center.notificationSettings().authorizationStatus
@@ -250,7 +250,12 @@ enum NotificationScheduler {
 
         let content = UNMutableNotificationContent()
         content.title = schedule.emoji.map { "\($0) \(schedule.title)" } ?? schedule.title
-        content.subtitle = reminderTimeRange(start: startAt, end: schedule.endAt)
+        switch anchor {
+        case .start(let start):
+            content.subtitle = reminderTimeRange(start: start, end: schedule.endAt)
+        case .due(let due):
+            content.subtitle = "마감 " + DateFormatting.korean("a h:mm").string(from: due)
+        }
         content.body = reminderOffsetText(offset: offsetMinutes)
         content.sound = .default
         content.userInfo = ["memdo_link": "schedule/\(schedule.id.uuidString.lowercased())"]
@@ -361,8 +366,8 @@ enum NotificationScheduler {
         for schedule in schedules {
             guard schedule.isActive, !schedule.isDone else { continue }
 
-            if let offsetMinutes = schedule.reminderOffsetMinutes, let startAt = schedule.startAt {
-                let fireAt = startAt.addingTimeInterval(-Double(offsetMinutes) * 60)
+            if let offsetMinutes = schedule.reminderOffsetMinutes, let anchor = schedule.reminderAnchor {
+                let fireAt = anchor.date.addingTimeInterval(-Double(offsetMinutes) * 60)
                 if fireAt > now, fireAt < windowEnd {
                     candidates.append(.init(scheduleID: schedule.id, kind: .reminder, fireAt: fireAt, schedule: schedule))
                 }

@@ -174,10 +174,29 @@ struct ScheduleReminderOption: Identifiable, Hashable {
         ScheduleReminderOption(offsetMinutes: 1_440, label: "1일 전")
     ]
 
+    /// R1-5: presets offered by "+ 알림 추가" -- a subset of `options` (no
+    /// "알림 없음", that's expressed by an empty reminderOffsetsMinutes, not
+    /// a selectable entry once reminders are a list). A full arbitrary-
+    /// offset custom picker isn't part of v1; an offset outside this preset
+    /// set (e.g. set via the Agent or Google) still displays correctly via
+    /// `label(for:)`'s formatted fallback below, just isn't offered here.
+    static let addPresets: [Int] = [0, 5, 10, 30, 60, 1_440]
+
     static func label(for offsetMinutes: Int?) -> String {
-        options.first { $0.offsetMinutes == offsetMinutes }?.label
-            ?? offsetMinutes.map { "\($0)분 전" }
-            ?? "알림 없음"
+        guard let offsetMinutes else { return "알림 없음" }
+        if let preset = options.first(where: { $0.offsetMinutes == offsetMinutes }) {
+            return preset.label
+        }
+        switch offsetMinutes {
+        case 1..<60:
+            return "\(offsetMinutes)분 전"
+        case 60..<1_440:
+            let hours = offsetMinutes / 60, minutes = offsetMinutes % 60
+            return minutes == 0 ? "\(hours)시간 전" : "\(hours)시간 \(minutes)분 전"
+        default:
+            let days = offsetMinutes / 1_440, hours = (offsetMinutes % 1_440) / 60
+            return hours == 0 ? "\(days)일 전" : "\(days)일 \(hours)시간 전"
+        }
     }
 }
 
@@ -369,6 +388,43 @@ struct ScheduleDetail: Identifiable, Equatable, Codable {
     var reminderOffsetMinutes: Int? {
         get { nearestReminderOffsetMinutes }
         set { reminderOffsetsMinutes = newValue.map { [$0] } ?? [] }
+    }
+
+    /// R1-5: what a reminder counts down to. Event → startAt (events always
+    /// have one, enforced by isTimeRangeValid). Task with a scheduled time →
+    /// startAt. Task with only a due time → dueAt. Task with neither → no
+    /// reminder is possible regardless of reminderOffsetsMinutes.
+    enum ReminderAnchor: Equatable {
+        case start(Date)
+        case due(Date)
+
+        var date: Date {
+            switch self {
+            case .start(let date), .due(let date): date
+            }
+        }
+    }
+
+    var reminderAnchor: ReminderAnchor? {
+        if let startAt { return .start(startAt) }
+        if kind == .task, let dueAt { return .due(dueAt) }
+        return nil
+    }
+
+    /// Matches the backend's reminder_offsets_minutes CHECK constraint
+    /// (R1-1) -- kept here so the editor's cap and server validation can't
+    /// silently drift apart.
+    static let maxReminderCount = 5
+
+    mutating func addReminderOffset(_ minutes: Int) {
+        guard !reminderOffsetsMinutes.contains(minutes),
+              reminderOffsetsMinutes.count < Self.maxReminderCount else { return }
+        reminderOffsetsMinutes.append(minutes)
+        reminderOffsetsMinutes.sort()
+    }
+
+    mutating func removeReminderOffset(_ minutes: Int) {
+        reminderOffsetsMinutes.removeAll { $0 == minutes }
     }
 
     var source: String { calendar.provider.displayName }

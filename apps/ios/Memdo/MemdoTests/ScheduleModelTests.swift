@@ -70,6 +70,66 @@ final class ScheduleModelTests: XCTestCase {
         XCTAssertNil(schedule.nearestReminderOffsetMinutes)
     }
 
+    // R1-5: reminderAnchor -- event/task-with-start use startAt, a
+    // due-only task falls back to dueAt, and a task with neither has no
+    // anchor (so no reminder is possible regardless of offsets set).
+
+    func testReminderAnchorIsStartAtForAnEvent() {
+        let start = Date()
+        let schedule = ScheduleDetail(
+            scheduledDate: start, startAt: start, endAt: start.addingTimeInterval(1800),
+            title: "일정", calendar: calendar
+        )
+        XCTAssertEqual(schedule.reminderAnchor, .start(start))
+    }
+
+    func testReminderAnchorFallsBackToDueAtForATaskWithNoStartTime() {
+        let due = Date()
+        let schedule = ScheduleDetail(
+            scheduledDate: due, dueAt: due, title: "할 일", kind: .task, calendar: calendar
+        )
+        XCTAssertEqual(schedule.reminderAnchor, .due(due))
+    }
+
+    func testReminderAnchorPrefersStartAtOverDueAtForATask() {
+        let start = Date()
+        let due = start.addingTimeInterval(3600)
+        let schedule = ScheduleDetail(
+            scheduledDate: start, startAt: start, endAt: start.addingTimeInterval(1800),
+            dueAt: due, title: "할 일", kind: .task, calendar: calendar
+        )
+        XCTAssertEqual(schedule.reminderAnchor, .start(start))
+    }
+
+    func testReminderAnchorIsNilForATaskWithNeitherStartNorDue() {
+        let schedule = ScheduleDetail(scheduledDate: Date(), title: "할 일", kind: .task, calendar: calendar)
+        XCTAssertNil(schedule.reminderAnchor)
+    }
+
+    func testAddReminderOffsetDedupesAndCapsAtFive() {
+        var schedule = ScheduleDetail(
+            scheduledDate: Date(), title: "일정", reminderOffsetsMinutes: [],
+            calendar: calendar
+        )
+        for offset in [60, 10, 30, 5, 1_440] { schedule.addReminderOffset(offset) }
+        XCTAssertEqual(schedule.reminderOffsetsMinutes, [5, 10, 30, 60, 1_440])
+
+        schedule.addReminderOffset(10) // duplicate -- no-op
+        XCTAssertEqual(schedule.reminderOffsetsMinutes, [5, 10, 30, 60, 1_440])
+
+        schedule.addReminderOffset(0) // 6th distinct value -- over the cap, no-op
+        XCTAssertEqual(schedule.reminderOffsetsMinutes, [5, 10, 30, 60, 1_440])
+    }
+
+    func testRemoveReminderOffset() {
+        var schedule = ScheduleDetail(
+            scheduledDate: Date(), title: "일정", reminderOffsetsMinutes: [10, 30],
+            calendar: calendar
+        )
+        schedule.removeReminderOffset(10)
+        XCTAssertEqual(schedule.reminderOffsetsMinutes, [30])
+    }
+
     func testTaskDoesNotSpillIntoAnotherDay() throws {
         let systemCalendar = Calendar(identifier: .gregorian)
         let day = try XCTUnwrap(systemCalendar.date(from: DateComponents(year: 2026, month: 8, day: 9)))

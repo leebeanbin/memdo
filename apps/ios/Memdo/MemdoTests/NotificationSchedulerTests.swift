@@ -102,6 +102,44 @@ final class NotificationSchedulerTests: XCTestCase {
         XCTAssertEqual(candidates[0].kind, .end)
     }
 
+    // R1-5: a task with only a due time (no startAt) previously never got a
+    // reminder candidate at all -- reconciledNotificationCandidates required
+    // schedule.startAt unconditionally. schedule.reminderAnchor now falls
+    // back to dueAt for a task with no scheduled time.
+    func test_dueOnlyTaskProducesAReminderCandidateAnchoredOnDueAt() throws {
+        let now = try now()
+        let due = now.addingTimeInterval(3600)
+        let task = ScheduleDetail(
+            scheduledDate: due,
+            dueAt: due,
+            title: "마감 있는 할 일",
+            reminderOffsetMinutes: 10,
+            kind: .task,
+            calendar: testCalendarEntity
+        )
+        let candidates = NotificationScheduler.reconciledNotificationCandidates(
+            schedules: [task], now: now, calendar: utc
+        )
+        XCTAssertEqual(candidates.count, 1)
+        XCTAssertEqual(candidates[0].kind, .reminder)
+        XCTAssertEqual(candidates[0].fireAt, due.addingTimeInterval(-600))
+    }
+
+    func test_taskWithNeitherStartNorDueHasNoReminderCandidate() throws {
+        let now = try now()
+        let task = ScheduleDetail(
+            scheduledDate: now,
+            title: "시간 없는 할 일",
+            reminderOffsetMinutes: 10,
+            kind: .task,
+            calendar: testCalendarEntity
+        )
+        let candidates = NotificationScheduler.reconciledNotificationCandidates(
+            schedules: [task], now: now, calendar: utc
+        )
+        XCTAssertTrue(candidates.isEmpty)
+    }
+
     func test_excludesDoneAndInactiveSchedules() throws {
         let now = try now()
         let start = now.addingTimeInterval(3600)
