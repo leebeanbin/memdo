@@ -56,8 +56,9 @@ final class AgentIntentTests: XCTestCase {
     func test_classify_proposeSchedule() {
         let intent = classify(
             proposedSchedule: CloudProposedScheduleDTO(
-                title: "치과", date: "tomorrow", startTime: "15:00", endTime: nil,
-                isTask: false, note: nil, conflictTitle: nil, conflictCheckFailed: false
+                title: "치과", entryKind: "event", scheduledDate: "tomorrow", startTime: "15:00", endTime: nil,
+                dueDate: nil, dueTime: nil, estimatedMinutes: nil, reminderOffsetsMinutes: nil,
+                locationQuery: nil, categoryHint: nil, note: nil, conflictTitle: nil, conflictCheckFailed: false
             )
         )
         XCTAssertEqual(intent, .proposeSchedule)
@@ -108,8 +109,9 @@ final class AgentIntentTests: XCTestCase {
         // the point of the turn (see classifyAgentIntent's doc comment).
         let intent = classify(
             proposedSchedule: CloudProposedScheduleDTO(
-                title: "치과", date: "tomorrow", startTime: nil, endTime: nil,
-                isTask: true, note: nil, conflictTitle: nil, conflictCheckFailed: false
+                title: "치과", entryKind: "task", scheduledDate: "tomorrow", startTime: nil, endTime: nil,
+                dueDate: nil, dueTime: nil, estimatedMinutes: nil, reminderOffsetsMinutes: nil,
+                locationQuery: nil, categoryHint: nil, note: nil, conflictTitle: nil, conflictCheckFailed: false
             ),
             toolNames: ["search_schedules", "propose_schedule"]
         )

@@ -610,13 +610,19 @@ struct AgentSheet: View {
         if let proposed = result.proposedSchedule {
             let stagingResult = stageScheduleProposal(
                 title: proposed.title,
-                date: proposed.date,
+                date: proposed.scheduledDate,
                 startTime: proposed.startTime ?? "",
                 endTime: proposed.endTime ?? "",
-                isTask: proposed.isTask,
+                isTask: proposed.entryKind == "task",
                 note: proposed.note ?? "",
                 existing: existingItemsSnapshot(scheduleStore),
-                conflictCheckFailed: proposed.conflictCheckFailed ?? false
+                conflictCheckFailed: proposed.conflictCheckFailed ?? false,
+                dueDate: proposed.dueDate,
+                dueTime: proposed.dueTime,
+                estimatedMinutes: proposed.estimatedMinutes,
+                reminderOffsetsMinutes: proposed.reminderOffsetsMinutes ?? [],
+                locationQuery: proposed.locationQuery,
+                categoryHint: proposed.categoryHint
             )
             switch stagingResult {
             case .staged(let draft, let conflict, let conflictCheckFailed):

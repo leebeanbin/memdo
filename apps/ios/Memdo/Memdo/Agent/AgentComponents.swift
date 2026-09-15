@@ -461,6 +461,36 @@ struct ProposedScheduleCard: View {
                 .foregroundStyle(MemdoTheme.secondaryInk)
                 .lineLimit(1)
 
+                // A1-2: every core-Todo field A1-1 widened the proposal
+                // contract to cover, shown when the model actually proposed
+                // it -- one row per field rather than a single line, since
+                // up to 5 of these can be present at once and a single
+                // HStack has no wrapping. locationQuery/categoryHint are
+                // labeled distinctly from a resolved value (아직 미해결 --
+                // see CloudProposedScheduleDTO's doc comment): categoryHint
+                // is never silently applied to a real category, so the
+                // label says so rather than implying it already is one.
+                VStack(alignment: .leading, spacing: 3) {
+                    if let displayDueDate = draft.displayDueDate {
+                        Label("마감 \(displayDueDate)", systemImage: "flag")
+                    }
+                    if let displayEstimatedMinutes = draft.displayEstimatedMinutes {
+                        Label("소요 시간 \(displayEstimatedMinutes)", systemImage: "hourglass")
+                    }
+                    if let displayReminders = draft.displayReminders {
+                        Label("알림 \(displayReminders)", systemImage: "bell")
+                    }
+                    if let locationQuery = draft.locationQuery, !locationQuery.isEmpty {
+                        Label(locationQuery, systemImage: "mappin.and.ellipse")
+                    }
+                    if let categoryHint = draft.categoryHint, !categoryHint.isEmpty {
+                        Label("카테고리 제안: \(categoryHint)", systemImage: "tag")
+                    }
+                }
+                .font(MemdoTypography.caption)
+                .foregroundStyle(MemdoTheme.secondaryInk)
+                .lineLimit(1)
+
                 if let note = draft.note, !note.isEmpty {
                     Text(note)
                         .font(MemdoTypography.caption)

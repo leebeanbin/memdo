@@ -85,14 +85,35 @@ struct AgentChatRequestDTO: Encodable {
     let debug: Bool
 }
 
-/// Field-for-field the same shape ProposeScheduleTool's Arguments produces
-/// on-device, so both paths feed the exact same proposal/consent UI.
+/// A1-1 core-Todo-field parity: title/scheduledDate/startTime/endTime/note
+/// are the same shape ProposeScheduleTool's Arguments produces on-device
+/// (so both paths feed the same proposal/consent UI); everything from
+/// dueDate on is cloud-only for now -- the on-device path (Apple's
+/// FoundationModels @Generable tool) hasn't been widened to extract these,
+/// so they're simply absent (nil/empty) for an on-device-staged proposal.
 struct CloudProposedScheduleDTO: Decodable {
     let title: String
-    let date: String
+    let entryKind: String
+    let scheduledDate: String
     let startTime: String?
     let endTime: String?
-    let isTask: Bool
+    /// Task-only. Split date/time (not one ISO instant), resolved
+    /// server-side against the user's own timezone the same way
+    /// scheduledDate is -- see agent-tool-contract.ts's proposeScheduleArgsSchema.
+    let dueDate: String?
+    let dueTime: String?
+    let estimatedMinutes: Int?
+    let reminderOffsetsMinutes: [Int]?
+    /// Opaque model-proposed text, not a resolved place -- A1-3 (deferred)
+    /// is the deterministic geocoding boundary. Applied today only as a
+    /// manual-provider ScheduleLocation (a display name, no coordinates),
+    /// the same shape a user's own free-text "장소" entry already produces.
+    let locationQuery: String?
+    /// Opaque model-proposed text, shown to the user but never auto-applied
+    /// to a real categoryId -- matching categoryHint against the user's
+    /// actual categories is A1-3's server-side resolution boundary, not
+    /// guessed client-side.
+    let categoryHint: String?
     let note: String?
     /// Set server-side by agent-cloud-chat's own Reflection check (see
     /// findConflict in agent-cloud-contract.ts) -- guaranteed, unlike the

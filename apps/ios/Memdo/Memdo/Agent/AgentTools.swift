@@ -90,6 +90,47 @@ struct ProposedScheduleDraft: Sendable, Equatable {
     let endTimeString: String?      // "HH:mm"
     let isTask: Bool
     let note: String?
+    // A1-2: cloud-only for now (see CloudProposedScheduleDTO's doc comment)
+    // -- always nil/empty for an on-device-staged draft.
+    let dueDateString: String?      // "today" | "tomorrow" | "yyyy-MM-dd", task-only
+    let dueTimeString: String?      // "HH:mm"
+    let estimatedMinutes: Int?
+    let reminderOffsetsMinutes: [Int]
+    /// Opaque model-proposed text -- see CloudProposedScheduleDTO's doc
+    /// comment for why this is applied as a manual-provider location
+    /// (a name only) rather than resolved to real coordinates.
+    let locationQuery: String?
+    /// Opaque model-proposed text, display-only -- never auto-applied to a
+    /// real categoryId. See CloudProposedScheduleDTO's doc comment.
+    let categoryHint: String?
+
+    init(
+        title: String,
+        dateString: String,
+        startTimeString: String? = nil,
+        endTimeString: String? = nil,
+        isTask: Bool,
+        note: String? = nil,
+        dueDateString: String? = nil,
+        dueTimeString: String? = nil,
+        estimatedMinutes: Int? = nil,
+        reminderOffsetsMinutes: [Int] = [],
+        locationQuery: String? = nil,
+        categoryHint: String? = nil
+    ) {
+        self.title = title
+        self.dateString = dateString
+        self.startTimeString = startTimeString
+        self.endTimeString = endTimeString
+        self.isTask = isTask
+        self.note = note
+        self.dueDateString = dueDateString
+        self.dueTimeString = dueTimeString
+        self.estimatedMinutes = estimatedMinutes
+        self.reminderOffsetsMinutes = reminderOffsetsMinutes
+        self.locationQuery = locationQuery
+        self.categoryHint = categoryHint
+    }
 
     var displayDate: String { displayAgentDateToken(dateString) }
 
@@ -97,6 +138,32 @@ struct ProposedScheduleDraft: Sendable, Equatable {
         if isTask { return "할 일" }
         guard let start = startTimeString else { return "시간 미정" }
         return start + (endTimeString.map { " – \($0)" } ?? "")
+    }
+
+    /// nil when there's no due date proposed. Task-only by construction
+    /// (the backend schema rejects dueDate on an event proposal), so this
+    /// doesn't re-check isTask.
+    var displayDueDate: String? {
+        guard let dueDateString else { return nil }
+        let day = displayAgentDateToken(dueDateString)
+        return dueTimeString.map { "\(day) \($0)" } ?? day
+    }
+
+    // ScheduleDuration (ScheduleSheets.swift) is file-private and preset-only
+    // (a fixed list of common durations) -- the Agent can propose any
+    // 1-1440 minute value, so this is a general minutes/hours formatter,
+    // not a lookup against that preset list.
+    var displayEstimatedMinutes: String? {
+        guard let estimatedMinutes else { return nil }
+        if estimatedMinutes < 60 { return "\(estimatedMinutes)분" }
+        let hours = estimatedMinutes / 60, minutes = estimatedMinutes % 60
+        return minutes == 0 ? "\(hours)시간" : "\(hours)시간 \(minutes)분"
+    }
+
+    var displayReminders: String? {
+        reminderOffsetsMinutes.isEmpty
+            ? nil
+            : reminderOffsetsMinutes.sorted().map { ScheduleReminderOption.label(for: $0) }.joined(separator: ", ")
     }
 
     /// Same "already validated by the time this exists" invariant as
@@ -107,6 +174,19 @@ struct ProposedScheduleDraft: Sendable, Equatable {
         AgentDateExpression(token: dateString)?.resolvedDate() ?? Calendar.current.startOfDay(for: .now)
     }
 
+    /// Resolved due instant, or nil when no due date was proposed. Falls
+    /// back to end-of-day when a date was proposed with no specific time
+    /// (matches how "마감 금요일까지" -- a deadline day with no stated
+    /// time -- naturally reads), same reasoning as R1-5's due-anchor
+    /// fallback on the display side.
+    func dueAt() -> Date? {
+        guard let dueDateString,
+              let day = AgentDateExpression(token: dueDateString)?.resolvedDate()
+        else { return nil }
+        if let dueTimeString, let time = parseAgentTime(dueTimeString, on: day) { return time }
+        return Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: day) ?? day
+    }
+
     func toScheduleDetail(calendar: ScheduleCalendar) -> ScheduleDetail {
         let date    = scheduledDate()
         let startAt = startTimeString.flatMap { parseAgentTime($0, on: date) }
@@ -114,10 +194,15 @@ struct ProposedScheduleDraft: Sendable, Equatable {
         return ScheduleDetail(
             scheduledDate: date,
             startAt: startAt, endAt: endAt,
-            title: title, memo: note ?? "",
+            dueAt: dueAt(),
+            title: title,
+            locationValue: locationQuery.map { ScheduleLocation(name: $0, provider: .manual) },
+            memo: note ?? "",
+            reminderOffsetsMinutes: reminderOffsetsMinutes,
             kind: isTask ? .task : .event,
             calendar: calendar,
-            timeBucket: startAt.map(ScheduleTimeBucket.inferred) ?? .anytime
+            timeBucket: startAt.map(ScheduleTimeBucket.inferred) ?? .anytime,
+            estimatedMinutes: isTask ? estimatedMinutes : nil
         )
     }
 

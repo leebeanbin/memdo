@@ -3,6 +3,13 @@ import XCTest
 @testable import Memdo
 
 final class AgentDomainServicesTests: XCTestCase {
+    private let testCalendar = ScheduleCalendar(
+        id: "test-calendar",
+        title: "테스트",
+        purpose: "personal",
+        provider: .memdo
+    )
+
     // Fixed reference day, plain UTC clock times -- FreeSlotService/
     // ConflictService do no timezone math of their own (that's the
     // caller's job), so bare UTC instants are fine here.
@@ -383,6 +390,134 @@ final class AgentDomainServicesTests: XCTestCase {
         }
         XCTAssertTrue(draft.isTask)
         XCTAssertNil(conflict)
+    }
+
+    // MARK: - A1-2: dueDate/dueTime/estimatedMinutes/reminderOffsetsMinutes/
+    // locationQuery/categoryHint threading
+
+    func test_stageSchedule_threadsThroughEveryA1FieldOntoTheDraft() {
+        let result = stageScheduleProposal(
+            title: "보고서 제출", date: "today", startTime: "", endTime: "", isTask: true, note: "",
+            existing: [],
+            dueDate: "tomorrow", dueTime: "18:00", estimatedMinutes: 90,
+            reminderOffsetsMinutes: [10, 1440], locationQuery: "집", categoryHint: "업무"
+        )
+        guard case .staged(let draft, _, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertEqual(draft.dueDateString, "tomorrow")
+        XCTAssertEqual(draft.dueTimeString, "18:00")
+        XCTAssertEqual(draft.estimatedMinutes, 90)
+        XCTAssertEqual(draft.reminderOffsetsMinutes, [10, 1440])
+        XCTAssertEqual(draft.locationQuery, "집")
+        XCTAssertEqual(draft.categoryHint, "업무")
+    }
+
+    func test_stageSchedule_dueDateOnAnEvent_isInvalid() {
+        // Mirrors proposeScheduleArgsSchema's task-only due date rule --
+        // trust-boundary re-validation, same reasoning as the date checks
+        // above.
+        let result = stageScheduleProposal(
+            title: "회의", date: "today", startTime: "10:00", endTime: "", isTask: false, note: "",
+            existing: [], dueDate: "tomorrow"
+        )
+        XCTAssertEqual(result, .invalidDate)
+    }
+
+    func test_stageSchedule_dueTimeWithoutDueDate_isInvalid() {
+        let result = stageScheduleProposal(
+            title: "보고서 제출", date: "today", startTime: "", endTime: "", isTask: true, note: "",
+            existing: [], dueTime: "18:00"
+        )
+        XCTAssertEqual(result, .invalidDate)
+    }
+
+    func test_stageSchedule_invalidDueDateToken_isInvalid() {
+        let result = stageScheduleProposal(
+            title: "보고서 제출", date: "today", startTime: "", endTime: "", isTask: true, note: "",
+            existing: [], dueDate: "banana"
+        )
+        XCTAssertEqual(result, .invalidDate)
+    }
+
+    func test_draft_dueAt_fallsBackToEndOfDayWithNoDueTime() throws {
+        let result = stageScheduleProposal(
+            title: "보고서 제출", date: "today", startTime: "", endTime: "", isTask: true, note: "",
+            existing: [], dueDate: "today"
+        )
+        guard case .staged(let draft, _, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        let dueAt = try XCTUnwrap(draft.dueAt())
+        let components = Calendar.current.dateComponents([.hour, .minute], from: dueAt)
+        XCTAssertEqual(components.hour, 23)
+        XCTAssertEqual(components.minute, 59)
+    }
+
+    func test_draft_dueAt_usesTheStatedTimeWhenGiven() throws {
+        let result = stageScheduleProposal(
+            title: "보고서 제출", date: "today", startTime: "", endTime: "", isTask: true, note: "",
+            existing: [], dueDate: "today", dueTime: "09:30"
+        )
+        guard case .staged(let draft, _, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        let dueAt = try XCTUnwrap(draft.dueAt())
+        let components = Calendar.current.dateComponents([.hour, .minute], from: dueAt)
+        XCTAssertEqual(components.hour, 9)
+        XCTAssertEqual(components.minute, 30)
+    }
+
+    func test_draft_toScheduleDetail_appliesLocationAndRemindersAndEstimatedMinutes() {
+        let result = stageScheduleProposal(
+            title: "보고서 제출", date: "today", startTime: "", endTime: "", isTask: true, note: "",
+            existing: [], estimatedMinutes: 90, reminderOffsetsMinutes: [10, 1440], locationQuery: "집"
+        )
+        guard case .staged(let draft, _, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        let detail = draft.toScheduleDetail(calendar: testCalendar)
+        XCTAssertEqual(detail.estimatedMinutes, 90)
+        XCTAssertEqual(detail.reminderOffsetsMinutes, [10, 1440])
+        XCTAssertEqual(detail.locationValue?.name, "집")
+        XCTAssertEqual(detail.locationValue?.provider, .manual)
+    }
+
+    func test_draft_toScheduleDetail_neverAppliesEstimatedMinutesToAnEvent() {
+        // estimatedMinutes is a task-only UI concept (ScheduleEditorFields
+        // only shows the picker for .task) -- a model proposing it for an
+        // event must not silently apply it somewhere the app never expects
+        // it to be editable.
+        let result = stageScheduleProposal(
+            title: "회의", date: "today", startTime: "10:00", endTime: "11:00", isTask: false, note: "",
+            existing: [], estimatedMinutes: 90
+        )
+        guard case .staged(let draft, _, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertNil(draft.toScheduleDetail(calendar: testCalendar).estimatedMinutes)
+    }
+
+    func test_draft_displayReminders_formatsAscendingCommaJoined() {
+        let result = stageScheduleProposal(
+            title: "회의", date: "today", startTime: "10:00", endTime: "", isTask: false, note: "",
+            existing: [], reminderOffsetsMinutes: [60, 10, 1440]
+        )
+        guard case .staged(let draft, _, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertEqual(draft.displayReminders, "10분 전, 1시간 전, 1일 전")
+    }
+
+    func test_draft_displayDueDate_combinesDateAndTime() {
+        let result = stageScheduleProposal(
+            title: "보고서 제출", date: "today", startTime: "", endTime: "", isTask: true, note: "",
+            existing: [], dueDate: "tomorrow", dueTime: "18:00"
+        )
+        guard case .staged(let draft, _, _) = result else {
+            return XCTFail("expected .staged, got \(result)")
+        }
+        XCTAssertEqual(draft.displayDueDate, "내일 18:00")
     }
 
     // MARK: - stage-update/* (Epic D-2)

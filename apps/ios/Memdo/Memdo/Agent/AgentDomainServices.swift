@@ -213,11 +213,31 @@ func stageScheduleProposal(
     isTask: Bool,
     note: String,
     existing: [ConflictService.ExistingItem],
-    conflictCheckFailed: Bool = false
+    conflictCheckFailed: Bool = false,
+    // A1-2: cloud-only fields, defaulted so the on-device call site
+    // (ProposeScheduleTool.call(arguments:), which doesn't produce any of
+    // these) needs no change. Same trust-boundary re-validation stance as
+    // `date` above -- agent-tool-contract.ts's proposeScheduleArgsSchema
+    // already rejects an invalid shape server-side, this defends against
+    // client/backend version skew, not a distrusted healthy backend.
+    dueDate: String? = nil,
+    dueTime: String? = nil,
+    estimatedMinutes: Int? = nil,
+    reminderOffsetsMinutes: [Int] = [],
+    locationQuery: String? = nil,
+    categoryHint: String? = nil
 ) -> ScheduleProposalStagingResult {
     // Reject before staging anything -- an unparseable date must never
     // silently become "today" (Issue A-04).
     guard AgentDateExpression(token: date) != nil else { return .invalidDate }
+    // Mirrors proposeScheduleArgsSchema's task-only-due-date and
+    // dueTime-requires-dueDate rules -- never silently drop an
+    // inconsistent due proposal by treating it as "no due date."
+    if let dueDate {
+        guard isTask, AgentDateExpression(token: dueDate) != nil else { return .invalidDate }
+    } else if dueTime != nil {
+        return .invalidDate
+    }
 
     // bd4: an event proposal with a start time but no end time used to
     // stage with endTimeString nil -- ProposedScheduleCard's displayTime
@@ -249,7 +269,13 @@ func stageScheduleProposal(
         startTimeString: startTime.isEmpty ? nil : startTime,
         endTimeString: resolvedEndTime.isEmpty ? nil : resolvedEndTime,
         isTask: isTask,
-        note: note.isEmpty ? nil : note
+        note: note.isEmpty ? nil : note,
+        dueDateString: dueDate,
+        dueTimeString: dueTime,
+        estimatedMinutes: estimatedMinutes,
+        reminderOffsetsMinutes: reminderOffsetsMinutes,
+        locationQuery: locationQuery,
+        categoryHint: categoryHint
     )
     // Reflection step: check the proposal against the real schedule before
     // handing it back, instead of presenting it uncritically.
