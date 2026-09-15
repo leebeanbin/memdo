@@ -340,6 +340,23 @@ final class AgentRoutineUpdateProposal {
     func clear() { draft = nil }
 }
 
+/// Pending state for an Agent proposal to edit a field (or several) on an
+/// EXISTING item -- reminder/location/deadline/duration/category/note
+/// (propose_schedule_edit, A2-1). Cloud-only, same reasoning as
+/// AgentRoutineUpdateProposal above (no on-device Tool produces this).
+/// Unlike AgentScheduleProposal/AgentScheduleUpdateProposal, there's no
+/// separate conflict concept here -- none of this proposal's editable
+/// fields touch a time range, matching handleProposeScheduleEdit's own
+/// "no Reflection check" reasoning server-side.
+@MainActor
+@Observable
+final class AgentScheduleEditProposal {
+    var draft: CloudProposedScheduleEditDTO?
+    var isPending: Bool { draft != nil }
+    func propose(_ d: CloudProposedScheduleEditDTO) { draft = d }
+    func clear() { draft = nil }
+}
+
 /// Pending state for an Agent proposal to write/update a day's reflection
 /// (propose_review_actions) -- cloud-only, same reasoning as
 /// AgentRoutineUpdateProposal above.

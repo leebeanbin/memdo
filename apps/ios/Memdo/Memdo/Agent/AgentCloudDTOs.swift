@@ -143,6 +143,45 @@ struct CloudProposedScheduleUpdateDTO: Decodable {
     let conflictCheckFailed: Bool?
 }
 
+/// A2-1/A2-2: mirrors propose_schedule_edit's shape -- a field-level edit
+/// on an EXISTING item (reminder/location/deadline/duration/category/note),
+/// distinct from CloudProposedScheduleUpdateDTO's complete/reschedule/
+/// delete. Only fields the model actually proposed are non-nil; `title`/
+/// `version`/`current` are echoed back by the server the same way
+/// CloudProposedScheduleUpdateDTO's title/version are, so the client has
+/// what it needs to render a before/after diff without a second round trip.
+struct CloudProposedScheduleEditDTO: Decodable {
+    let id: String
+    let title: String
+    let version: Int
+    let reminderOffsetsMinutes: [Int]?
+    let dueDate: String?
+    let dueTime: String?
+    let estimatedMinutes: Int?
+    let locationQuery: String?
+    let categoryHint: String?
+    /// A1-3's same deterministic resolution, reused as-is -- never set
+    /// directly by the model. Display-only on this side too, same as
+    /// CloudProposedScheduleDTO.categoryHint's own doc comment: applying it
+    /// to the real item's categoryId isn't part of this pass.
+    let categoryId: String?
+    let note: String?
+    let current: CurrentScheduleEditableFieldsDTO
+}
+
+/// Pre-edit values for every editable field -- carried alongside the
+/// proposed ones so the card can render a before/after diff without a
+/// second round trip. Always the full current snapshot regardless of which
+/// fields were actually proposed for edit.
+struct CurrentScheduleEditableFieldsDTO: Decodable {
+    let reminderOffsetsMinutes: [Int]
+    let dueAt: String?
+    let estimatedMinutes: Int?
+    let locationName: String?
+    let categoryId: String?
+    let note: String?
+}
+
 /// Mirrors propose_routine_update's shape (agent-cloud-contract.ts) -- every
 /// field optional, since the model only includes the settings it's actually
 /// proposing to change.
@@ -258,6 +297,7 @@ struct AgentStreamLineDTO: Decodable {
     let done: Bool?
     let proposedSchedule: CloudProposedScheduleDTO?
     let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
+    let proposedScheduleEdit: CloudProposedScheduleEditDTO?
     let proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?
     let proposedReviewAction: CloudProposedReviewActionDTO?
     let clarificationRequest: CloudClarificationRequestDTO?
@@ -288,6 +328,7 @@ struct AgentStreamErrorDTO: Decodable {
 struct AgentCloudChatResult {
     let proposedSchedule: CloudProposedScheduleDTO?
     let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
+    let proposedScheduleEdit: CloudProposedScheduleEditDTO?
     let proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?
     let proposedReviewAction: CloudProposedReviewActionDTO?
     let clarificationRequest: CloudClarificationRequestDTO?

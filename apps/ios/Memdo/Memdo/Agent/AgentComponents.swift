@@ -795,6 +795,126 @@ struct ProposedRoutineUpdateCard: View {
     }
 }
 
+/// Confirmation card for propose_schedule_edit (A2-3) -- a field-level
+/// before/after diff, not the full create-proposal card reused wholesale:
+/// an edit is usually a 1-2 field change, and showing the whole item
+/// unchanged around it would bury what's actually different. Only rows
+/// for fields the model actually proposed changing are shown, matching
+/// ProposedRoutineUpdateCard's own "rows: [String], only the touched
+/// settings" precedent.
+struct ProposedScheduleEditCard: View {
+    let draft: CloudProposedScheduleEditDTO
+    var isApplying: Bool = false
+    let onConfirm: () -> Void
+    let onDecline: () -> Void
+
+    private static func reminderSummary(_ offsets: [Int]) -> String {
+        offsets.isEmpty ? "없음" : offsets.sorted().map { ScheduleReminderOption.label(for: $0) }.joined(separator: ", ")
+    }
+
+    private static func dueSummary(_ iso: String?) -> String {
+        guard let iso, let date = try? APIDate.parseInstant(iso) else { return "없음" }
+        return DateFormatting.korean("M월 d일 a h:mm").string(from: date)
+    }
+
+    /// categoryId is a UUID on the wire -- resolved to a display name via
+    /// the same locally-cached category list AddScheduleSheet's own picker
+    /// reads (ScheduleUserCategory.load()), not a network round trip.
+    private static func categoryName(_ id: String?) -> String {
+        guard let id, let uuid = UUID(uuidString: id) else { return "없음" }
+        return ScheduleUserCategory.load().first(where: { $0.id == uuid })?.name ?? "없음"
+    }
+
+    private var rows: [String] {
+        var lines: [String] = []
+        if let proposed = draft.reminderOffsetsMinutes {
+            lines.append(
+                "알림: \(Self.reminderSummary(draft.current.reminderOffsetsMinutes)) → \(Self.reminderSummary(proposed))"
+            )
+        }
+        if let dueDate = draft.dueDate {
+            let after = displayAgentDateToken(dueDate) + (draft.dueTime.map { " \($0)" } ?? "")
+            lines.append("마감: \(Self.dueSummary(draft.current.dueAt)) → \(after)")
+        }
+        if let estimated = draft.estimatedMinutes {
+            let before = draft.current.estimatedMinutes.map { "\($0)분" } ?? "없음"
+            lines.append("소요 시간: \(before) → \(estimated)분")
+        }
+        if let locationQuery = draft.locationQuery {
+            let before = (draft.current.locationName?.isEmpty == false) ? draft.current.locationName! : "없음"
+            lines.append("장소: \(before) → \(locationQuery)")
+        }
+        if let categoryHint = draft.categoryHint {
+            lines.append("카테고리: \(Self.categoryName(draft.current.categoryId)) → \(categoryHint)")
+        }
+        if let note = draft.note {
+            let before = (draft.current.note?.isEmpty == false) ? draft.current.note! : "없음"
+            lines.append("메모: \(before) → \(note.isEmpty ? "없음" : note)")
+        }
+        return lines
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Agent 일정 수정 제안", systemImage: "pencil")
+                .font(MemdoTypography.captionEmphasis)
+                .foregroundStyle(MemdoTheme.brandInk)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(draft.title)
+                    .font(MemdoTypography.action)
+                    .foregroundStyle(MemdoTheme.ink)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(rows, id: \.self) { row in
+                        Text(row)
+                    }
+                }
+                .font(MemdoTypography.caption)
+                .foregroundStyle(MemdoTheme.secondaryInk)
+            }
+
+            HStack(spacing: 8) {
+                Button(action: onConfirm) {
+                    HStack(spacing: 6) {
+                        if isApplying {
+                            ProgressView().tint(MemdoTheme.onBrand)
+                        }
+                        Text(isApplying ? "적용하는 중" : "적용하기")
+                        if !isApplying {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+                .buttonStyle(MemdoPrimaryActionButtonStyle())
+                .disabled(isApplying)
+                .accessibilityLabel(isApplying ? "적용하는 중" : "'\(draft.title)' 수정 적용하기")
+
+                Button(action: onDecline) {
+                    Text("취소")
+                }
+                .buttonStyle(MemdoSecondaryActionButtonStyle())
+                .disabled(isApplying)
+                .accessibilityLabel("'\(draft.title)' 수정 제안 취소")
+            }
+        }
+        .padding(14)
+        .background(MemdoTheme.brandSoft,
+                    in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                .stroke(MemdoTheme.brand.opacity(0.2), lineWidth: 0.5)
+        }
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .move(edge: .bottom)),
+            removal: .opacity
+        ))
+        // Same reasoning as ProposedScheduleCard above (fd3).
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Agent 일정 수정 제안: '\(draft.title)', \(rows.joined(separator: ", "))")
+    }
+}
+
 /// Confirmation card for propose_review_actions -- a proposed reflection
 /// *text* for one day. Resolves the model's raw date token once (via the
 /// shared AgentDateExpression) and, if it resolves, checks for an existing

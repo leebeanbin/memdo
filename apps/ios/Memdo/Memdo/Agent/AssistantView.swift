@@ -116,6 +116,7 @@ struct AgentSheet: View {
     @State private var showsResetConfirmation = false
     @State private var proposal = AgentScheduleProposal()
     @State private var updateProposal = AgentScheduleUpdateProposal()
+    @State private var editProposal = AgentScheduleEditProposal()
     /// True while the create/update-proposal confirm button's Store mutation
     /// is actually in flight -- disables the button so a rapid double-tap
     /// can't fire two requests (a UI-layer guard on top of ScheduleStore's
@@ -123,6 +124,7 @@ struct AgentSheet: View {
     /// action racing in on the same id from elsewhere, e.g. TodayView).
     @State private var isApplyingProposal = false
     @State private var isApplyingUpdateProposal = false
+    @State private var isApplyingEditProposal = false
 
     /// See ProposedScheduleUpdateCard.isFromGoogleCalendar's doc comment --
     /// the server-side proposal only ever carries an id, never origin, so
@@ -273,6 +275,13 @@ struct AgentSheet: View {
                     Task { await confirmScheduleUpdateProposal() }
                 } onDecline: {
                     declineScheduleUpdateProposal()
+                }
+            }
+            if let editDraft = editProposal.draft {
+                ProposedScheduleEditCard(draft: editDraft, isApplying: isApplyingEditProposal) {
+                    Task { await confirmScheduleEditProposal(editDraft) }
+                } onDecline: {
+                    withAnimation(.easeOut(duration: 0.2)) { editProposal.clear() }
                 }
             }
             if let routineDraft = routineProposal.draft {
@@ -667,6 +676,17 @@ struct AgentSheet: View {
                 appendRecoverableErrorIfNoAssistantText(messageID: messageID)
             }
         }
+        if let proposedEdit = result.proposedScheduleEdit {
+            // Same trust-boundary re-validation as scheduledDate/date above
+            // -- proposeScheduleEditArgsSchema already guarantees a
+            // resolved yyyy-MM-dd or nil server-side, this defends against
+            // client/backend version skew, not a distrusted healthy backend.
+            if proposedEdit.dueDate != nil && AgentDateExpression(token: proposedEdit.dueDate!) == nil {
+                appendRecoverableErrorIfNoAssistantText(messageID: messageID)
+            } else {
+                editProposal.propose(proposedEdit)
+            }
+        }
         if let proposedRoutineUpdate = result.proposedRoutineUpdate {
             routineProposal.propose(proposedRoutineUpdate)
         }
@@ -678,6 +698,7 @@ struct AgentSheet: View {
             clarificationRequest: result.clarificationRequest,
             proposedSchedule: result.proposedSchedule,
             proposedScheduleUpdate: result.proposedScheduleUpdate,
+            proposedScheduleEdit: result.proposedScheduleEdit,
             proposedRoutineUpdate: result.proposedRoutineUpdate,
             proposedReviewAction: result.proposedReviewAction,
             toolNames: result.toolNames
@@ -990,6 +1011,45 @@ struct AgentSheet: View {
 
     private func declineScheduleUpdateProposal() {
         withAnimation(.easeOut(duration: 0.2)) { updateProposal.clear() }
+    }
+
+    /// A2-2/A2-3: applies an approved propose_schedule_edit. Reads the
+    /// CURRENT live copy from scheduleStore.schedules (never a value built
+    /// from the proposal's own staging-time `current` snapshot) -- see
+    /// applyScheduleEdit's doc comment for why this is what gives version
+    /// safety for free through the ordinary save()/VERSION_CONFLICT path,
+    /// same as every other write in this app, rather than needing a
+    /// separate dedicated conflict-detection mechanism for this proposal
+    /// kind.
+    private func confirmScheduleEditProposal(_ draft: CloudProposedScheduleEditDTO) async {
+        guard let id = UUID(uuidString: draft.id),
+              let current = scheduleStore.schedules.first(where: { $0.id == id }) else {
+            messages.append(AgentMessage(role: .assistant, text: "'\(draft.title)'을(를) 찾을 수 없어요.", isError: true))
+            withAnimation(.easeOut(duration: 0.2)) { editProposal.clear() }
+            return
+        }
+
+        isApplyingEditProposal = true
+        defer { isApplyingEditProposal = false }
+        // Same best-effort MapKit upgrade as confirmProposal's create path
+        // (A1-3) -- a manual-name fallback if it resolves nothing.
+        var resolvedLocation: ScheduleLocation?
+        if let query = draft.locationQuery, !query.isEmpty {
+            resolvedLocation = await resolveMapLocation(query: query)
+        }
+        let updated = applyScheduleEdit(draft, to: current, resolvedLocation: resolvedLocation)
+        do {
+            let outcome = try await scheduleStore.save(updated)
+            messages.append(writeOutcomeMessage(outcome, committedText: "'\(draft.title)' 수정했어요 ✓"))
+            withAnimation(.easeOut(duration: 0.2)) { editProposal.clear() }
+        } catch {
+            messages.append(AgentMessage(
+                role: .assistant,
+                text: "'\(draft.title)' 수정에 실패했어요: \(error.localizedDescription)",
+                isError: true
+            ))
+            // No clear() -- the card stays pending so the user can retry or decline.
+        }
     }
 
     /// Approves a propose_routine_update proposal via the same

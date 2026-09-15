@@ -69,6 +69,9 @@ enum AgentIntent: Equatable {
     case clarificationRequired
     case proposeSchedule
     case proposeScheduleUpdate
+    /// A2-1: cloud-only, same reasoning as proposeRoutineUpdate/
+    /// proposeReviewAction below (no on-device Tool produces this).
+    case proposeScheduleEdit
     case proposeRoutineUpdate
     case proposeReviewAction
     case findFreeSlots
@@ -86,6 +89,7 @@ func classifyAgentIntent(
     clarificationRequest: CloudClarificationRequestDTO?,
     proposedSchedule: CloudProposedScheduleDTO?,
     proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?,
+    proposedScheduleEdit: CloudProposedScheduleEditDTO?,
     proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?,
     proposedReviewAction: CloudProposedReviewActionDTO?,
     toolNames: [String]
@@ -93,6 +97,7 @@ func classifyAgentIntent(
     if clarificationRequest != nil { return .clarificationRequired }
     if proposedSchedule != nil { return .proposeSchedule }
     if proposedScheduleUpdate != nil { return .proposeScheduleUpdate }
+    if proposedScheduleEdit != nil { return .proposeScheduleEdit }
     if proposedRoutineUpdate != nil { return .proposeRoutineUpdate }
     if proposedReviewAction != nil { return .proposeReviewAction }
     if toolNames.contains("find_free_slots") { return .findFreeSlots }

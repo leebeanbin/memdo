@@ -882,6 +882,7 @@ actor MemdoAPIClient {
 
         var proposedSchedule: CloudProposedScheduleDTO?
         var proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
+        var proposedScheduleEdit: CloudProposedScheduleEditDTO?
         var proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?
         var proposedReviewAction: CloudProposedReviewActionDTO?
         var clarificationRequest: CloudClarificationRequestDTO?
@@ -904,6 +905,7 @@ actor MemdoAPIClient {
             if parsed.done == true {
                 proposedSchedule = parsed.proposedSchedule
                 proposedScheduleUpdate = parsed.proposedScheduleUpdate
+                proposedScheduleEdit = parsed.proposedScheduleEdit
                 proposedRoutineUpdate = parsed.proposedRoutineUpdate
                 proposedReviewAction = parsed.proposedReviewAction
                 clarificationRequest = parsed.clarificationRequest
@@ -914,6 +916,7 @@ actor MemdoAPIClient {
         return AgentCloudChatResult(
             proposedSchedule: proposedSchedule,
             proposedScheduleUpdate: proposedScheduleUpdate,
+            proposedScheduleEdit: proposedScheduleEdit,
             proposedRoutineUpdate: proposedRoutineUpdate,
             proposedReviewAction: proposedReviewAction,
             clarificationRequest: clarificationRequest,

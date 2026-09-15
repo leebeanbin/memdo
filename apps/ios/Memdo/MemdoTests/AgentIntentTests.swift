@@ -32,6 +32,7 @@ final class AgentIntentTests: XCTestCase {
         clarificationRequest: CloudClarificationRequestDTO? = nil,
         proposedSchedule: CloudProposedScheduleDTO? = nil,
         proposedScheduleUpdate: CloudProposedScheduleUpdateDTO? = nil,
+        proposedScheduleEdit: CloudProposedScheduleEditDTO? = nil,
         proposedRoutineUpdate: CloudProposedRoutineUpdateDTO? = nil,
         proposedReviewAction: CloudProposedReviewActionDTO? = nil,
         toolNames: [String] = []
@@ -40,6 +41,7 @@ final class AgentIntentTests: XCTestCase {
             clarificationRequest: clarificationRequest,
             proposedSchedule: proposedSchedule,
             proposedScheduleUpdate: proposedScheduleUpdate,
+            proposedScheduleEdit: proposedScheduleEdit,
             proposedRoutineUpdate: proposedRoutineUpdate,
             proposedReviewAction: proposedReviewAction,
             toolNames: toolNames
@@ -72,6 +74,22 @@ final class AgentIntentTests: XCTestCase {
             )
         )
         XCTAssertEqual(intent, .proposeScheduleUpdate)
+    }
+
+    func test_classify_proposeScheduleEdit() {
+        let intent = classify(
+            proposedScheduleEdit: CloudProposedScheduleEditDTO(
+                id: "a1", title: "미용실", version: 1,
+                reminderOffsetsMinutes: [30, 1440],
+                dueDate: nil, dueTime: nil, estimatedMinutes: nil,
+                locationQuery: nil, categoryHint: nil, categoryId: nil, note: nil,
+                current: CurrentScheduleEditableFieldsDTO(
+                    reminderOffsetsMinutes: [10], dueAt: nil, estimatedMinutes: nil,
+                    locationName: nil, categoryId: nil, note: nil
+                )
+            )
+        )
+        XCTAssertEqual(intent, .proposeScheduleEdit)
     }
 
     func test_classify_proposeRoutineUpdate() {

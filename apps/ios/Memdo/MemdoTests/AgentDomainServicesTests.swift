@@ -520,6 +520,110 @@ final class AgentDomainServicesTests: XCTestCase {
         XCTAssertEqual(draft.displayDueDate, "내일 18:00")
     }
 
+    // MARK: - applyScheduleEdit (A2-2/A2-3)
+
+    private func editDTO(
+        reminderOffsetsMinutes: [Int]? = nil,
+        dueDate: String? = nil,
+        dueTime: String? = nil,
+        estimatedMinutes: Int? = nil,
+        locationQuery: String? = nil,
+        categoryHint: String? = nil,
+        categoryId: String? = nil,
+        note: String? = nil
+    ) -> CloudProposedScheduleEditDTO {
+        CloudProposedScheduleEditDTO(
+            id: "a1", title: "미용실", version: 4,
+            reminderOffsetsMinutes: reminderOffsetsMinutes,
+            dueDate: dueDate, dueTime: dueTime, estimatedMinutes: estimatedMinutes,
+            locationQuery: locationQuery, categoryHint: categoryHint, categoryId: categoryId, note: note,
+            current: CurrentScheduleEditableFieldsDTO(
+                reminderOffsetsMinutes: [10], dueAt: nil, estimatedMinutes: nil,
+                locationName: nil, categoryId: nil, note: nil
+            )
+        )
+    }
+
+    private func baseSchedule(version: Int = 4) -> ScheduleDetail {
+        ScheduleDetail(
+            scheduledDate: Date(), title: "미용실", reminderOffsetsMinutes: [10],
+            calendar: testCalendar, version: version
+        )
+    }
+
+    func test_applyScheduleEdit_replacesReminderOffsetsMinutes() {
+        let updated = applyScheduleEdit(editDTO(reminderOffsetsMinutes: [30, 1440]), to: baseSchedule())
+        XCTAssertEqual(updated.reminderOffsetsMinutes, [30, 1440])
+    }
+
+    func test_applyScheduleEdit_untouchedFieldsPassThroughUnchanged() {
+        // Only reminderOffsetsMinutes is in the edit -- title/version/
+        // everything else on the live schedule must be untouched.
+        let live = baseSchedule(version: 7)
+        let updated = applyScheduleEdit(editDTO(reminderOffsetsMinutes: []), to: live)
+        XCTAssertEqual(updated.title, "미용실")
+        XCTAssertEqual(updated.version, 7)
+        XCTAssertNil(updated.dueAt)
+        XCTAssertNil(updated.estimatedMinutes)
+        XCTAssertNil(updated.locationValue)
+    }
+
+    func test_applyScheduleEdit_emptyReminderArrayClearsAllReminders() {
+        let updated = applyScheduleEdit(editDTO(reminderOffsetsMinutes: []), to: baseSchedule())
+        XCTAssertEqual(updated.reminderOffsetsMinutes, [])
+    }
+
+    func test_applyScheduleEdit_dueDateWithTimeSetsExactInstant() throws {
+        let updated = applyScheduleEdit(editDTO(dueDate: "today", dueTime: "09:30"), to: baseSchedule())
+        let dueAt = try XCTUnwrap(updated.dueAt)
+        let components = Calendar.current.dateComponents([.hour, .minute], from: dueAt)
+        XCTAssertEqual(components.hour, 9)
+        XCTAssertEqual(components.minute, 30)
+    }
+
+    func test_applyScheduleEdit_dueDateWithNoTimeFallsBackToEndOfDay() throws {
+        let updated = applyScheduleEdit(editDTO(dueDate: "today"), to: baseSchedule())
+        let dueAt = try XCTUnwrap(updated.dueAt)
+        let components = Calendar.current.dateComponents([.hour, .minute], from: dueAt)
+        XCTAssertEqual(components.hour, 23)
+        XCTAssertEqual(components.minute, 59)
+    }
+
+    func test_applyScheduleEdit_estimatedMinutes() {
+        let updated = applyScheduleEdit(editDTO(estimatedMinutes: 45), to: baseSchedule())
+        XCTAssertEqual(updated.estimatedMinutes, 45)
+    }
+
+    func test_applyScheduleEdit_locationQueryWithNoResolvedLocationFallsBackToManualProvider() {
+        let updated = applyScheduleEdit(editDTO(locationQuery: "강남역"), to: baseSchedule())
+        XCTAssertEqual(updated.locationValue?.name, "강남역")
+        XCTAssertEqual(updated.locationValue?.provider, .manual)
+    }
+
+    func test_applyScheduleEdit_locationQueryPrefersAResolvedLocationOverTheManualFallback() {
+        let resolved = ScheduleLocation(
+            name: "강남역 2호선", address: "서울 강남구", latitude: 37.4979, longitude: 127.0276, provider: .appleMaps
+        )
+        let updated = applyScheduleEdit(editDTO(locationQuery: "강남역"), to: baseSchedule(), resolvedLocation: resolved)
+        XCTAssertEqual(updated.locationValue?.name, "강남역 2호선")
+        XCTAssertEqual(updated.locationValue?.provider, .appleMaps)
+    }
+
+    func test_applyScheduleEdit_note() {
+        let updated = applyScheduleEdit(editDTO(note: "준비물: 노트북"), to: baseSchedule())
+        XCTAssertEqual(updated.memo, "준비물: 노트북")
+    }
+
+    func test_applyScheduleEdit_neverAppliesCategoryIdEvenWhenResolvedServerSide() {
+        // Same "display-only, never auto-applied" stance as propose_schedule's
+        // own categoryHint -- A1-3 resolves a real categoryId server-side,
+        // but this pass never writes it onto the saved item.
+        let live = baseSchedule()
+        XCTAssertNil(live.categoryId)
+        let updated = applyScheduleEdit(editDTO(categoryHint: "업무", categoryId: "cat-1"), to: live)
+        XCTAssertNil(updated.categoryId)
+    }
+
     // MARK: - stage-update/* (Epic D-2)
 
     func test_stageUpdate_complete_noDateNeeded() {

@@ -348,6 +348,61 @@ func stageScheduleUpdate(
     )
 }
 
+/// A2-2/A2-3: applies an approved propose_schedule_edit's changes onto the
+/// CURRENT live copy of the item (`schedule` must be read from
+/// scheduleStore.schedules at confirm time, never the staging-time
+/// snapshot the server echoed back in `current`) -- only fields actually
+/// proposed are touched, everything else on `schedule` passes through
+/// unchanged, including its `version`. Reading the live copy is what gives
+/// A2-2's version-safety property for free: `schedule.version` is
+/// whatever the local store currently holds, so the eventual
+/// ScheduleStore.save() call naturally revalidates against the item's
+/// CURRENT state (via the same optimistic-lock VERSION_CONFLICT path
+/// every other write already goes through), not the state that existed
+/// when the proposal was first staged.
+///
+/// `resolvedLocation` is separate from `edit.locationQuery` on purpose --
+/// A1-3's on-device MapKit resolution (AssistantView.resolveMapLocation)
+/// is async and this function stays pure/synchronous; nil falls back to a
+/// manual-provider ScheduleLocation (a name only), the same default
+/// ProposedScheduleDraft.toScheduleDetail() already uses for create
+/// proposals when MapKit resolves nothing.
+func applyScheduleEdit(
+    _ edit: CloudProposedScheduleEditDTO,
+    to schedule: ScheduleDetail,
+    resolvedLocation: ScheduleLocation? = nil
+) -> ScheduleDetail {
+    var updated = schedule
+    if let reminderOffsetsMinutes = edit.reminderOffsetsMinutes {
+        updated.reminderOffsetsMinutes = reminderOffsetsMinutes
+    }
+    if let dueDateToken = edit.dueDate, let expr = AgentDateExpression(token: dueDateToken) {
+        let day = expr.resolvedDate()
+        if let dueTimeString = edit.dueTime, let time = parseAgentTime(dueTimeString, on: day) {
+            updated.dueAt = time
+        } else {
+            // No specific time stated -- end-of-day, same fallback R1-5's
+            // due-anchor reminder default and ProposedScheduleDraft.dueAt()
+            // already use.
+            updated.dueAt = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: day) ?? day
+        }
+    }
+    if let estimatedMinutes = edit.estimatedMinutes {
+        updated.estimatedMinutes = estimatedMinutes
+    }
+    if let locationQuery = edit.locationQuery, !locationQuery.isEmpty {
+        updated.locationValue = resolvedLocation ?? ScheduleLocation(name: locationQuery, provider: .manual)
+    }
+    if let note = edit.note {
+        updated.memo = note
+    }
+    // categoryId intentionally never applied here, even though A1-3
+    // resolves one server-side -- same "display-only, never auto-applied"
+    // stance as propose_schedule's own categoryHint (see
+    // CloudProposedScheduleEditDTO's doc comment).
+    return updated
+}
+
 /// Shared by staging (stageScheduleUpdate, called from both the on-device
 /// Tool and cloud ingestion) and confirm-time revalidation (Issue C-04) so a
 /// reschedule's conflict is computed identically everywhere -- previously
