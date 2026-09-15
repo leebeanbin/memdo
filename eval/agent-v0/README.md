@@ -1,6 +1,6 @@
 # Agent v0 behavior baseline corpus
 
-40 cases across 6 files, establishing what the current Agent (before Sprint 1's
+48 cases across 7 files, establishing what the current Agent (before Sprint 1's
 validation-boundary work) actually does with a representative set of Korean
 prompts — the reference point for measuring whether later changes (this
 Sprint, or the model swaps in Epic F) are actual improvements.
@@ -13,7 +13,7 @@ Sprint, or the model swaps in Epic F) are actual improvements.
   "category": "simple-create",
   "input": "내일 오후 3시에 치과 일정 추가해줘",
   "expectedBehavior": "PROPOSE_SCHEDULE",
-  "expected": { "date": "tomorrow", "startTime": "15:00", "isTask": false },
+  "expected": { "scheduledDate": "tomorrow", "startTime": "15:00", "entryKind": "event" },
   "notes": "basic relative-date create"
 }
 ```
@@ -30,7 +30,14 @@ Sprint, or the model swaps in Epic F) are actual improvements.
   (see below); every other label, including `CLARIFICATION_REQUIRED`, is
   gradable directly from `dispatchedTools`.
 - `expected` is optional and partial — fill in only the fields worth pinning
-  down for that case. An empty `{}` is fine.
+  down for that case. An empty `{}` is fine. Values are compared with `===`,
+  except an array value (e.g. `reminderOffsetsMinutes`), which compares by
+  JSON.stringify (order-sensitive) instead -- see `grade.ts`'s
+  `matchesExpectedValue`. A field whose exact value is genuinely
+  model-phrasing-dependent (a resolved day-of-week date, a free-text
+  `locationQuery`/`categoryHint`) is deliberately left out of `expected` and
+  checked via manual review of the actual call instead of pinned to a value
+  that would produce false failures.
 - `notes` explains why the case is interesting, not what it does.
 
 ## Cloud path: automated via Epic E's runner
@@ -104,7 +111,7 @@ what `eval:seed` already seeds. Cost/token attribution reads
 right before that model's run, not by account "cleanliness."
 
 **Rate limiting**: `agent-cloud-chat` caps every account at 30 requests/hour
-by default, which a single model run against this 38-case corpus already
+by default, which a single model run against this 48-case corpus already
 exceeds — comparing multiple models needs the dedicated eval account's
 limit raised. On the backend, set `MEMDO_EVAL_RATE_LIMIT_ENABLED=true` and
 `MEMDO_EVAL_RATE_LIMIT_PER_HOUR` to a value **strictly greater than 30**
