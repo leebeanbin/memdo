@@ -568,6 +568,26 @@ final class AgentDomainServicesTests: XCTestCase {
         XCTAssertNil(updated.locationValue)
     }
 
+    // A2-4: the proposal's own staged version (captured server-side when
+    // propose_schedule_edit was first called) must be deliberately ignored
+    // in favor of whatever version the CURRENT live item actually holds --
+    // real time can pass, and other writes can land, between staging and
+    // approval (same class of bug this session already found and fixed
+    // once for a read path: "UpdateScheduleTool reads live existing items
+    // not a construction-time snapshot"). This is what lets the ordinary
+    // ScheduleStore.save() call's optimistic-lock VERSION_CONFLICT handling
+    // catch a real conflict instead of silently overwriting a concurrent
+    // change with a stale version number.
+    func test_applyScheduleEdit_usesTheLiveVersionNeverTheProposalsStagedVersion() {
+        let edit = editDTO(note: "메모 수정") // editDTO()'s version is fixed at 4
+        XCTAssertEqual(edit.version, 4)
+        // The item changed elsewhere since staging -- its live version is
+        // now 9, not the 4 the proposal was staged against.
+        let liveWithDifferentVersion = baseSchedule(version: 9)
+        let updated = applyScheduleEdit(edit, to: liveWithDifferentVersion)
+        XCTAssertEqual(updated.version, 9)
+    }
+
     func test_applyScheduleEdit_emptyReminderArrayClearsAllReminders() {
         let updated = applyScheduleEdit(editDTO(reminderOffsetsMinutes: []), to: baseSchedule())
         XCTAssertEqual(updated.reminderOffsetsMinutes, [])
