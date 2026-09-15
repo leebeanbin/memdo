@@ -1,5 +1,6 @@
 import SwiftUI
 import FoundationModels
+import MapKit
 
 // MARK: - Message model
 
@@ -797,7 +798,21 @@ struct AgentSheet: View {
         isApplyingProposal = true
         defer { isApplyingProposal = false }
         do {
-            let outcome = try await scheduleStore.save(draft.toScheduleDetail(calendar: cal))
+            var detail = draft.toScheduleDetail(calendar: cal)
+            // A1-3: locationQuery is opaque model-proposed text -- never a
+            // resolved place (see CloudProposedScheduleDTO's doc comment).
+            // toScheduleDetail() already applies it as a manual-provider
+            // ScheduleLocation (a name only) as a safe default; try to
+            // upgrade that to a real MapKit result -- the same on-device
+            // search LocationPickerView's manual "장소" entry already uses
+            // -- right before saving. Best-effort: MapKit returning nothing
+            // (offline, no results) leaves the manual fallback in place
+            // rather than blocking or failing the save.
+            if let query = draft.locationQuery, !query.isEmpty,
+               let resolved = await resolveMapLocation(query: query) {
+                detail.locationValue = resolved
+            }
+            let outcome = try await scheduleStore.save(detail)
             messages.append(writeOutcomeMessage(outcome, committedText: "'\(draft.title)' 일정을 저장했어요 ✓"))
             withAnimation(.easeOut(duration: 0.2)) { proposal.clear() }
         } catch {
@@ -808,6 +823,28 @@ struct AgentSheet: View {
             ))
             // No clear() -- the card stays pending so the user can retry or decline.
         }
+    }
+
+    /// A1-3: resolves a free-text location query to a real place via
+    /// on-device MapKit search -- the deterministic half of "never let the
+    /// LLM invent coordinates directly" that can actually run today (this
+    /// app has no server-side geocoding; MKLocalSearch is Apple's own
+    /// client-only API, mirrors LocationPickerView's search() exactly,
+    /// just taking the top result instead of presenting a picker). nil on
+    /// no results or a search failure -- the caller keeps the manual-name
+    /// fallback in that case, never blocks the save on this.
+    private func resolveMapLocation(query: String) async -> ScheduleLocation? {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
+        guard let item = (try? await MKLocalSearch(request: request).start())?.mapItems.first
+        else { return nil }
+        return ScheduleLocation(
+            name: item.name ?? query,
+            address: item.placemark.title,
+            latitude: item.placemark.coordinate.latitude,
+            longitude: item.placemark.coordinate.longitude,
+            provider: .appleMaps
+        )
     }
 
     /// Applies an approved propose_schedule_update by dispatching to the
