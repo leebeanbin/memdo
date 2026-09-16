@@ -289,6 +289,47 @@ func stageScheduleProposal(
     )
 }
 
+/// A3-1/A3-2/A3-3: stages every item in a propose_schedule_batch response
+/// independently, reusing stageScheduleProposal per item completely
+/// unchanged -- each item gets the exact same date/dueDate/endTime
+/// validation and conflict-check Reflection a lone propose_schedule call
+/// already gets, computed fresh against the current local schedule (never
+/// trusting the server's own staging-time conflictTitle, same C-04 stance
+/// as every other proposal kind). An item that fails validation
+/// (invalidDate/needsEndTime) is dropped from the returned array instead of
+/// failing the whole batch -- the client-side mirror of A3-2's "one bad
+/// item never blocks the others" contract, since staging here happens
+/// against fresh local state the server never saw.
+func stageScheduleBatchProposal(
+    items: [CloudProposedScheduleBatchItemDTO],
+    existing: [ConflictService.ExistingItem]
+) -> [AgentScheduleBatchItem] {
+    items.compactMap { item in
+        let result = stageScheduleProposal(
+            title: item.title,
+            date: item.scheduledDate,
+            startTime: item.startTime ?? "",
+            endTime: item.endTime ?? "",
+            isTask: item.entryKind == "task",
+            note: item.note ?? "",
+            existing: existing,
+            conflictCheckFailed: item.conflictCheckFailed ?? false,
+            dueDate: item.dueDate,
+            dueTime: item.dueTime,
+            estimatedMinutes: item.estimatedMinutes,
+            reminderOffsetsMinutes: item.reminderOffsetsMinutes ?? [],
+            locationQuery: item.locationQuery,
+            categoryHint: item.categoryHint
+        )
+        switch result {
+        case .staged(let draft, let conflict, let conflictCheckFailed):
+            return AgentScheduleBatchItem(draft: draft, conflict: conflict, conflictCheckFailed: conflictCheckFailed)
+        case .invalidDate, .needsEndTime:
+            return nil
+        }
+    }
+}
+
 enum ScheduleUpdateStagingResult: Equatable {
     case staged(
         id: String, action: AgentUpdateAction, title: String,

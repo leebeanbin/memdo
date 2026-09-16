@@ -520,6 +520,99 @@ final class AgentDomainServicesTests: XCTestCase {
         XCTAssertEqual(draft.displayDueDate, "내일 18:00")
     }
 
+    // MARK: - stageScheduleBatchProposal (A3-1/A3-2/A3-3)
+
+    private func batchItem(
+        title: String = "미용실",
+        entryKind: String = "event",
+        scheduledDate: String = "today",
+        startTime: String? = "10:00",
+        endTime: String? = nil,
+        dueDate: String? = nil,
+        dueTime: String? = nil,
+        estimatedMinutes: Int? = nil,
+        reminderOffsetsMinutes: [Int]? = nil,
+        locationQuery: String? = nil,
+        categoryHint: String? = nil,
+        note: String? = nil,
+        conflictTitle: String? = nil,
+        conflictCheckFailed: Bool? = false
+    ) -> CloudProposedScheduleBatchItemDTO {
+        CloudProposedScheduleBatchItemDTO(
+            title: title, entryKind: entryKind, scheduledDate: scheduledDate,
+            startTime: startTime, endTime: endTime, dueDate: dueDate, dueTime: dueTime,
+            estimatedMinutes: estimatedMinutes, reminderOffsetsMinutes: reminderOffsetsMinutes,
+            locationQuery: locationQuery, categoryHint: categoryHint, note: note,
+            conflictTitle: conflictTitle, conflictCheckFailed: conflictCheckFailed
+        )
+    }
+
+    func test_stageScheduleBatchProposal_stagesEveryValidItem() {
+        let items = stageScheduleBatchProposal(
+            items: [
+                batchItem(title: "미용실", scheduledDate: "today", startTime: "10:00"),
+                batchItem(title: "운동", entryKind: "task", scheduledDate: "tomorrow", startTime: nil),
+            ],
+            existing: []
+        )
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(items[0].draft.title, "미용실")
+        XCTAssertFalse(items[0].draft.isTask)
+        XCTAssertEqual(items[1].draft.title, "운동")
+        XCTAssertTrue(items[1].draft.isTask)
+        // Selected by default -- the model already scoped `items` to what
+        // the user asked for; deselecting is the user's job, not the
+        // default state.
+        XCTAssertTrue(items[0].isSelected)
+        XCTAssertTrue(items[1].isSelected)
+    }
+
+    func test_stageScheduleBatchProposal_computesConflictPerItem() {
+        let existing = [todayCandidate("e1", "팀 회의", "10:00", "11:00")]
+        let items = stageScheduleBatchProposal(
+            items: [
+                batchItem(title: "미용실", scheduledDate: "today", startTime: "10:30"),
+                batchItem(title: "장보기", entryKind: "task", scheduledDate: "today", startTime: nil),
+            ],
+            existing: existing
+        )
+        XCTAssertEqual(items[0].conflict?.id, "e1")
+        // A task has no time range to conflict-check -- must not inherit
+        // the sibling item's conflict.
+        XCTAssertNil(items[1].conflict)
+    }
+
+    func test_stageScheduleBatchProposal_dropsOnlyTheInvalidItem_keepsTheRest() {
+        // A3-2's "one bad item never blocks the others" contract, mirrored
+        // client-side: an unparseable date must drop just that one item,
+        // not fail the whole batch.
+        let items = stageScheduleBatchProposal(
+            items: [
+                batchItem(title: "미용실", scheduledDate: "today", startTime: "10:00"),
+                batchItem(title: "잘못된 항목", scheduledDate: "banana", startTime: "10:00"),
+                batchItem(title: "운동", entryKind: "task", scheduledDate: "tomorrow", startTime: nil),
+            ],
+            existing: []
+        )
+        XCTAssertEqual(items.map(\.draft.title), ["미용실", "운동"])
+    }
+
+    func test_stageScheduleBatchProposal_emptyInput_producesEmptyOutput() {
+        XCTAssertTrue(stageScheduleBatchProposal(items: [], existing: []).isEmpty)
+    }
+
+    func test_stageScheduleBatchProposal_carriesConflictCheckFailedPerItem() {
+        let items = stageScheduleBatchProposal(
+            items: [
+                batchItem(title: "미용실", conflictCheckFailed: true),
+                batchItem(title: "운동", entryKind: "task", startTime: nil, conflictCheckFailed: false),
+            ],
+            existing: []
+        )
+        XCTAssertTrue(items[0].conflictCheckFailed)
+        XCTAssertFalse(items[1].conflictCheckFailed)
+    }
+
     // MARK: - applyScheduleEdit (A2-2/A2-3)
 
     private func editDTO(

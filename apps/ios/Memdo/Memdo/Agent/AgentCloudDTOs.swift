@@ -126,6 +126,30 @@ struct CloudProposedScheduleDTO: Decodable {
     let conflictCheckFailed: Bool?
 }
 
+/// A3-1: one item within a propose_schedule_batch proposal -- the exact
+/// same per-item shape as CloudProposedScheduleDTO above, minus the
+/// pre-A1-1 date/isTask bridge fields (propose_schedule_batch is a brand
+/// new tool with no pre-A1-1 client ever having shipped, so there's no
+/// back-compat decode hazard to bridge). Each item gets its own
+/// conflictTitle/conflictCheckFailed -- a batch's conflict outcome is
+/// per-item, not one shared flag for the whole call.
+struct CloudProposedScheduleBatchItemDTO: Decodable {
+    let title: String
+    let entryKind: String
+    let scheduledDate: String
+    let startTime: String?
+    let endTime: String?
+    let dueDate: String?
+    let dueTime: String?
+    let estimatedMinutes: Int?
+    let reminderOffsetsMinutes: [Int]?
+    let locationQuery: String?
+    let categoryHint: String?
+    let note: String?
+    let conflictTitle: String?
+    let conflictCheckFailed: Bool?
+}
+
 /// Mirrors propose_schedule_update's shape (agent-cloud-contract.ts) --
 /// completing, moving, or deleting an EXISTING item. `title`/`version` are
 /// echoed back by the server (the model only ever supplies an `id`), so the
@@ -296,6 +320,7 @@ struct AgentStreamLineDTO: Decodable {
     let toolCallFinished: String?
     let done: Bool?
     let proposedSchedule: CloudProposedScheduleDTO?
+    let proposedScheduleBatch: [CloudProposedScheduleBatchItemDTO]?
     let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
     let proposedScheduleEdit: CloudProposedScheduleEditDTO?
     let proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?
@@ -327,6 +352,7 @@ struct AgentStreamErrorDTO: Decodable {
 /// even if the model called no tools (`toolCalls` is simply `[]` then).
 struct AgentCloudChatResult {
     let proposedSchedule: CloudProposedScheduleDTO?
+    let proposedScheduleBatch: [CloudProposedScheduleBatchItemDTO]?
     let proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
     let proposedScheduleEdit: CloudProposedScheduleEditDTO?
     let proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?

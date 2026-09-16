@@ -68,6 +68,9 @@ enum AgentIntent: Equatable {
     case answer
     case clarificationRequired
     case proposeSchedule
+    /// A3-1: cloud-only, same reasoning as proposeScheduleEdit below (no
+    /// on-device Tool produces a batch).
+    case proposeScheduleBatch
     case proposeScheduleUpdate
     /// A2-1: cloud-only, same reasoning as proposeRoutineUpdate/
     /// proposeReviewAction below (no on-device Tool produces this).
@@ -88,6 +91,7 @@ enum AgentIntent: Equatable {
 func classifyAgentIntent(
     clarificationRequest: CloudClarificationRequestDTO?,
     proposedSchedule: CloudProposedScheduleDTO?,
+    proposedScheduleBatch: [CloudProposedScheduleBatchItemDTO]?,
     proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?,
     proposedScheduleEdit: CloudProposedScheduleEditDTO?,
     proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?,
@@ -96,6 +100,7 @@ func classifyAgentIntent(
 ) -> AgentIntent {
     if clarificationRequest != nil { return .clarificationRequired }
     if proposedSchedule != nil { return .proposeSchedule }
+    if let proposedScheduleBatch, !proposedScheduleBatch.isEmpty { return .proposeScheduleBatch }
     if proposedScheduleUpdate != nil { return .proposeScheduleUpdate }
     if proposedScheduleEdit != nil { return .proposeScheduleEdit }
     if proposedRoutineUpdate != nil { return .proposeRoutineUpdate }

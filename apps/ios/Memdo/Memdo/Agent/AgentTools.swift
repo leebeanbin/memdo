@@ -357,6 +357,35 @@ final class AgentScheduleEditProposal {
     func clear() { draft = nil }
 }
 
+/// A3-1/A3-3: one item within a staged propose_schedule_batch proposal --
+/// same (draft, conflict, conflictCheckFailed) shape a lone create already
+/// stages (see AgentScheduleProposal above), plus a stable identity so the
+/// multi-confirm UI can track per-item selection. `isSelected` defaults to
+/// true: the model already scoped `items` to exactly what the user asked
+/// for in one message, so partial selection is the user opting OUT of a
+/// specific item, not opting in to any.
+struct AgentScheduleBatchItem: Identifiable {
+    let id = UUID()
+    let draft: ProposedScheduleDraft
+    let conflict: AgentConflictSnapshot?
+    let conflictCheckFailed: Bool
+    var isSelected: Bool = true
+}
+
+/// Pending state for a propose_schedule_batch proposal (A3-1/A3-3) --
+/// cloud-only, same "state class only, no on-device Tool mirror" pattern as
+/// AgentRoutineUpdateProposal/AgentReviewActionProposal above (this tool
+/// set has no FoundationModels @Generable analog).
+@MainActor
+@Observable
+final class AgentScheduleBatchProposal {
+    var items: [AgentScheduleBatchItem] = []
+    var isPending: Bool { !items.isEmpty }
+    var selectedCount: Int { items.filter(\.isSelected).count }
+    func propose(_ items: [AgentScheduleBatchItem]) { self.items = items }
+    func clear() { items = [] }
+}
+
 /// Pending state for an Agent proposal to write/update a day's reflection
 /// (propose_review_actions) -- cloud-only, same reasoning as
 /// AgentRoutineUpdateProposal above.

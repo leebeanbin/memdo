@@ -881,6 +881,7 @@ actor MemdoAPIClient {
         }
 
         var proposedSchedule: CloudProposedScheduleDTO?
+        var proposedScheduleBatch: [CloudProposedScheduleBatchItemDTO]?
         var proposedScheduleUpdate: CloudProposedScheduleUpdateDTO?
         var proposedScheduleEdit: CloudProposedScheduleEditDTO?
         var proposedRoutineUpdate: CloudProposedRoutineUpdateDTO?
@@ -904,6 +905,7 @@ actor MemdoAPIClient {
             }
             if parsed.done == true {
                 proposedSchedule = parsed.proposedSchedule
+                proposedScheduleBatch = parsed.proposedScheduleBatch
                 proposedScheduleUpdate = parsed.proposedScheduleUpdate
                 proposedScheduleEdit = parsed.proposedScheduleEdit
                 proposedRoutineUpdate = parsed.proposedRoutineUpdate
@@ -915,6 +917,7 @@ actor MemdoAPIClient {
         }
         return AgentCloudChatResult(
             proposedSchedule: proposedSchedule,
+            proposedScheduleBatch: proposedScheduleBatch,
             proposedScheduleUpdate: proposedScheduleUpdate,
             proposedScheduleEdit: proposedScheduleEdit,
             proposedRoutineUpdate: proposedRoutineUpdate,

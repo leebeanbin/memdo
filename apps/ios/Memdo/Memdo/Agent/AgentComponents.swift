@@ -567,6 +567,113 @@ struct ProposedScheduleCard: View {
     }
 }
 
+/// A3-1/A3-3: confirmation card for propose_schedule_batch -- N new-item
+/// proposals staged from one call, reviewed and confirmed together with
+/// per-item opt-out. Not ProposedScheduleCard reused per row wholesale
+/// (that card's own confirm/decline apply to exactly one item and stage a
+/// Store save itself) -- this is its own dedicated card, same "distinct
+/// before/after diff card, not the create card reused" precedent
+/// ProposedScheduleEditCard followed over reusing ProposedScheduleCard for
+/// an edit.
+struct ProposedScheduleBatchCard: View {
+    let proposal: AgentScheduleBatchProposal
+    /// True while the confirm tap's Store mutations are actually in flight.
+    var isApplying: Bool = false
+    let onToggleItem: (AgentScheduleBatchItem.ID) -> Void
+    let onConfirm: () -> Void
+    let onDecline: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Agent 일정 제안 \(proposal.items.count)건", systemImage: "calendar.badge.plus")
+                .font(MemdoTypography.captionEmphasis)
+                .foregroundStyle(MemdoTheme.brandInk)
+
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(proposal.items) { item in
+                    Button {
+                        onToggleItem(item.id)
+                    } label: {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: item.isSelected ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(item.isSelected ? MemdoTheme.brand : MemdoTheme.secondaryInk)
+                                .padding(.top, 2)
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(item.draft.title)
+                                    .font(MemdoTypography.action)
+                                    .foregroundStyle(item.isSelected ? MemdoTheme.ink : MemdoTheme.secondaryInk)
+
+                                HStack(spacing: 10) {
+                                    Label(item.draft.displayDate, systemImage: "calendar")
+                                    Label(item.draft.displayTime,
+                                          systemImage: item.draft.isTask ? "checkmark.circle" : "clock")
+                                }
+                                .font(MemdoTypography.caption)
+                                .foregroundStyle(MemdoTheme.secondaryInk)
+                                .lineLimit(1)
+
+                                if let conflictTitle = item.conflict?.title {
+                                    Label("'\(conflictTitle)'과 겹쳐요", systemImage: "exclamationmark.triangle.fill")
+                                        .font(MemdoTypography.caption)
+                                        .memdoWarningBand()
+                                        .lineLimit(1)
+                                } else if item.conflictCheckFailed {
+                                    Label("기존 일정을 확인하지 못했어요", systemImage: "questionmark.circle.fill")
+                                        .font(MemdoTypography.caption)
+                                        .memdoWarningBand()
+                                        .lineLimit(1)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(item.isSelected ? [.isSelected] : [])
+                    .accessibilityLabel("'\(item.draft.title)', \(item.draft.displayDate) \(item.draft.displayTime)")
+                    .accessibilityHint(item.isSelected ? "선택 해제하려면 두 번 탭하세요" : "선택하려면 두 번 탭하세요")
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button(action: onConfirm) {
+                    HStack(spacing: 6) {
+                        if isApplying {
+                            ProgressView().tint(MemdoTheme.onBrand)
+                        }
+                        Text(isApplying ? "저장하는 중" : "\(proposal.selectedCount)개 저장하기")
+                        if !isApplying {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+                .buttonStyle(MemdoPrimaryActionButtonStyle())
+                .disabled(isApplying || proposal.selectedCount == 0)
+                .accessibilityLabel(isApplying ? "저장하는 중" : "선택한 \(proposal.selectedCount)개 일정 저장하기")
+
+                Button(action: onDecline) {
+                    Text("전체 취소")
+                }
+                .buttonStyle(MemdoSecondaryActionButtonStyle())
+                .disabled(isApplying)
+                .accessibilityLabel("일정 제안 \(proposal.items.count)건 전체 취소")
+            }
+        }
+        .padding(14)
+        .background(MemdoTheme.brandSoft,
+                    in: RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: MemdoMetrics.contentRadius, style: .continuous)
+                .stroke(MemdoTheme.brand.opacity(0.2), lineWidth: 0.5)
+        }
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .move(edge: .bottom)),
+            removal: .opacity
+        ))
+    }
+}
+
 /// Confirmation card for propose_schedule_update (complete/reschedule/delete
 /// an EXISTING item) -- shared by both the cloud path and UpdateScheduleTool
 /// (on-device), since both funnel into the same AgentScheduleUpdateProposal.

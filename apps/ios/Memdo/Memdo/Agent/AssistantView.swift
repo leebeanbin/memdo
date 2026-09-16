@@ -117,6 +117,7 @@ struct AgentSheet: View {
     @State private var proposal = AgentScheduleProposal()
     @State private var updateProposal = AgentScheduleUpdateProposal()
     @State private var editProposal = AgentScheduleEditProposal()
+    @State private var batchProposal = AgentScheduleBatchProposal()
     /// True while the create/update-proposal confirm button's Store mutation
     /// is actually in flight -- disables the button so a rapid double-tap
     /// can't fire two requests (a UI-layer guard on top of ScheduleStore's
@@ -125,6 +126,7 @@ struct AgentSheet: View {
     @State private var isApplyingProposal = false
     @State private var isApplyingUpdateProposal = false
     @State private var isApplyingEditProposal = false
+    @State private var isApplyingBatchProposal = false
 
     /// See ProposedScheduleUpdateCard.isFromGoogleCalendar's doc comment --
     /// the server-side proposal only ever carries an id, never origin, so
@@ -243,7 +245,7 @@ struct AgentSheet: View {
 
     @ViewBuilder
     private var messageList: some View {
-        if messages.isEmpty && proposal.draft == nil && routineProposal.draft == nil && reviewProposal.draft == nil {
+        if messages.isEmpty && proposal.draft == nil && routineProposal.draft == nil && reviewProposal.draft == nil && !batchProposal.isPending {
             AgentQuickActions(context: context, hasSchedulesToday: hasSchedulesToday, onSelect: selectQuickAction)
         } else {
             if showSessionGapNotice { sessionGapBanner }
@@ -282,6 +284,20 @@ struct AgentSheet: View {
                     Task { await confirmScheduleEditProposal(editDraft) }
                 } onDecline: {
                     withAnimation(.easeOut(duration: 0.2)) { editProposal.clear() }
+                }
+            }
+            if batchProposal.isPending {
+                ProposedScheduleBatchCard(
+                    proposal: batchProposal,
+                    isApplying: isApplyingBatchProposal
+                ) { itemID in
+                    if let index = batchProposal.items.firstIndex(where: { $0.id == itemID }) {
+                        batchProposal.items[index].isSelected.toggle()
+                    }
+                } onConfirm: {
+                    Task { await confirmScheduleBatchProposal() }
+                } onDecline: {
+                    withAnimation(.easeOut(duration: 0.2)) { batchProposal.clear() }
                 }
             }
             if let routineDraft = routineProposal.draft {
@@ -687,6 +703,21 @@ struct AgentSheet: View {
                 editProposal.propose(proposedEdit)
             }
         }
+        if let proposedBatch = result.proposedScheduleBatch, !proposedBatch.isEmpty {
+            // A3-1/A3-2/A3-3: same trust-boundary re-validation as
+            // proposedSchedule above, per item -- stageScheduleBatchProposal
+            // reuses stageScheduleProposal unchanged and drops any item that
+            // fails validation rather than failing the whole batch.
+            let items = stageScheduleBatchProposal(
+                items: proposedBatch,
+                existing: existingItemsSnapshot(scheduleStore)
+            )
+            if items.isEmpty {
+                appendRecoverableErrorIfNoAssistantText(messageID: messageID)
+            } else {
+                batchProposal.propose(items)
+            }
+        }
         if let proposedRoutineUpdate = result.proposedRoutineUpdate {
             routineProposal.propose(proposedRoutineUpdate)
         }
@@ -697,6 +728,7 @@ struct AgentSheet: View {
         let intent = classifyAgentIntent(
             clarificationRequest: result.clarificationRequest,
             proposedSchedule: result.proposedSchedule,
+            proposedScheduleBatch: result.proposedScheduleBatch,
             proposedScheduleUpdate: result.proposedScheduleUpdate,
             proposedScheduleEdit: result.proposedScheduleEdit,
             proposedRoutineUpdate: result.proposedRoutineUpdate,
@@ -768,6 +800,12 @@ struct AgentSheet: View {
         showSessionGapNotice = false
         proposal.clear()
         updateProposal.clear()
+        // A2-3/A3-3: editProposal/batchProposal were previously never
+        // cleared here -- a staged edit or batch card survived "새 대화",
+        // still visible (and confirmable, against a conversation that no
+        // longer semantically exists) after the reset.
+        editProposal.clear()
+        batchProposal.clear()
         routineProposal.clear()
         reviewProposal.clear()
     }
@@ -1049,6 +1087,66 @@ struct AgentSheet: View {
                 isError: true
             ))
             // No clear() -- the card stays pending so the user can retry or decline.
+        }
+    }
+
+    /// A3-1/A3-3: approves the SELECTED subset of a staged propose_schedule_
+    /// batch proposal. Partial selection/partial failure are both first-class
+    /// here (A3-3/A3-4's intent), realized client-side today rather than via
+    /// a dedicated backend batch-save endpoint (A3-4/A3-5 remain unbuilt) --
+    /// each selected item goes through the exact same scheduleStore.save()
+    /// path confirmProposal(_:) already uses for a lone create, sequentially,
+    /// so a later A3-4 backend endpoint can replace this loop's mechanism
+    /// without changing what the user sees: select items, see which saved
+    /// and which didn't. A per-item failure never blocks the rest of the
+    /// loop (A3-2's "one bad item never blocks the others" contract, mirrored
+    /// here at confirm time). Saved items are removed from the card; failed
+    /// ones stay staged (still selected) so the user can see what failed and
+    /// retry, matching confirmProposal's "no clear() on failure" precedent.
+    private func confirmScheduleBatchProposal() async {
+        let selected = batchProposal.items.filter(\.isSelected)
+        guard !selected.isEmpty else { return }
+        guard let cal = scheduleStore.calendars.first(where: { $0.provider == .memdo })
+                ?? scheduleStore.calendars.first else { return }
+
+        isApplyingBatchProposal = true
+        defer { isApplyingBatchProposal = false }
+
+        var succeededIDs: Set<AgentScheduleBatchItem.ID> = []
+        var anyQueuedOffline = false
+        var failedTitles: [String] = []
+        for item in selected {
+            do {
+                var detail = item.draft.toScheduleDetail(calendar: cal)
+                if let query = item.draft.locationQuery, !query.isEmpty,
+                   let resolved = await resolveMapLocation(query: query) {
+                    detail.locationValue = resolved
+                }
+                let outcome = try await scheduleStore.save(detail)
+                if case .committed = outcome {} else { anyQueuedOffline = true }
+                succeededIDs.insert(item.id)
+            } catch {
+                failedTitles.append(item.draft.title)
+            }
+        }
+
+        var summary: String
+        if failedTitles.isEmpty {
+            summary = "일정 \(succeededIDs.count)건을 저장했어요 ✓"
+        } else if succeededIDs.isEmpty {
+            summary = "선택한 일정을 저장하지 못했어요: \(failedTitles.joined(separator: ", "))"
+        } else {
+            summary = "\(succeededIDs.count)건 저장했고, 다음은 실패했어요: \(failedTitles.joined(separator: ", "))"
+        }
+        if anyQueuedOffline {
+            summary += " (오프라인 항목은 연결되면 동기화돼요)"
+        }
+        messages.append(AgentMessage(role: .assistant, text: summary, isError: !failedTitles.isEmpty && succeededIDs.isEmpty))
+
+        if failedTitles.isEmpty {
+            withAnimation(.easeOut(duration: 0.2)) { batchProposal.clear() }
+        } else {
+            batchProposal.items.removeAll { succeededIDs.contains($0.id) }
         }
     }
 

@@ -31,6 +31,7 @@ final class AgentIntentTests: XCTestCase {
     private func classify(
         clarificationRequest: CloudClarificationRequestDTO? = nil,
         proposedSchedule: CloudProposedScheduleDTO? = nil,
+        proposedScheduleBatch: [CloudProposedScheduleBatchItemDTO]? = nil,
         proposedScheduleUpdate: CloudProposedScheduleUpdateDTO? = nil,
         proposedScheduleEdit: CloudProposedScheduleEditDTO? = nil,
         proposedRoutineUpdate: CloudProposedRoutineUpdateDTO? = nil,
@@ -40,6 +41,7 @@ final class AgentIntentTests: XCTestCase {
         classifyAgentIntent(
             clarificationRequest: clarificationRequest,
             proposedSchedule: proposedSchedule,
+            proposedScheduleBatch: proposedScheduleBatch,
             proposedScheduleUpdate: proposedScheduleUpdate,
             proposedScheduleEdit: proposedScheduleEdit,
             proposedRoutineUpdate: proposedRoutineUpdate,
@@ -90,6 +92,27 @@ final class AgentIntentTests: XCTestCase {
             )
         )
         XCTAssertEqual(intent, .proposeScheduleEdit)
+    }
+
+    func test_classify_proposeScheduleBatch() {
+        let intent = classify(
+            proposedScheduleBatch: [
+                CloudProposedScheduleBatchItemDTO(
+                    title: "미용실", entryKind: "event", scheduledDate: "tomorrow", startTime: "10:00", endTime: nil,
+                    dueDate: nil, dueTime: nil, estimatedMinutes: nil, reminderOffsetsMinutes: nil,
+                    locationQuery: nil, categoryHint: nil, note: nil, conflictTitle: nil, conflictCheckFailed: false
+                ),
+            ]
+        )
+        XCTAssertEqual(intent, .proposeScheduleBatch)
+    }
+
+    func test_classify_emptyProposeScheduleBatch_isNotProposeScheduleBatch() {
+        // A3-1: an empty array (vs. absent) must not misclassify -- matches
+        // AssistantView.ingestCloudResult's own `!proposedBatch.isEmpty`
+        // staging guard.
+        let intent = classify(proposedScheduleBatch: [])
+        XCTAssertNotEqual(intent, .proposeScheduleBatch)
     }
 
     func test_classify_proposeRoutineUpdate() {
