@@ -1,6 +1,6 @@
 # Agent v0 behavior baseline corpus
 
-54 cases across 8 files, establishing what the current Agent (before Sprint 1's
+59 cases across 9 files, establishing what the current Agent (before Sprint 1's
 validation-boundary work) actually does with a representative set of Korean
 prompts — the reference point for measuring whether later changes (this
 Sprint, or the model swaps in Epic F) are actual improvements.
@@ -19,7 +19,15 @@ Sprint, or the model swaps in Epic F) are actual improvements.
 ```
 
 - `expectedBehavior` is one of: `SEARCH_SCHEDULES`, `FIND_FREE_SLOTS`,
-  `PROPOSE_SCHEDULE`, `PROPOSE_SCHEDULE_UPDATE`, `PROPOSE_SCHEDULE_EDIT`
+  `PROPOSE_SCHEDULE`, `PROPOSE_SCHEDULE_BATCH` (A3-1/A3-5 -- multiple NEW
+  items staged from one call, e.g. "금요일 미용실 넣고 토요일 AWS 2시간,
+  일요일 운동 넣어줘"; no search-before-propose requirement, same as
+  `PROPOSE_SCHEDULE` -- a batch of new items has nothing existing to search
+  for. `expected` stays `{}` for these cases: per-item fields live inside
+  `items`, an array `grade.ts`'s `argsMismatches` only checks at the top
+  level of `expected`, so batch fixtures are checked via manual review
+  instead of pinned values), `PROPOSE_SCHEDULE_UPDATE`,
+  `PROPOSE_SCHEDULE_EDIT`
   (A2-1 -- a field-level edit on an existing item: reminder/location/
   deadline/duration/category/note, as opposed to
   `PROPOSE_SCHEDULE_UPDATE`'s complete/reschedule/delete; same
@@ -116,7 +124,7 @@ what `eval:seed` already seeds. Cost/token attribution reads
 right before that model's run, not by account "cleanliness."
 
 **Rate limiting**: `agent-cloud-chat` caps every account at 30 requests/hour
-by default, which a single model run against this 54-case corpus already
+by default, which a single model run against this 59-case corpus already
 exceeds — comparing multiple models needs the dedicated eval account's
 limit raised. On the backend, set `MEMDO_EVAL_RATE_LIMIT_ENABLED=true` and
 `MEMDO_EVAL_RATE_LIMIT_PER_HOUR` to a value **strictly greater than 30**
